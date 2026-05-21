@@ -1,15 +1,14 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
-from app.services.core import create_breakpoint, normalize
+from app.services.core import create_breakpoint, list_interfaces, normalize
 
 interface_api = Blueprint("interface_api", __name__, url_prefix="/api/interfaces")
 
 
 @interface_api.get("")
 def interfaces():
-    rows = get_db().execute("SELECT * FROM discovered_interface ORDER BY last_seen_at DESC").fetchall()
-    return jsonify({"items": [normalize(row_to_dict(row)) for row in rows]})
+    return jsonify({"items": list_interfaces(request.args.get("sessionId"))})
 
 
 @interface_api.get("/<interface_id>")

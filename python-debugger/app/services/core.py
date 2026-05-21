@@ -8,11 +8,11 @@ from app.utils.time_utils import now_iso
 STATE = {"recording": False, "debugging": False, "mode": "idle", "sessionId": None}
 
 
-def start_session(mode, payload):
-    stop_session()
-    session_id = f"{mode}-{uuid.uuid4().hex[:10]}"
+def create_session(payload):
+    stop_activity()
+    session_id = f"session-{uuid.uuid4().hex[:10]}"
     now = now_iso()
-    STATE.update(recording=True, debugging=mode == "debug", mode=mode, sessionId=session_id)
+    STATE.update(recording=False, debugging=False, mode="idle", sessionId=session_id)
     db = get_db()
     db.execute(
         """INSERT INTO debug_session
@@ -20,12 +20,12 @@ def start_session(mode, payload):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id,
-            mode,
+            "idle",
             payload.get("serviceName", "instrument-service-demo"),
             payload.get("operator", "developer"),
             now,
-            1,
-            1 if mode == "debug" else 0,
+            0,
+            0,
             payload.get("remark", ""),
             now,
             now,
@@ -35,7 +35,30 @@ def start_session(mode, payload):
     return state_response(success=True, sessionId=session_id)
 
 
-def stop_session():
+def select_session(session_id):
+    stop_activity()
+    row = get_db().execute("SELECT id FROM debug_session WHERE id=?", (session_id,)).fetchone()
+    if not row:
+        return {"success": False, "message": "session not found"}
+    STATE.update(recording=False, debugging=False, mode="idle", sessionId=session_id)
+    return state_response(success=True, sessionId=session_id)
+
+
+def start_session(mode, payload):
+    if not STATE["sessionId"]:
+        return {"success": False, "message": "请先新建或选择会话", **state_response()}
+    now = now_iso()
+    STATE.update(recording=True, debugging=mode == "debug", mode=mode)
+    db = get_db()
+    db.execute(
+        "UPDATE debug_session SET mode=?, recording=1, debugging=?, end_time=NULL, updated_at=? WHERE id=?",
+        (mode, 1 if mode == "debug" else 0, now, STATE["sessionId"]),
+    )
+    db.commit()
+    return state_response(success=True)
+
+
+def stop_activity():
     released = wait_manager.continue_all()
     if STATE["sessionId"]:
         now = now_iso()
@@ -45,19 +68,34 @@ def stop_session():
             (now, now, STATE["sessionId"]),
         )
         db.commit()
-    STATE.update(recording=False, debugging=False, mode="idle", sessionId=None)
+    STATE.update(recording=False, debugging=False, mode="idle")
     return released
 
 
 def state_response(**extra):
     db = get_db()
+    session_filter = "WHERE session_id=?" if STATE["sessionId"] else ""
+    session_args = (STATE["sessionId"],) if STATE["sessionId"] else ()
     counts = {
-        "callCount": db.execute("SELECT COUNT(*) FROM call_record").fetchone()[0],
-        "discoveredInterfaceCount": db.execute("SELECT COUNT(*) FROM discovered_interface").fetchone()[0],
-        "breakpointCount": db.execute("SELECT COUNT(*) FROM breakpoint").fetchone()[0],
-        "pausedCount": db.execute("SELECT COUNT(*) FROM call_record WHERE status='paused'").fetchone()[0],
+        "hasSession": STATE["sessionId"] is not None,
+        "callCount": db.execute(f"SELECT COUNT(*) FROM call_record {session_filter}", session_args).fetchone()[0],
+        "discoveredInterfaceCount": db.execute(f"SELECT COUNT(*) FROM discovered_interface {session_filter}", session_args).fetchone()[0],
+        "breakpointCount": breakpoint_count(db),
+        "pausedCount": db.execute(
+            f"SELECT COUNT(*) FROM call_record {'WHERE session_id=? AND status=?' if STATE['sessionId'] else 'WHERE status=?'}",
+            (STATE["sessionId"], "paused") if STATE["sessionId"] else ("paused",),
+        ).fetchone()[0],
     }
     return {**STATE, **counts, **extra}
+
+
+def breakpoint_count(db):
+    if not STATE["sessionId"]:
+        return db.execute("SELECT COUNT(*) FROM breakpoint").fetchone()[0]
+    return db.execute(
+        "SELECT COUNT(*) FROM breakpoint WHERE source_session_id IS NULL OR source_session_id=?",
+        (STATE["sessionId"],),
+    ).fetchone()[0]
 
 
 def before_call(payload):
@@ -215,6 +253,8 @@ def match_breakpoint(payload):
     args = payload.get("args", {})
     for row in rows:
         item = row_to_dict(row)
+        if item["source_session_id"] and item["source_session_id"] != STATE["sessionId"]:
+            continue
         if item["service_name"] and item["service_name"] != payload.get("serviceName"):
             continue
         if item["class_name"] and item["class_name"] != payload.get("className"):
@@ -227,6 +267,47 @@ def match_breakpoint(payload):
 
 def list_rows(table):
     return [normalize(row_to_dict(row)) for row in get_db().execute(f"SELECT * FROM {table} ORDER BY created_at DESC").fetchall()]
+
+
+def list_sessions():
+    rows = get_db().execute(
+        """SELECT s.*,
+            (SELECT COUNT(*) FROM call_record c WHERE c.session_id=s.id) AS call_count,
+            (SELECT COUNT(*) FROM discovered_interface i WHERE i.session_id=s.id) AS interface_count,
+            (SELECT COUNT(*) FROM call_record c WHERE c.session_id=s.id AND c.status='exception') AS exception_count
+           FROM debug_session s ORDER BY s.created_at DESC"""
+    ).fetchall()
+    return [row_to_dict(row) for row in rows]
+
+
+def list_calls(session_id=None):
+    sid = session_id or STATE["sessionId"]
+    if sid:
+        rows = get_db().execute("SELECT * FROM call_record WHERE session_id=? ORDER BY id DESC", (sid,)).fetchall()
+    else:
+        rows = []
+    return [normalize(row_to_dict(row)) for row in rows]
+
+
+def list_interfaces(session_id=None):
+    sid = session_id or STATE["sessionId"]
+    if sid:
+        rows = get_db().execute("SELECT * FROM discovered_interface WHERE session_id=? ORDER BY last_seen_at DESC", (sid,)).fetchall()
+    else:
+        rows = []
+    return [normalize(row_to_dict(row)) for row in rows]
+
+
+def list_breakpoints(session_id=None):
+    sid = session_id or STATE["sessionId"]
+    if sid:
+        rows = get_db().execute(
+            "SELECT * FROM breakpoint WHERE source_session_id IS NULL OR source_session_id=? ORDER BY created_at DESC",
+            (sid,),
+        ).fetchall()
+    else:
+        rows = get_db().execute("SELECT * FROM breakpoint ORDER BY created_at DESC").fetchall()
+    return [normalize(row_to_dict(row)) for row in rows]
 
 
 def normalize(row):

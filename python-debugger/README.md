@@ -25,11 +25,11 @@ python run_desktop.py
 
 ## 验收主链路
 
-1. 启动 Python 后端。
-2. 启动 Java Demo。
-3. 打开桌面端，点击“开始记录”。
+1. 启动 Java Demo。
+2. 打开桌面端，进入“历史会话”，点击“新建会话”。
+3. 点击“开始记录”。
 4. 进入“Java 调用”页，点击 `initialize`、`control-create`。
-5. 在“调用记录”和“已发现接口”中查看动态记录。
-6. 对 `instrumentControl` 设置断点，点击“开始调试”。
-7. 再次调用 `control-create`，调用状态应变为 `paused`。
+5. 在“调用记录”和“已发现接口”中查看当前会话的动态记录。
+6. 点击“停止记录”，对 `instrumentControl` 设置断点。
+7. 点击“开始调试”，再次调用 `control-create`，调用状态应变为 `paused`。
 8. 点击“继续执行”后 Java 请求恢复，状态变为 `finished`。

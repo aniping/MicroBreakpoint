@@ -9,6 +9,7 @@ class Bridge(QObject):
     callsChanged = Signal(str)
     interfacesChanged = Signal(str)
     breakpointsChanged = Signal(str)
+    sessionsChanged = Signal(str)
     resultChanged = Signal(str)
 
     def __init__(self):
@@ -55,8 +56,19 @@ class Bridge(QObject):
         self.refreshAll()
 
     @Slot()
+    def createSession(self):
+        self._emit_result(self._request("POST", f"{self.backend}/api/session/create", json={"serviceName": "instrument-service-demo", "operator": "developer"}))
+        self.refreshAll()
+
+    @Slot(str)
+    def selectSession(self, sessionId):
+        self._emit_result(self._request("POST", f"{self.backend}/api/session/{sessionId}/select"))
+        self.refreshAll()
+
+    @Slot()
     def refreshAll(self):
         self.loadState()
+        self.loadSessions()
         self.loadCalls()
         self.loadInterfaces()
         self.loadBreakpoints()
@@ -64,6 +76,10 @@ class Bridge(QObject):
     @Slot()
     def loadState(self):
         self.stateChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/debug/state"), ensure_ascii=False))
+
+    @Slot()
+    def loadSessions(self):
+        self.sessionsChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/session"), ensure_ascii=False))
 
     @Slot()
     def loadCalls(self):

@@ -45,13 +45,14 @@ mvn spring-boot:run
 
 ## 验收流程
 
-1. 桌面端点击“开始记录”。
-2. 进入“Java 调用”页，点击“测试连接”，应返回 `pong`。
-3. 点击“调用 initialize”和“调用 control-create”。
-4. “调用记录”页应出现调用记录，“已发现接口”页应出现 `instrumentInitialize` 和 `instrumentControl`。
-5. 对 `instrumentControl` 设置断点。
-6. 点击“开始调试”，再次在“Java 调用”页点击 `control-create`。
-7. 调用记录状态应变为 `paused`，点击“继续执行”后 Java 请求恢复，状态最终变为 `finished`。
+1. 桌面端进入“历史会话”，点击“新建会话”或选择已有会话。
+2. 点击“开始记录”。
+3. 进入“Java 调用”页，点击“测试连接”，应返回 `pong`。
+4. 点击“调用 initialize”和“调用 control-create”。
+5. “调用记录”页应出现当前会话的调用记录，“已发现接口”页应出现当前会话发现的 `instrumentInitialize` 和 `instrumentControl`。
+6. 点击“停止记录”，对 `instrumentControl` 设置断点。
+7. 点击“开始调试”，再次在“Java 调用”页点击 `control-create`。
+8. 当前会话的调用记录状态应变为 `paused`，点击“继续执行”后 Java 请求恢复，状态最终变为 `finished`。
 
 ## 验证命令
 

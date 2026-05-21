@@ -24,11 +24,12 @@ ApplicationWindow {
     property color red: "#ff5d5d"
     property color amber: "#f4d13d"
 
-    property int currentPage: 0
+    property int currentPage: 3
     property var stateData: ({mode: "idle", callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0})
     property var callItems: []
     property var interfaceItems: []
     property var breakpointItems: []
+    property var sessionItems: []
     property string resultText: ""
 
     function modeText(mode) {
@@ -51,6 +52,7 @@ ApplicationWindow {
         function onCallsChanged(payload) { callItems = JSON.parse(payload).items || [] }
         function onInterfacesChanged(payload) { interfaceItems = JSON.parse(payload).items || [] }
         function onBreakpointsChanged(payload) { breakpointItems = JSON.parse(payload).items || [] }
+        function onSessionsChanged(payload) { sessionItems = JSON.parse(payload).items || [] }
         function onResultChanged(payload) { resultText = payload }
     }
 
@@ -93,40 +95,34 @@ ApplicationWindow {
         }
     }
 
-    component NavButton: Rectangle {
+    component NavButton: Button {
         id: nav
         property string label: ""
         property string iconText: ""
         property bool selected: false
-        signal clicked()
-        width: parent ? parent.width : 138
-        height: 62
-        color: selected ? "#18365e" : "transparent"
-        border.color: selected ? "#245fa8" : "transparent"
-
-        Rectangle {
-            width: 3
-            height: parent.height
-            visible: nav.selected
-            color: root.blue
-            anchors.left: parent.left
+        Layout.fillWidth: true
+        Layout.preferredHeight: 62
+        padding: 0
+        background: Rectangle {
+            color: nav.selected ? "#18365e" : (nav.hovered ? "#121c28" : "transparent")
+            border.color: nav.selected ? "#245fa8" : "transparent"
+            Rectangle {
+                width: 3
+                height: parent.height
+                visible: nav.selected
+                color: root.blue
+                anchors.left: parent.left
+            }
         }
-
-        Row {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: 22
-            spacing: 12
-            Text { text: nav.iconText; color: nav.selected ? "#58a6ff" : "#a6b2c0"; font.pixelSize: 20; anchors.verticalCenter: parent.verticalCenter }
-            Text { text: nav.label; color: nav.selected ? "#cfe6ff" : "#c4ccd6"; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            onClicked: nav.clicked()
-            onEntered: if (!nav.selected) nav.color = "#121c28"
-            onExited: if (!nav.selected) nav.color = "transparent"
+        contentItem: Item {
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: 22
+                spacing: 12
+                Text { text: nav.iconText; color: nav.selected ? "#58a6ff" : "#a6b2c0"; font.pixelSize: 20; anchors.verticalCenter: parent.verticalCenter }
+                Text { text: nav.label; color: nav.selected ? "#cfe6ff" : "#c4ccd6"; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
+            }
         }
     }
 
@@ -174,9 +170,10 @@ ApplicationWindow {
                 anchors.leftMargin: 30
                 anchors.rightMargin: 30
                 spacing: 18
-                MbButton { text: "开始记录"; accent: root.green; enabled: stateData.mode === "idle"; onClicked: bridge.startRecord() }
+                MbButton { text: "新建会话"; accent: root.blue; implicitWidth: 122; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 3 } }
+                MbButton { text: "开始记录"; accent: root.green; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startRecord() }
                 MbButton { text: "停止记录"; accent: root.red; enabled: stateData.mode === "record"; onClicked: bridge.stopRecord() }
-                MbButton { text: "开始调试"; accent: root.blue; enabled: stateData.mode === "idle"; onClicked: bridge.startDebug() }
+                MbButton { text: "开始调试"; accent: root.blue; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startDebug() }
                 MbButton { text: "停止调试"; accent: root.red; enabled: stateData.mode === "debug"; onClicked: bridge.stopDebug() }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 MbButton { text: "刷新"; implicitWidth: 102; accent: root.blue; onClicked: bridge.refreshAll() }
@@ -206,7 +203,7 @@ ApplicationWindow {
                     Text { text: modeText(stateData.mode); color: modeColor(stateData.mode); font.bold: true; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
-                Text { text: "Session:  " + (stateData.sessionId || "-"); color: root.textNormal; font.pixelSize: 15 }
+                Text { text: "Session:  " + (stateData.sessionId || "请先新建会话"); color: stateData.hasSession ? root.textNormal : root.amber; font.pixelSize: 15 }
                 Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
                 Text { text: "调用:  " + stateData.callCount; color: root.textStrong; font.pixelSize: 15 }
                 Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
@@ -241,7 +238,7 @@ ApplicationWindow {
                     NavButton { label: "Java调用"; iconText: "J"; selected: currentPage === 4; onClicked: currentPage = 4 }
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.border }
-                    NavButton { label: "设置"; iconText: "⚙"; selected: false; onClicked: bridge.refreshAll() }
+                    NavButton { label: "设置"; iconText: "⚙"; selected: currentPage === 5; onClicked: currentPage = 5 }
                 }
             }
 
@@ -253,8 +250,9 @@ ApplicationWindow {
                 CallRecordTab { items: callItems; breakpoints: breakpointItems }
                 InterfaceTab { items: interfaceItems }
                 BreakpointTab { items: breakpointItems }
-                SessionTab {}
+                SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || "" }
                 JavaCallTab { resultText: root.resultText }
+                SettingsTab {}
             }
         }
 

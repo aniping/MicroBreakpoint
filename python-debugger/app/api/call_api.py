@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
-from app.services.core import after_call, before_call, create_breakpoint, normalize
+from app.services.core import after_call, before_call, create_breakpoint, list_calls, normalize
 from app.services.wait_manager import wait_manager
 
 call_api = Blueprint("call_api", __name__, url_prefix="/api/calls")
@@ -19,8 +19,7 @@ def after():
 
 @call_api.get("")
 def calls():
-    rows = get_db().execute("SELECT * FROM call_record ORDER BY id DESC").fetchall()
-    return jsonify({"items": [normalize(row_to_dict(row)) for row in rows]})
+    return jsonify({"items": list_calls(request.args.get("sessionId"))})
 
 
 @call_api.get("/<call_id>")

@@ -1,14 +1,14 @@
 from flask import Blueprint, jsonify, request
 
-from app.db.database import get_db, row_to_dict
-from app.services.core import create_breakpoint, list_rows
+from app.db.database import get_db
+from app.services.core import create_breakpoint, list_breakpoints
 
 bp_api = Blueprint("bp_api", __name__, url_prefix="/api/breakpoints")
 
 
 @bp_api.get("")
 def breakpoints():
-    return jsonify({"items": list_rows("breakpoint")})
+    return jsonify({"items": list_breakpoints(request.args.get("sessionId"))})
 
 
 @bp_api.post("")

@@ -20,6 +20,9 @@ def test_record_discover_and_breakpoint_match(tmp_path):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
     client = app.test_client()
 
+    created = client.post("/api/session/create", json={}).get_json()
+    assert created["mode"] == "idle"
+    assert created["sessionId"].startswith("session-")
     start = client.post("/api/session/start-record", json={}).get_json()
     assert start["mode"] == "record"
     assert client.post("/api/calls/before", json=make_before()).get_json()["action"] == "continue"
@@ -34,3 +37,13 @@ def test_record_discover_and_breakpoint_match(tmp_path):
     paused = client.post("/api/calls/before", json=make_before("call-2")).get_json()
     assert paused["action"] == "pause"
     assert client.post("/api/calls/call-2/continue").get_json()["success"]
+
+
+def test_record_requires_selected_session(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    response = client.post("/api/session/start-record", json={})
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "请先新建或选择会话"

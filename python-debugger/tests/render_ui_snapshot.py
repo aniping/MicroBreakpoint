@@ -16,6 +16,7 @@ from desktop.bridge import Bridge
 
 
 def seed_backend(base):
+    requests.post(base + "/api/session/create", json={}, timeout=3)
     requests.post(base + "/api/session/start-record", json={}, timeout=3)
     for index in range(1, 11):
         method = "instrumentControl" if index % 2 == 0 else "instrumentInitialize"
@@ -96,6 +97,7 @@ def main():
     root = engine.rootObjects()[0]
     root.setWidth(1448)
     root.setHeight(1070)
+    root.setProperty("currentPage", 0)
 
     def capture():
         bridge.refreshAll()
