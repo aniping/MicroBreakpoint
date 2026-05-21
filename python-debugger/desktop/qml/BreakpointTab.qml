@@ -82,12 +82,12 @@ Item {
                             onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
                         }
                         Button {
-                            text: "删除"
-                            Layout.preferredWidth: 64
+                            text: "×"
+                            Layout.preferredWidth: 34
                             Layout.preferredHeight: 32
                             onClicked: bridge.deleteBreakpoint(modelData.id)
                             background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
-                            contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                     }
                 }
