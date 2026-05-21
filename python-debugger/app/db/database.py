@@ -43,6 +43,7 @@ def migrate_db(db):
     ensure_column(db, "discovered_interface", "query_signature", "TEXT")
     ensure_column(db, "discovered_interface", "body_signature", "TEXT")
     ensure_column(db, "discovered_interface", "content_type", "TEXT")
+    ensure_column(db, "discovered_interface", "interface_alias", "TEXT")
 
 
 def ensure_column(db, table, column, definition):

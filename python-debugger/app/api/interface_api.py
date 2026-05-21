@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
-from app.services.core import create_breakpoint, list_interfaces, normalize
+from app.services.core import create_breakpoint, list_interfaces, normalize, update_interface_alias
 
 interface_api = Blueprint("interface_api", __name__, url_prefix="/api/interfaces")
 
@@ -17,6 +17,13 @@ def interface_detail(interface_id):
     return jsonify(normalize(row_to_dict(row)) if row else {"success": False, "message": "not found"}), 200 if row else 404
 
 
+@interface_api.patch("/<interface_id>/alias")
+def update_alias(interface_id):
+    body = request.get_json(silent=True) or {}
+    result = update_interface_alias(interface_id, body.get("alias", ""))
+    return jsonify(result), 200 if result.get("success") else 404
+
+
 @interface_api.post("/<interface_id>/breakpoint")
 def breakpoint_from_interface(interface_id):
     row = get_db().execute("SELECT * FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
@@ -25,7 +32,7 @@ def breakpoint_from_interface(interface_id):
     item = normalize(row_to_dict(row))
     body = request.get_json(silent=True) or {}
     return jsonify(create_breakpoint({
-        "name": body.get("name") or f"{item['method_name']} breakpoint",
+        "name": body.get("name") or f"{item.get('interface_alias') or item['method_name']} breakpoint",
         "enabled": body.get("enabled", True),
         "serviceName": item["service_name"],
         "className": item["class_name"],

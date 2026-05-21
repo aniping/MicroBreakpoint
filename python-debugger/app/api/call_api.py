@@ -1,7 +1,15 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
-from app.services.core import after_call, before_call, clear_call_records, create_breakpoint, list_calls, normalize
+from app.services.core import (
+    after_call,
+    before_call,
+    clear_call_records,
+    create_breakpoint,
+    list_calls,
+    normalize,
+    update_call_interface_alias,
+)
 from app.services.wait_manager import wait_manager
 
 call_api = Blueprint("call_api", __name__, url_prefix="/api/calls")
@@ -32,6 +40,13 @@ def clear_calls():
 def call_detail(call_id):
     row = get_db().execute("SELECT * FROM call_record WHERE call_id=?", (call_id,)).fetchone()
     return jsonify(normalize(row_to_dict(row)) if row else {"success": False, "message": "not found"}), 200 if row else 404
+
+
+@call_api.patch("/<call_id>/alias")
+def update_call_alias(call_id):
+    body = request.get_json(silent=True) or {}
+    result = update_call_interface_alias(call_id, body.get("alias", ""))
+    return jsonify(result), 200 if result.get("success") else 404
 
 
 @call_api.get("/<call_id>/wait")
@@ -69,7 +84,7 @@ def breakpoint_from_call(call_id):
     selected = body.get("selectedArgs", [])
     condition = {k: call.get("args", {}).get(k) for k in selected if k in call.get("args", {})}
     return jsonify(create_breakpoint({
-        "name": body.get("name") or f"{call['method_name']} args breakpoint",
+        "name": body.get("name") or f"{call.get('interface_alias') or call['method_name']} args breakpoint",
         "enabled": body.get("enabled", True),
         "serviceName": call["service_name"],
         "className": call["class_name"],
@@ -78,5 +93,6 @@ def breakpoint_from_call(call_id):
         "condition": condition,
         "hitMode": body.get("hitMode", "always"),
         "sourceSessionId": call["session_id"],
+        "sourceInterfaceId": call.get("interface_id"),
         "sourceCallId": call_id,
     }))

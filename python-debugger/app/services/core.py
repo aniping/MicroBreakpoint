@@ -255,10 +255,10 @@ def upsert_interface(payload, session_id, now):
     db.execute(
         """INSERT INTO discovered_interface
         (id, session_id, service_name, class_name, method_name, interface_key, http_method, request_uri,
-         query_signature, body_signature, content_type, display_name, description,
+         query_signature, body_signature, content_type, interface_alias, display_name, description,
          parameter_schema_json, sample_args_json, first_seen_at, last_seen_at, call_count,
          success_count, exception_count, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
         ON CONFLICT(session_id, service_name, class_name, method_name)
         DO UPDATE SET display_name=excluded.display_name, description=excluded.description,
           parameter_schema_json=excluded.parameter_schema_json, sample_args_json=excluded.sample_args_json,
@@ -278,6 +278,7 @@ def upsert_interface(payload, session_id, now):
             identity["query_signature"],
             identity["body_signature"],
             identity["content_type"],
+            payload.get("interfaceAlias"),
             payload.get("displayName"),
             payload.get("description"),
             dumps(schema),
@@ -377,7 +378,14 @@ def list_sessions():
 def list_calls(session_id=None):
     sid = session_id or STATE["sessionId"]
     if sid:
-        rows = get_db().execute("SELECT * FROM call_record WHERE session_id=? ORDER BY id DESC", (sid,)).fetchall()
+        rows = get_db().execute(
+            """SELECT c.*, i.interface_alias
+               FROM call_record c
+               LEFT JOIN discovered_interface i ON c.interface_id=i.id
+               WHERE c.session_id=?
+               ORDER BY c.id DESC""",
+            (sid,),
+        ).fetchall()
     else:
         rows = []
     return [normalize(row_to_dict(row)) for row in rows]
@@ -396,12 +404,66 @@ def list_breakpoints(session_id=None):
     sid = session_id or STATE["sessionId"]
     if sid:
         rows = get_db().execute(
-            "SELECT * FROM breakpoint WHERE source_session_id IS NULL OR source_session_id=? ORDER BY created_at DESC",
+            """SELECT b.*, COALESCE(b.source_interface_id, c.interface_id) AS resolved_interface_id,
+                      COALESCE(i.interface_alias, ci.interface_alias) AS interface_alias
+               FROM breakpoint b
+               LEFT JOIN discovered_interface i ON b.source_interface_id=i.id
+               LEFT JOIN call_record c ON b.source_call_id=c.call_id
+               LEFT JOIN discovered_interface ci ON c.interface_id=ci.id
+               WHERE b.source_session_id IS NULL OR b.source_session_id=?
+               ORDER BY b.created_at DESC""",
             (sid,),
         ).fetchall()
     else:
-        rows = get_db().execute("SELECT * FROM breakpoint ORDER BY created_at DESC").fetchall()
+        rows = get_db().execute(
+            """SELECT b.*, COALESCE(b.source_interface_id, c.interface_id) AS resolved_interface_id,
+                      COALESCE(i.interface_alias, ci.interface_alias) AS interface_alias
+               FROM breakpoint b
+               LEFT JOIN discovered_interface i ON b.source_interface_id=i.id
+               LEFT JOIN call_record c ON b.source_call_id=c.call_id
+               LEFT JOIN discovered_interface ci ON c.interface_id=ci.id
+               ORDER BY b.created_at DESC"""
+        ).fetchall()
     return [normalize(row_to_dict(row)) for row in rows]
+
+
+def update_interface_alias(interface_id, alias):
+    db = get_db()
+    row = db.execute("SELECT id FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
+    if not row:
+        return {"success": False, "message": "interface not found"}
+    now = now_iso()
+    db.execute(
+        "UPDATE discovered_interface SET interface_alias=?, updated_at=? WHERE id=?",
+        ((alias or "").strip(), now, interface_id),
+    )
+    db.commit()
+    return {"success": True, "interfaceId": interface_id, "interfaceAlias": (alias or "").strip()}
+
+
+def update_call_interface_alias(call_id, alias):
+    row = get_db().execute("SELECT interface_id FROM call_record WHERE call_id=?", (call_id,)).fetchone()
+    if not row:
+        return {"success": False, "message": "call not found"}
+    if not row["interface_id"]:
+        return {"success": False, "message": "call has no discovered interface"}
+    return update_interface_alias(row["interface_id"], alias)
+
+
+def update_breakpoint_interface_alias(breakpoint_id, alias):
+    row = get_db().execute(
+        """SELECT b.source_interface_id, c.interface_id
+           FROM breakpoint b
+           LEFT JOIN call_record c ON b.source_call_id=c.call_id
+           WHERE b.id=?""",
+        (breakpoint_id,),
+    ).fetchone()
+    if not row:
+        return {"success": False, "message": "breakpoint not found"}
+    interface_id = row["source_interface_id"] or row["interface_id"]
+    if not interface_id:
+        return {"success": False, "message": "breakpoint has no discovered interface"}
+    return update_interface_alias(interface_id, alias)
 
 
 def normalize(row):

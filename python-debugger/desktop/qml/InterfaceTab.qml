@@ -79,7 +79,7 @@ Item {
                         required property int index
                         property var boundBreakpoint: page.interfaceBreakpoint(modelData.id)
                         width: list.width
-                        height: 88
+                        height: 98
                         color: list.currentIndex === index ? "#173052" : (index % 2 ? "#151c24" : "#111820")
                         border.color: border
                         MouseArea { anchors.fill: parent; onClicked: list.currentIndex = index }
@@ -90,8 +90,24 @@ Item {
                             Rectangle { width: 10; height: 36; radius: 2; color: blue }
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 4
+                                spacing: 3
                                 Text { text: modelData.method_name + "  " + (modelData.display_name || ""); color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
+                                TextField {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 26
+                                    text: modelData.interface_alias || ""
+                                    placeholderText: "接口别名"
+                                    color: textStrong
+                                    placeholderTextColor: textMuted
+                                    font.pixelSize: 12
+                                    selectByMouse: true
+                                    onEditingFinished: {
+                                        if (text !== (modelData.interface_alias || "")) {
+                                            bridge.setInterfaceAlias(modelData.id, text)
+                                        }
+                                    }
+                                    background: Rectangle { radius: 4; color: "#10161d"; border.color: parent.activeFocus ? blue : border }
+                                }
                                 Text { text: modelData.class_name || "-"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
                             Text { text: "调用 " + (modelData.call_count || 0); color: textNormal; font.pixelSize: 14 }

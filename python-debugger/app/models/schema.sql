@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS discovered_interface (
   query_signature TEXT,
   body_signature TEXT,
   content_type TEXT,
+  interface_alias TEXT,
   display_name TEXT,
   description TEXT,
   parameter_schema_json TEXT,

@@ -322,13 +322,14 @@ Item {
                     Layout.preferredHeight: 46
                     spacing: 0
                     HeaderCell { label: "序号"; Layout.preferredWidth: 58; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "方法名"; Layout.preferredWidth: 166; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "中文描述"; Layout.preferredWidth: 112; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "状态"; Layout.preferredWidth: 82; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 92; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "调用时间"; Layout.preferredWidth: 140; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "命中断点"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "方法名"; Layout.preferredWidth: 150; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "中文描述"; Layout.preferredWidth: 104; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "接口别名"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "状态"; Layout.preferredWidth: 76; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 84; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "调用时间"; Layout.preferredWidth: 134; Layout.preferredHeight: 46 }
+                            HeaderCell { label: "命中断点"; Layout.preferredWidth: 112; Layout.preferredHeight: 46 }
                 }
 
                 ListView {
@@ -356,24 +357,47 @@ Item {
 
                         GridLayout {
                             anchors.fill: parent
-                            columns: 8
+                            columns: 9
                             rowSpacing: 0
                             columnSpacing: 0
                             DataCell { label: String(modelData.call_index || index + 1); labelColor: modelData.status === "paused" ? page.amber : page.textNormal; Layout.preferredWidth: 58; Layout.fillHeight: true }
-                            DataCell { label: modelData.method_name || "-"; labelColor: modelData.status === "exception" ? page.red : (modelData.status === "paused" ? page.amber : page.textStrong); Layout.preferredWidth: 166; Layout.fillHeight: true }
-                            DataCell { label: modelData.display_name || "-"; Layout.preferredWidth: 112; Layout.fillHeight: true }
+                            DataCell { label: modelData.method_name || "-"; labelColor: modelData.status === "exception" ? page.red : (modelData.status === "paused" ? page.amber : page.textStrong); Layout.preferredWidth: 150; Layout.fillHeight: true }
+                            DataCell { label: modelData.display_name || "-"; Layout.preferredWidth: 104; Layout.fillHeight: true }
                             Rectangle {
-                                Layout.preferredWidth: 82
+                                Layout.preferredWidth: 126
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: page.border
+                                TextField {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    text: modelData.interface_alias || ""
+                                    placeholderText: "未命名"
+                                    color: page.textStrong
+                                    placeholderTextColor: page.textMuted
+                                    font.pixelSize: 13
+                                    selectByMouse: true
+                                    enabled: !!modelData.interface_id
+                                    onEditingFinished: {
+                                        if (modelData.interface_id && text !== (modelData.interface_alias || "")) {
+                                            bridge.setCallAlias(modelData.call_id, text)
+                                        }
+                                    }
+                                    background: Rectangle { radius: 4; color: parent.enabled ? "#10161d" : "transparent"; border.color: parent.activeFocus ? page.blue : "transparent" }
+                                }
+                            }
+                            Rectangle {
+                                Layout.preferredWidth: 76
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: page.border
                                 StatusBadge { status: modelData.status || ""; anchors.centerIn: parent }
                             }
-                            DataCell { label: modelData.cost_ms === null || modelData.cost_ms === undefined ? "-" : String(modelData.cost_ms); Layout.preferredWidth: 92; Layout.fillHeight: true }
+                            DataCell { label: modelData.cost_ms === null || modelData.cost_ms === undefined ? "-" : String(modelData.cost_ms); Layout.preferredWidth: 84; Layout.fillHeight: true }
                             DataCell { label: modelData.thread_name || "-"; Layout.fillWidth: true; Layout.fillHeight: true }
-                            DataCell { label: shortTime(modelData.created_at); Layout.preferredWidth: 140; Layout.fillHeight: true }
+                            DataCell { label: shortTime(modelData.created_at); Layout.preferredWidth: 134; Layout.fillHeight: true }
                             Rectangle {
-                                Layout.preferredWidth: 126
+                                Layout.preferredWidth: 112
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: page.border

@@ -133,6 +133,33 @@ def test_interface_identity_uses_http_signature(tmp_path):
     assert by_query[dumps({"cmdName": ["stop"], "instType": ["VNA"], "slotId": ["1"]})]["call_count"] == 1
 
 
+def test_interface_alias_syncs_across_calls_interfaces_and_breakpoints(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    client.post("/api/session/create", json={})
+    client.post("/api/session/start-record", json={})
+    client.post("/api/calls/before", json=make_before("alias-call"))
+    client.post("/api/calls/after", json={"callId": "alias-call", "success": True, "costMs": 5, "result": {"ok": True}})
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
+    assert client.post("/api/calls/alias-call/breakpoint", json={}).get_json()["success"]
+
+    assert client.patch(f"/api/interfaces/{interface_id}/alias", json={"alias": "启动仪表"}).get_json()["success"]
+    assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "启动仪表"
+    assert client.get("/api/calls").get_json()["items"][0]["interface_alias"] == "启动仪表"
+    assert {item["interface_alias"] for item in client.get("/api/breakpoints").get_json()["items"]} == {"启动仪表"}
+
+    assert client.patch("/api/calls/alias-call/alias", json={"alias": "调用侧别名"}).get_json()["success"]
+    assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "调用侧别名"
+    assert client.get("/api/breakpoints").get_json()["items"][0]["interface_alias"] == "调用侧别名"
+
+    breakpoint_id = client.get("/api/breakpoints").get_json()["items"][0]["id"]
+    assert client.patch(f"/api/breakpoints/{breakpoint_id}/alias", json={"alias": "断点侧别名"}).get_json()["success"]
+    assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "断点侧别名"
+    assert client.get("/api/calls").get_json()["items"][0]["interface_alias"] == "断点侧别名"
+
+
 def test_clear_current_session_call_records(tmp_path):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
     client = app.test_client()

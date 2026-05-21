@@ -61,7 +61,7 @@ Item {
                     required property var modelData
                     required property int index
                     width: list.width
-                    height: 70
+                    height: 84
                     color: index % 2 ? "#151c24" : "#111820"
                     border.color: border
                     RowLayout {
@@ -74,6 +74,23 @@ Item {
                             Layout.fillWidth: true
                             spacing: 3
                             Text { text: modelData.name || modelData.method_name; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
+                            TextField {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 26
+                                text: modelData.interface_alias || ""
+                                placeholderText: "接口别名"
+                                color: textStrong
+                                placeholderTextColor: textMuted
+                                font.pixelSize: 12
+                                selectByMouse: true
+                                enabled: !!modelData.resolved_interface_id
+                                onEditingFinished: {
+                                    if (modelData.resolved_interface_id && text !== (modelData.interface_alias || "")) {
+                                        bridge.setBreakpointAlias(modelData.id, text)
+                                    }
+                                }
+                                background: Rectangle { radius: 4; color: parent.enabled ? "#10161d" : "transparent"; border.color: parent.activeFocus ? "#2f81f7" : border }
+                            }
                             Text { text: (modelData.method_name || "-") + " | 条件 " + JSON.stringify(modelData.condition || {}) + " | 命中 " + (modelData.hit_count || 0) + " 次"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                         }
                         Text { text: modelData.enabled ? "启用" : "禁用"; color: modelData.enabled ? green : red; font.pixelSize: 14; font.weight: Font.DemiBold }
