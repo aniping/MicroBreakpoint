@@ -9,7 +9,7 @@ TextField {
     implicitHeight: 38
     color: appTheme.textStrong
     placeholderTextColor: appTheme.textMuted
-    selectedTextColor: "#FFFFFF"
+    selectedTextColor: appTheme.onAccent
     selectionColor: appTheme.primary
     font.pixelSize: 14
     selectByMouse: true

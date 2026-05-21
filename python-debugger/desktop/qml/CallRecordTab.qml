@@ -104,33 +104,6 @@ Item {
         return result
     }
 
-    component MiniSwitch: Rectangle {
-        id: sw
-        property bool checked: false
-        property bool enabledSwitch: true
-        signal toggled(bool checked)
-        width: 42
-        height: 22
-        radius: 11
-        color: checked ? "#1f6feb" : "#26313d"
-        border.color: checked ? "#58a6ff" : "#4b5563"
-        opacity: enabledSwitch ? 1 : 0.45
-        Rectangle {
-            width: 16
-            height: 16
-            radius: 8
-            color: "#e8eef5"
-            anchors.verticalCenter: parent.verticalCenter
-            x: sw.checked ? 22 : 4
-            Behavior on x { NumberAnimation { duration: 110 } }
-        }
-        MouseArea {
-            anchors.fill: parent
-            enabled: sw.enabledSwitch
-            onClicked: sw.toggled(!sw.checked)
-        }
-    }
-
     component SegmentButton: Button {
         id: seg
         property bool selected: false
@@ -144,7 +117,7 @@ Item {
         }
         contentItem: Text {
             text: seg.text
-            color: seg.selected ? "#ffffff" : page.textNormal
+            color: seg.selected ? page.appTheme.onAccent : page.textNormal
             font: seg.font
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
@@ -274,8 +247,8 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: panel
-            border.color: border
+            color: page.panel
+            border.color: page.border
             radius: 3
 
             ColumnLayout {
@@ -285,8 +258,8 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 62
-                    color: panel
-                    border.color: border
+                    color: page.panel
+                    border.color: page.border
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: 12
@@ -455,25 +428,25 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 62
                     color: page.appTheme.panelBgAlt
-                    border.color: border
+                    border.color: page.border
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 18
                         anchors.rightMargin: 18
-                        Text { text: "共 " + page.filterItems().length + " / " + items.length + " 条"; color: textNormal; font.pixelSize: 15 }
+                        Text { text: "共 " + page.filterItems().length + " / " + items.length + " 条"; color: page.textNormal; font.pixelSize: 15 }
                         Item { Layout.fillWidth: true }
                         Button {
                             text: "‹"
                             Layout.preferredWidth: 36
                             Layout.preferredHeight: 36
-                            background: Rectangle { radius: 4; color: page.appTheme.inputBg; border.color: border }
-                            contentItem: Text { text: parent.text; color: textMuted; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { radius: 4; color: page.appTheme.inputBg; border.color: page.border }
+                            contentItem: Text { text: parent.text; color: page.textMuted; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                         Rectangle {
                             Layout.preferredWidth: 38
                             Layout.preferredHeight: 36
                             color: page.appTheme.primarySoft
-                            border.color: blue
+                            border.color: page.blue
                             radius: 4
                             Text { anchors.centerIn: parent; text: "1"; color: page.appTheme.primary; font.pixelSize: 16; font.weight: Font.DemiBold }
                         }
@@ -481,16 +454,16 @@ Item {
                             text: "›"
                             Layout.preferredWidth: 36
                             Layout.preferredHeight: 36
-                            background: Rectangle { radius: 4; color: page.appTheme.inputBg; border.color: border }
-                            contentItem: Text { text: parent.text; color: textMuted; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { radius: 4; color: page.appTheme.inputBg; border.color: page.border }
+                            contentItem: Text { text: parent.text; color: page.textMuted; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                         Rectangle {
                             Layout.preferredWidth: 98
                             Layout.preferredHeight: 36
                             radius: 4
                             color: page.appTheme.inputBg
-                            border.color: border
-                            Text { anchors.centerIn: parent; text: "20 条/页"; color: textNormal; font.pixelSize: 14 }
+                            border.color: page.border
+                            Text { anchors.centerIn: parent; text: "20 条/页"; color: page.textNormal; font.pixelSize: 14 }
                         }
                     }
                 }
@@ -500,8 +473,8 @@ Item {
         Rectangle {
             Layout.preferredWidth: 488
             Layout.fillHeight: true
-            color: panel
-            border.color: border
+            color: page.panel
+            border.color: page.border
             radius: 3
 
             ColumnLayout {
@@ -511,10 +484,10 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 42
-                    color: panel
-                    border.color: border
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "调用详情"; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: page.callDetailExpanded ? "⌃" : "⌄"; color: textMuted; font.pixelSize: 16 }
+                    color: page.panel
+                    border.color: page.border
+                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "调用详情"; color: page.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
+                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: page.callDetailExpanded ? "⌃" : "⌄"; color: page.textMuted; font.pixelSize: 16 }
                     MouseArea { anchors.fill: parent; onClicked: page.callDetailExpanded = !page.callDetailExpanded }
                 }
 
@@ -547,8 +520,8 @@ Item {
                             RowLayout {
                                 anchors.fill: parent
                                 spacing: 8
-                                Text { text: modelData[0]; color: textNormal; font.pixelSize: 13; Layout.preferredWidth: 96; elide: Text.ElideRight }
-                                Text { text: modelData[1]; color: modelData[0] === "status" ? (selectedItem ? statusColor(selectedItem.status) : textMuted) : textStrong; font.pixelSize: 13; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: modelData[0]; color: page.textNormal; font.pixelSize: 13; Layout.preferredWidth: 96; elide: Text.ElideRight }
+                                Text { text: modelData[1]; color: modelData[0] === "status" ? (selectedItem ? statusColor(selectedItem.status) : page.textMuted) : page.textStrong; font.pixelSize: 13; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
                         }
                     }
@@ -558,7 +531,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: page.callDetailExpanded ? 1 : 0
                     visible: page.callDetailExpanded
-                    color: border
+                    color: page.border
                 }
 
                 RowLayout {
@@ -597,8 +570,8 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 112
-                    color: panel
-                    border.color: border
+                    color: page.panel
+                    border.color: page.border
                     GridLayout {
                         anchors.fill: parent
                         anchors.margins: 10
@@ -658,10 +631,10 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 42
-                    color: panel
-                    border.color: border
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "断点列表 (" + breakpoints.length + ")"; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: page.breakpointPanelExpanded ? "⌃" : "⌄"; color: textMuted; font.pixelSize: 16 }
+                    color: page.panel
+                    border.color: page.border
+                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "断点列表 (" + breakpoints.length + ")"; color: page.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
+                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: page.breakpointPanelExpanded ? "⌃" : "⌄"; color: page.textMuted; font.pixelSize: 16 }
                     MouseArea { anchors.fill: parent; onClicked: page.breakpointPanelExpanded = !page.breakpointPanelExpanded }
                 }
 
@@ -677,20 +650,20 @@ Item {
                         width: parent ? parent.width : 480
                         height: 58
                         color: index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg
-                        border.color: border
+                        border.color: page.border
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 14
                             anchors.rightMargin: 12
                             spacing: 12
-                            Rectangle { width: 10; height: 10; radius: 5; color: modelData.enabled ? red : textMuted }
+                            Rectangle { width: 10; height: 10; radius: 5; color: modelData.enabled ? page.green : page.textMuted }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 2
-                                Text { text: modelData.id + "   " + modelData.method_name; color: textStrong; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
-                                Text { text: modelData.class_name || "-"; color: textMuted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
+                                Text { text: modelData.id + "   " + modelData.method_name; color: page.textStrong; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
+                                Text { text: modelData.class_name || "-"; color: page.textMuted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
                             }
-                            Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.green : textMuted; font.pixelSize: 13 }
+                            Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.green : page.textMuted; font.pixelSize: 13 }
                             MbSwitch {
                                 appTheme: page.appTheme
                                 checked: !!modelData.enabled

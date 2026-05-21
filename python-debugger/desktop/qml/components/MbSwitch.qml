@@ -20,7 +20,7 @@ Rectangle {
         width: 16
         height: 16
         radius: 8
-        color: control.checked ? "#FFFFFF" : control.appTheme.textMuted
+        color: control.checked ? control.appTheme.onAccent : control.appTheme.textMuted
         anchors.verticalCenter: parent.verticalCenter
         x: control.checked ? 22 : 4
 

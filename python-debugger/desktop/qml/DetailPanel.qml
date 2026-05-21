@@ -4,10 +4,11 @@ import QtQuick.Layouts
 
 Rectangle {
     id: detailPanel
+    property var appTheme
     property string title: "详情"
     property string text: ""
-    color: "#141a21"
-    border.color: "#2a333d"
+    color: appTheme.panelBg
+    border.color: appTheme.border
     radius: 3
 
     ColumnLayout {
@@ -16,9 +17,9 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 42
-            color: "#141a21"
-            border.color: "#2a333d"
-            Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: title; color: "#e8eef5"; font.bold: true; font.pixelSize: 15 }
+            color: appTheme.panelBg
+            border.color: appTheme.border
+            Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: title; color: appTheme.textStrong; font.bold: true; font.pixelSize: 15 }
         }
         ScrollView {
             Layout.fillWidth: true
@@ -26,26 +27,26 @@ Rectangle {
             clip: true
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
-                contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? "#2f81f7" : "#4b5563" }
-                background: Rectangle { color: "#0d1218"; radius: 4 }
+                contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? detailPanel.appTheme.primary : detailPanel.appTheme.textDisabled }
+                background: Rectangle { color: detailPanel.appTheme.panelBgAlt; radius: 4 }
             }
             ScrollBar.horizontal: ScrollBar {
                 policy: ScrollBar.AsNeeded
-                contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? "#2f81f7" : "#4b5563" }
-                background: Rectangle { color: "#0d1218"; radius: 4 }
+                contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? detailPanel.appTheme.primary : detailPanel.appTheme.textDisabled }
+                background: Rectangle { color: detailPanel.appTheme.panelBgAlt; radius: 4 }
             }
 
             TextArea {
                 readOnly: true
                 selectByMouse: true
                 text: detailPanel.text
-                color: "#b6e3ff"
-                selectedTextColor: "#ffffff"
-                selectionColor: "#1f6feb"
+                color: detailPanel.appTheme.codeText
+                selectedTextColor: detailPanel.appTheme.onAccent
+                selectionColor: detailPanel.appTheme.primary
                 font.family: "Consolas"
                 font.pixelSize: 13
                 wrapMode: TextArea.NoWrap
-                background: Rectangle { color: "#0f151c"; border.color: "#2a333d" }
+                background: Rectangle { color: detailPanel.appTheme.codeBg; border.color: detailPanel.appTheme.border }
             }
         }
     }

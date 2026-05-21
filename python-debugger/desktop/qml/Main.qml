@@ -118,7 +118,7 @@ ApplicationWindow {
                         GradientStop { position: 0; color: theme.primary }
                         GradientStop { position: 1; color: theme.primaryHover }
                     }
-                    Text { anchors.centerIn: parent; text: "M"; color: "white"; font.bold: true; font.pixelSize: 13 }
+                    Text { anchors.centerIn: parent; text: "M"; color: theme.onAccent; font.bold: true; font.pixelSize: 13 }
                 }
                 Text {
                     text: root.title

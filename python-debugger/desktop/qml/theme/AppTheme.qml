@@ -25,6 +25,7 @@ QtObject {
     readonly property color primary: isDark ? "#3B82F6" : "#2563EB"
     readonly property color primaryHover: isDark ? "#2563EB" : "#1D4ED8"
     readonly property color primarySoft: isDark ? "#1D3B63" : "#DBEAFE"
+    readonly property color onAccent: "#FFFFFF"
     readonly property color success: isDark ? "#22C55E" : "#16A34A"
     readonly property color successSoft: isDark ? "#143D28" : "#DCFCE7"
     readonly property color warning: isDark ? "#FACC15" : "#CA8A04"

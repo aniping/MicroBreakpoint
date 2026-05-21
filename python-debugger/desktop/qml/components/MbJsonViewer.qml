@@ -41,7 +41,7 @@ Rectangle {
             readOnly: true
             selectByMouse: true
             color: viewer.appTheme.codeText
-            selectedTextColor: "#FFFFFF"
+            selectedTextColor: viewer.appTheme.onAccent
             selectionColor: viewer.appTheme.primary
             font.family: "Consolas"
             font.pixelSize: 13
