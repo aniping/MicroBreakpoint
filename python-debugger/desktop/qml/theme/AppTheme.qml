@@ -1,0 +1,39 @@
+import QtQuick
+
+QtObject {
+    id: theme
+
+    property string mode: "dark"
+    readonly property bool isDark: mode !== "light"
+
+    readonly property color windowBg: isDark ? "#0B1117" : "#F5F7FA"
+    readonly property color topBarBg: isDark ? "#0F1720" : "#FFFFFF"
+    readonly property color toolbarBg: isDark ? "#111A24" : "#FFFFFF"
+    readonly property color sidebarBg: isDark ? "#0F1720" : "#F8FAFC"
+    readonly property color contentBg: isDark ? "#0B1117" : "#F5F7FA"
+    readonly property color panelBg: isDark ? "#121C27" : "#FFFFFF"
+    readonly property color panelBgAlt: isDark ? "#162231" : "#F8FAFC"
+    readonly property color panelHover: isDark ? "#1B2A3A" : "#EEF4FF"
+    readonly property color panelActive: isDark ? "#163B63" : "#E8F1FF"
+    readonly property color border: isDark ? "#253244" : "#D8E0EA"
+    readonly property color borderSoft: isDark ? "#1C2836" : "#E6ECF2"
+    readonly property color divider: isDark ? "#223044" : "#E2E8F0"
+    readonly property color textStrong: isDark ? "#EAF2FF" : "#172033"
+    readonly property color textNormal: isDark ? "#C7D3E0" : "#344054"
+    readonly property color textMuted: isDark ? "#8492A6" : "#667085"
+    readonly property color textDisabled: isDark ? "#5E6B7B" : "#98A2B3"
+    readonly property color primary: isDark ? "#3B82F6" : "#2563EB"
+    readonly property color primaryHover: isDark ? "#2563EB" : "#1D4ED8"
+    readonly property color primarySoft: isDark ? "#1D3B63" : "#DBEAFE"
+    readonly property color success: isDark ? "#22C55E" : "#16A34A"
+    readonly property color successSoft: isDark ? "#143D28" : "#DCFCE7"
+    readonly property color warning: isDark ? "#FACC15" : "#CA8A04"
+    readonly property color warningSoft: isDark ? "#3B3213" : "#FEF3C7"
+    readonly property color danger: isDark ? "#EF4444" : "#DC2626"
+    readonly property color dangerSoft: isDark ? "#3A171A" : "#FEE2E2"
+    readonly property color inputBg: isDark ? "#0D1520" : "#FFFFFF"
+    readonly property color inputBorder: isDark ? "#2A3A4F" : "#CBD5E1"
+    readonly property color inputFocus: isDark ? "#3B82F6" : "#2563EB"
+    readonly property color codeBg: isDark ? "#08111C" : "#F8FAFC"
+    readonly property color codeText: isDark ? "#CFE6FF" : "#1E293B"
+}

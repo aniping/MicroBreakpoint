@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "theme"
 
 ApplicationWindow {
     id: root
@@ -10,19 +11,20 @@ ApplicationWindow {
     minimumWidth: 1100
     minimumHeight: 760
     title: "MicroBreakpoint - Java 微服务接口断点调试器"
-    color: "#0d1218"
+    color: theme.windowBg
 
-    property color bg: "#0d1218"
-    property color panel: "#141a21"
-    property color panel2: "#10161d"
-    property color border: "#2a333d"
-    property color textStrong: "#e8eef5"
-    property color textNormal: "#c7d0da"
-    property color textMuted: "#8b98a7"
-    property color blue: "#2f81f7"
-    property color green: "#55d66b"
-    property color red: "#ff5d5d"
-    property color amber: "#f4d13d"
+    property string themeMode: "dark"
+    property color bg: theme.windowBg
+    property color panel: theme.panelBg
+    property color panel2: theme.panelBgAlt
+    property color border: theme.border
+    property color textStrong: theme.textStrong
+    property color textNormal: theme.textNormal
+    property color textMuted: theme.textMuted
+    property color blue: theme.primary
+    property color green: theme.success
+    property color red: theme.danger
+    property color amber: theme.warning
 
     property int currentPage: 3
     property var stateData: ({mode: "idle", callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0})
@@ -31,6 +33,11 @@ ApplicationWindow {
     property var breakpointItems: []
     property var sessionItems: []
     property string resultText: ""
+
+    AppTheme {
+        id: theme
+        mode: root.themeMode
+    }
 
     function modeText(mode) {
         if (mode === "record") return "记录中"
@@ -78,20 +85,20 @@ ApplicationWindow {
                 width: 15
                 height: 15
                 radius: 3
-                color: btn.enabled ? btn.accent : "#47515d"
+                color: btn.enabled ? btn.accent : theme.textDisabled
                 anchors.verticalCenter: parent.verticalCenter
             }
             Text {
                 text: btn.text
-                color: btn.enabled ? root.textStrong : "#687483"
+                color: btn.enabled ? root.textStrong : theme.textDisabled
                 font: btn.font
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
         background: Rectangle {
             radius: 4
-            color: btn.pressed ? "#243344" : (btn.hovered ? "#1d2631" : "#151b23")
-            border.color: btn.enabled ? "#323d49" : "#222a33"
+            color: btn.pressed ? theme.panelActive : (btn.hovered ? theme.panelHover : theme.panelBgAlt)
+            border.color: btn.enabled ? theme.border : theme.borderSoft
         }
     }
 
@@ -104,8 +111,8 @@ ApplicationWindow {
         Layout.preferredHeight: 62
         padding: 0
         background: Rectangle {
-            color: nav.selected ? "#18365e" : (nav.hovered ? "#121c28" : "transparent")
-            border.color: nav.selected ? "#245fa8" : "transparent"
+            color: nav.selected ? theme.panelActive : (nav.hovered ? theme.panelHover : "transparent")
+            border.color: nav.selected ? theme.primary : "transparent"
             Rectangle {
                 width: 3
                 height: parent.height
@@ -120,8 +127,8 @@ ApplicationWindow {
                 anchors.left: parent.left
                 anchors.leftMargin: 22
                 spacing: 12
-                Text { text: nav.iconText; color: nav.selected ? "#58a6ff" : "#a6b2c0"; font.pixelSize: 20; anchors.verticalCenter: parent.verticalCenter }
-                Text { text: nav.label; color: nav.selected ? "#cfe6ff" : "#c4ccd6"; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
+                Text { text: nav.iconText; color: nav.selected ? theme.primary : theme.textMuted; font.pixelSize: 20; anchors.verticalCenter: parent.verticalCenter }
+                Text { text: nav.label; color: nav.selected ? theme.textStrong : theme.textNormal; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
             }
         }
     }
@@ -133,8 +140,8 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 45
-            color: "#0f151c"
-            border.color: "#232c36"
+            color: theme.topBarBg
+            border.color: theme.borderSoft
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 18
@@ -145,8 +152,8 @@ ApplicationWindow {
                     height: 20
                     radius: 5
                     gradient: Gradient {
-                        GradientStop { position: 0; color: "#58a6ff" }
-                        GradientStop { position: 1; color: "#1f6feb" }
+                        GradientStop { position: 0; color: theme.primary }
+                        GradientStop { position: 1; color: theme.primaryHover }
                     }
                     Text { anchors.centerIn: parent; text: "M"; color: "white"; font.bold: true; font.pixelSize: 13 }
                 }
@@ -163,7 +170,7 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 70
-            color: "#141a21"
+            color: theme.toolbarBg
             border.color: root.border
             RowLayout {
                 anchors.fill: parent
@@ -178,7 +185,7 @@ ApplicationWindow {
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 MbButton { text: "刷新"; implicitWidth: 102; accent: root.blue; onClicked: bridge.refreshAll() }
                 MbButton { text: "继续全部"; accent: root.blue; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
-                MbButton { text: "清空筛选"; implicitWidth: 124; accent: "#94a3b8"; onClicked: bridge.refreshAll() }
+                MbButton { text: "清空筛选"; implicitWidth: 124; accent: theme.textMuted; onClicked: bridge.refreshAll() }
                 Item { Layout.fillWidth: true }
             }
         }
@@ -186,7 +193,7 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 58
-            color: "#10161d"
+            color: theme.panelBgAlt
             border.color: root.border
             RowLayout {
                 anchors.fill: parent
@@ -224,7 +231,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.preferredWidth: 152
                 Layout.fillHeight: true
-                color: "#10171f"
+                color: theme.sidebarBg
                 border.color: root.border
 
                 ColumnLayout {
@@ -259,7 +266,7 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 36
-            color: "#111820"
+            color: theme.panelBgAlt
             border.color: root.border
             RowLayout {
                 anchors.fill: parent
