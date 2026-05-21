@@ -75,37 +75,6 @@ ApplicationWindow {
         onTriggered: bridge.refreshAll()
     }
 
-    component NavButton: Button {
-        id: nav
-        property string label: ""
-        property string iconText: ""
-        property bool selected: false
-        Layout.fillWidth: true
-        Layout.preferredHeight: 62
-        padding: 0
-        background: Rectangle {
-            color: nav.selected ? theme.panelActive : (nav.hovered ? theme.panelHover : "transparent")
-            border.color: nav.selected ? theme.primary : "transparent"
-            Rectangle {
-                width: 3
-                height: parent.height
-                visible: nav.selected
-                color: root.blue
-                anchors.left: parent.left
-            }
-        }
-        contentItem: Item {
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
-                anchors.leftMargin: 22
-                spacing: 12
-                Text { text: nav.iconText; color: nav.selected ? theme.primary : theme.textMuted; font.pixelSize: 20; anchors.verticalCenter: parent.verticalCenter }
-                Text { text: nav.label; color: nav.selected ? theme.textStrong : theme.textNormal; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
-            }
-        }
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -193,26 +162,14 @@ ApplicationWindow {
                 anchors.fill: parent
                 anchors.leftMargin: 18
                 anchors.rightMargin: 18
-                spacing: 30
+                spacing: 10
 
-                Row {
-                    spacing: 8
-                    Layout.preferredWidth: 150
-                    anchors.verticalCenter: parent.verticalCenter
-                    Rectangle { width: 9; height: 9; radius: 5; color: modeColor(stateData.mode); anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "状态:"; color: root.textNormal; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: modeText(stateData.mode); color: modeColor(stateData.mode); font.bold: true; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
-                }
-                Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
-                Text { text: "Session:  " + (stateData.sessionId || "请先新建会话"); color: stateData.hasSession ? root.textNormal : root.amber; font.pixelSize: 15 }
-                Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
-                Text { text: "调用:  " + stateData.callCount; color: root.textStrong; font.pixelSize: 15 }
-                Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
-                Text { text: "接口:  " + stateData.discoveredInterfaceCount; color: root.textStrong; font.pixelSize: 15 }
-                Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
-                Text { text: "断点:  " + stateData.breakpointCount; color: root.textStrong; font.pixelSize: 15 }
-                Rectangle { width: 1; Layout.preferredHeight: 28; color: root.border }
-                Text { text: "暂停:  " + stateData.pausedCount; color: stateData.pausedCount > 0 ? root.amber : root.textStrong; font.bold: stateData.pausedCount > 0; font.pixelSize: 15 }
+                MbStatusChip { appTheme: theme; label: "状态"; value: modeText(stateData.mode); type: stateData.mode === "debug" ? "success" : (stateData.mode === "record" ? "primary" : "neutral"); Layout.preferredWidth: 140 }
+                MbStatusChip { appTheme: theme; label: "Session"; value: stateData.sessionId || "请先新建会话"; type: stateData.hasSession ? "neutral" : "warning"; Layout.preferredWidth: 300; Layout.maximumWidth: 360 }
+                MbStatusChip { appTheme: theme; label: "调用"; value: String(stateData.callCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
+                MbStatusChip { appTheme: theme; label: "接口"; value: String(stateData.discoveredInterfaceCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
+                MbStatusChip { appTheme: theme; label: "断点"; value: String(stateData.breakpointCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
+                MbStatusChip { appTheme: theme; label: "暂停"; value: String(stateData.pausedCount || 0); type: stateData.pausedCount > 0 ? "warning" : "neutral"; Layout.preferredWidth: 104 }
                 Item { Layout.fillWidth: true }
             }
         }
@@ -232,14 +189,14 @@ ApplicationWindow {
                     anchors.fill: parent
                     spacing: 0
                     Item { Layout.preferredHeight: 8 }
-                    NavButton { label: "调用记录"; iconText: "☷"; selected: currentPage === 0; onClicked: currentPage = 0 }
-                    NavButton { label: "已发现接口"; iconText: "◇"; selected: currentPage === 1; onClicked: currentPage = 1 }
-                    NavButton { label: "断点管理"; iconText: "◎"; selected: currentPage === 2; onClicked: currentPage = 2 }
-                    NavButton { label: "历史会话"; iconText: "◷"; selected: currentPage === 3; onClicked: currentPage = 3 }
-                    NavButton { label: "Java调用"; iconText: "J"; selected: currentPage === 4; onClicked: currentPage = 4 }
+                    MbNavButton { appTheme: theme; text: "调用记录"; iconText: "☷"; selected: currentPage === 0; onClicked: currentPage = 0 }
+                    MbNavButton { appTheme: theme; text: "已发现接口"; iconText: "◇"; selected: currentPage === 1; onClicked: currentPage = 1 }
+                    MbNavButton { appTheme: theme; text: "断点管理"; iconText: "◎"; selected: currentPage === 2; onClicked: currentPage = 2 }
+                    MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 3; onClicked: currentPage = 3 }
+                    MbNavButton { appTheme: theme; text: "Java调用"; iconText: "J"; selected: currentPage === 4; onClicked: currentPage = 4 }
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.border }
-                    NavButton { label: "设置"; iconText: "⚙"; selected: currentPage === 5; onClicked: currentPage = 5 }
+                    MbNavButton { appTheme: theme; text: "设置"; iconText: "⚙"; selected: currentPage === 5; onClicked: currentPage = 5 }
                 }
             }
 
