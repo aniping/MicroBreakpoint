@@ -441,31 +441,6 @@ def update_interface_alias(interface_id, alias):
     return {"success": True, "interfaceId": interface_id, "interfaceAlias": (alias or "").strip()}
 
 
-def update_call_interface_alias(call_id, alias):
-    row = get_db().execute("SELECT interface_id FROM call_record WHERE call_id=?", (call_id,)).fetchone()
-    if not row:
-        return {"success": False, "message": "call not found"}
-    if not row["interface_id"]:
-        return {"success": False, "message": "call has no discovered interface"}
-    return update_interface_alias(row["interface_id"], alias)
-
-
-def update_breakpoint_interface_alias(breakpoint_id, alias):
-    row = get_db().execute(
-        """SELECT b.source_interface_id, c.interface_id
-           FROM breakpoint b
-           LEFT JOIN call_record c ON b.source_call_id=c.call_id
-           WHERE b.id=?""",
-        (breakpoint_id,),
-    ).fetchone()
-    if not row:
-        return {"success": False, "message": "breakpoint not found"}
-    interface_id = row["source_interface_id"] or row["interface_id"]
-    if not interface_id:
-        return {"success": False, "message": "breakpoint has no discovered interface"}
-    return update_interface_alias(interface_id, alias)
-
-
 def normalize(row):
     for key in list(row.keys()):
         if key.endswith("_json"):

@@ -322,14 +322,14 @@ Item {
                     Layout.preferredHeight: 46
                     spacing: 0
                     HeaderCell { label: "序号"; Layout.preferredWidth: 58; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "方法名"; Layout.preferredWidth: 150; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "中文描述"; Layout.preferredWidth: 104; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "接口别名"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "状态"; Layout.preferredWidth: 76; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 84; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "调用时间"; Layout.preferredWidth: 134; Layout.preferredHeight: 46 }
-                            HeaderCell { label: "命中断点"; Layout.preferredWidth: 112; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "方法名"; Layout.preferredWidth: 150; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "中文描述"; Layout.preferredWidth: 104; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "接口别名"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "状态"; Layout.preferredWidth: 76; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 84; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "调用时间"; Layout.preferredWidth: 134; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "命中断点"; Layout.preferredWidth: 112; Layout.preferredHeight: 46 }
                 }
 
                 ListView {
@@ -368,22 +368,28 @@ Item {
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: page.border
-                                TextField {
-                                    anchors.fill: parent
-                                    anchors.margins: 6
-                                    text: modelData.interface_alias || ""
-                                    placeholderText: "未命名"
-                                    color: page.textStrong
-                                    placeholderTextColor: page.textMuted
-                                    font.pixelSize: 13
-                                    selectByMouse: true
-                                    enabled: !!modelData.interface_id
-                                    onEditingFinished: {
-                                        if (modelData.interface_id && text !== (modelData.interface_alias || "")) {
-                                            bridge.setCallAlias(modelData.call_id, text)
-                                        }
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    height: 26
+                                    radius: 4
+                                    color: modelData.interface_alias ? "#142237" : "transparent"
+                                    border.color: modelData.interface_alias ? "#2a5284" : "transparent"
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        text: modelData.interface_alias || "未命名"
+                                        color: modelData.interface_alias ? "#cfe6ff" : page.textMuted
+                                        font.pixelSize: 13
+                                        font.weight: modelData.interface_alias ? Font.DemiBold : Font.Normal
+                                        elide: Text.ElideRight
                                     }
-                                    background: Rectangle { radius: 4; color: parent.enabled ? "#10161d" : "transparent"; border.color: parent.activeFocus ? page.blue : "transparent" }
                                 }
                             }
                             Rectangle {

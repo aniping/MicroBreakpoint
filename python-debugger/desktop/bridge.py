@@ -123,16 +123,6 @@ class Bridge(QObject):
         self._emit_result(self._request("PATCH", f"{self.backend}/api/interfaces/{interfaceId}/alias", json={"alias": alias}))
         self.refreshAll()
 
-    @Slot(str, str)
-    def setCallAlias(self, callId, alias):
-        self._emit_result(self._request("PATCH", f"{self.backend}/api/calls/{callId}/alias", json={"alias": alias}))
-        self.refreshAll()
-
-    @Slot(str, str)
-    def setBreakpointAlias(self, breakpointId, alias):
-        self._emit_result(self._request("PATCH", f"{self.backend}/api/breakpoints/{breakpointId}/alias", json={"alias": alias}))
-        self.refreshAll()
-
     @Slot(str, bool)
     def setBreakpointEnabled(self, breakpointId, enabled):
         action = "enable" if enabled else "disable"

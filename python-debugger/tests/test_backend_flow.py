@@ -149,15 +149,9 @@ def test_interface_alias_syncs_across_calls_interfaces_and_breakpoints(tmp_path)
     assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "启动仪表"
     assert client.get("/api/calls").get_json()["items"][0]["interface_alias"] == "启动仪表"
     assert {item["interface_alias"] for item in client.get("/api/breakpoints").get_json()["items"]} == {"启动仪表"}
-
-    assert client.patch("/api/calls/alias-call/alias", json={"alias": "调用侧别名"}).get_json()["success"]
-    assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "调用侧别名"
-    assert client.get("/api/breakpoints").get_json()["items"][0]["interface_alias"] == "调用侧别名"
-
+    assert client.patch("/api/calls/alias-call/alias", json={"alias": "调用侧别名"}).status_code == 404
     breakpoint_id = client.get("/api/breakpoints").get_json()["items"][0]["id"]
-    assert client.patch(f"/api/breakpoints/{breakpoint_id}/alias", json={"alias": "断点侧别名"}).get_json()["success"]
-    assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "断点侧别名"
-    assert client.get("/api/calls").get_json()["items"][0]["interface_alias"] == "断点侧别名"
+    assert client.patch(f"/api/breakpoints/{breakpoint_id}/alias", json={"alias": "断点侧别名"}).status_code == 404
 
 
 def test_clear_current_session_call_records(tmp_path):

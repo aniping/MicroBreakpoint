@@ -8,7 +8,6 @@ from app.services.core import (
     create_breakpoint,
     list_calls,
     normalize,
-    update_call_interface_alias,
 )
 from app.services.wait_manager import wait_manager
 
@@ -40,13 +39,6 @@ def clear_calls():
 def call_detail(call_id):
     row = get_db().execute("SELECT * FROM call_record WHERE call_id=?", (call_id,)).fetchone()
     return jsonify(normalize(row_to_dict(row)) if row else {"success": False, "message": "not found"}), 200 if row else 404
-
-
-@call_api.patch("/<call_id>/alias")
-def update_call_alias(call_id):
-    body = request.get_json(silent=True) or {}
-    result = update_call_interface_alias(call_id, body.get("alias", ""))
-    return jsonify(result), 200 if result.get("success") else 404
 
 
 @call_api.get("/<call_id>/wait")

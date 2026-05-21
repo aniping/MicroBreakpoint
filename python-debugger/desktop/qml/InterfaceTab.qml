@@ -79,7 +79,7 @@ Item {
                         required property int index
                         property var boundBreakpoint: page.interfaceBreakpoint(modelData.id)
                         width: list.width
-                        height: 98
+                        height: 108
                         color: list.currentIndex === index ? "#173052" : (index % 2 ? "#151c24" : "#111820")
                         border.color: border
                         MouseArea { anchors.fill: parent; onClicked: list.currentIndex = index }
@@ -90,23 +90,45 @@ Item {
                             Rectangle { width: 10; height: 36; radius: 2; color: blue }
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 3
+                                spacing: 5
                                 Text { text: modelData.method_name + "  " + (modelData.display_name || ""); color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
-                                TextField {
+                                Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 26
-                                    text: modelData.interface_alias || ""
-                                    placeholderText: "接口别名"
-                                    color: textStrong
-                                    placeholderTextColor: textMuted
-                                    font.pixelSize: 12
-                                    selectByMouse: true
-                                    onEditingFinished: {
-                                        if (text !== (modelData.interface_alias || "")) {
-                                            bridge.setInterfaceAlias(modelData.id, text)
+                                    Layout.preferredHeight: 36
+                                    radius: 6
+                                    color: "#10161d"
+                                    border.color: "#2a5284"
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 10
+                                        anchors.rightMargin: 10
+                                        spacing: 10
+                                        Text {
+                                            text: "别名"
+                                            color: "#8fbce8"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            Layout.preferredWidth: 34
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        TextField {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            text: modelData.interface_alias || ""
+                                            placeholderText: "为接口命名，便于调用记录和断点识别"
+                                            color: textStrong
+                                            placeholderTextColor: textMuted
+                                            font.pixelSize: 14
+                                            font.weight: Font.DemiBold
+                                            selectByMouse: true
+                                            onEditingFinished: {
+                                                if (text !== (modelData.interface_alias || "")) {
+                                                    bridge.setInterfaceAlias(modelData.id, text)
+                                                }
+                                            }
+                                            background: Rectangle { color: "transparent" }
                                         }
                                     }
-                                    background: Rectangle { radius: 4; color: "#10161d"; border.color: parent.activeFocus ? blue : border }
                                 }
                                 Text { text: modelData.class_name || "-"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                             }

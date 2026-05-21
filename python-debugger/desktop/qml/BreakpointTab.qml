@@ -61,7 +61,7 @@ Item {
                     required property var modelData
                     required property int index
                     width: list.width
-                    height: 84
+                    height: 78
                     color: index % 2 ? "#151c24" : "#111820"
                     border.color: border
                     RowLayout {
@@ -74,22 +74,35 @@ Item {
                             Layout.fillWidth: true
                             spacing: 3
                             Text { text: modelData.name || modelData.method_name; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
-                            TextField {
+                            RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 26
-                                text: modelData.interface_alias || ""
-                                placeholderText: "接口别名"
-                                color: textStrong
-                                placeholderTextColor: textMuted
-                                font.pixelSize: 12
-                                selectByMouse: true
-                                enabled: !!modelData.resolved_interface_id
-                                onEditingFinished: {
-                                    if (modelData.resolved_interface_id && text !== (modelData.interface_alias || "")) {
-                                        bridge.setBreakpointAlias(modelData.id, text)
+                                Layout.preferredHeight: 24
+                                spacing: 8
+                                Text {
+                                    text: "别名"
+                                    color: textMuted
+                                    font.pixelSize: 12
+                                    Layout.preferredWidth: 30
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 24
+                                    radius: 4
+                                    color: modelData.interface_alias ? "#142237" : "transparent"
+                                    border.color: modelData.interface_alias ? "#2a5284" : border
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        text: modelData.interface_alias || "未命名"
+                                        color: modelData.interface_alias ? "#cfe6ff" : textMuted
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
                                     }
                                 }
-                                background: Rectangle { radius: 4; color: parent.enabled ? "#10161d" : "transparent"; border.color: parent.activeFocus ? "#2f81f7" : border }
                             }
                             Text { text: (modelData.method_name || "-") + " | 条件 " + JSON.stringify(modelData.condition || {}) + " | 命中 " + (modelData.hit_count || 0) + " 次"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                         }

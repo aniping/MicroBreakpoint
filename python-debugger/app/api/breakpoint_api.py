@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db
-from app.services.core import create_breakpoint, list_breakpoints, update_breakpoint_interface_alias
+from app.services.core import create_breakpoint, list_breakpoints
 
 bp_api = Blueprint("bp_api", __name__, url_prefix="/api/breakpoints")
 
@@ -22,13 +22,6 @@ def delete_breakpoint(breakpoint_id):
     get_db().execute("DELETE FROM breakpoint WHERE id=?", (breakpoint_id,))
     get_db().commit()
     return jsonify({"success": True})
-
-
-@bp_api.patch("/<breakpoint_id>/alias")
-def update_breakpoint_alias(breakpoint_id):
-    body = request.get_json(silent=True) or {}
-    result = update_breakpoint_interface_alias(breakpoint_id, body.get("alias", ""))
-    return jsonify(result), 200 if result.get("success") else 404
 
 
 @bp_api.post("/<breakpoint_id>/enable")
