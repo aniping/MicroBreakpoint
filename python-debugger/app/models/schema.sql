@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS call_record (
   cost_ms INTEGER,
   status TEXT,
   breakpoint_id TEXT,
+  interface_id TEXT,
+  discovery_enabled INTEGER DEFAULT 1,
   created_at TEXT,
   updated_at TEXT
 );
@@ -42,6 +44,12 @@ CREATE TABLE IF NOT EXISTS discovered_interface (
   service_name TEXT,
   class_name TEXT,
   method_name TEXT,
+  interface_key TEXT,
+  http_method TEXT,
+  request_uri TEXT,
+  query_signature TEXT,
+  body_signature TEXT,
+  content_type TEXT,
   display_name TEXT,
   description TEXT,
   parameter_schema_json TEXT,

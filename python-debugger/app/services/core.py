@@ -1,4 +1,5 @@
 import uuid
+from hashlib import sha256
 
 from app.db.database import get_db, row_to_dict
 from app.services.wait_manager import wait_manager
@@ -106,11 +107,15 @@ def before_call(payload):
     now = now_iso()
     session_id = STATE["sessionId"]
     call_index = db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0] + 1
+    discovery_enabled = 0 if STATE["debugging"] else 1
+    interface_id = None
+    if discovery_enabled:
+        interface_id = upsert_interface(payload, session_id, now)
     db.execute(
         """INSERT OR REPLACE INTO call_record
         (call_id, session_id, call_index, service_name, class_name, method_name, display_name, description,
-         thread_name, args_json, parameter_meta_json, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)""",
+         thread_name, args_json, parameter_meta_json, status, interface_id, discovery_enabled, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?)""",
         (
             payload["callId"],
             session_id,
@@ -123,13 +128,12 @@ def before_call(payload):
             payload.get("threadName"),
             dumps(payload.get("args", {})),
             dumps(payload.get("parameterMeta", [])),
+            interface_id,
+            discovery_enabled,
             now,
             now,
         ),
     )
-    interface_id = None
-    if not STATE["debugging"]:
-        interface_id = upsert_interface(payload, session_id, now)
     matched = match_breakpoint(payload)
     if STATE["debugging"] and matched:
         wait_manager.create(payload["callId"])
@@ -171,40 +175,75 @@ def after_call(payload):
         ),
     )
     row = db.execute("SELECT * FROM call_record WHERE call_id=?", (payload.get("callId"),)).fetchone()
-    if row and not STATE["debugging"]:
+    if row and row["discovery_enabled"] and row["interface_id"]:
         update_interface_stats(row, payload, now)
     db.commit()
     return {"success": True}
 
 
 def upsert_interface(payload, session_id, now):
-    interface_id = uuid.uuid5(
-        uuid.NAMESPACE_URL,
-        "|".join([session_id, payload.get("serviceName", ""), payload.get("className", ""), payload.get("methodName", "")]),
-    ).hex
+    identity = interface_identity(payload)
+    interface_id = uuid.uuid5(uuid.NAMESPACE_URL, "|".join([session_id, payload.get("serviceName", ""), identity["interface_key"]])).hex
     schema = {}
     args = payload.get("args", {})
     for item in payload.get("parameterMeta", []):
         name = item.get("name")
         schema[name] = {**item, "sample": args.get(name)}
     db = get_db()
+    existing = db.execute(
+        "SELECT id FROM discovered_interface WHERE session_id=? AND service_name=? AND interface_key=?",
+        (session_id, payload.get("serviceName"), identity["interface_key"]),
+    ).fetchone()
+    if existing:
+        db.execute(
+            """UPDATE discovered_interface
+            SET method_name=?, display_name=?, description=?, parameter_schema_json=?, sample_args_json=?,
+                http_method=?, request_uri=?, query_signature=?, body_signature=?, content_type=?,
+                last_seen_at=?, call_count=call_count+1, updated_at=?
+            WHERE id=?""",
+            (
+                payload.get("methodName"),
+                payload.get("displayName"),
+                payload.get("description"),
+                dumps(schema),
+                dumps(args),
+                identity["http_method"],
+                identity["request_uri"],
+                identity["query_signature"],
+                identity["body_signature"],
+                identity["content_type"],
+                now,
+                now,
+                existing["id"],
+            ),
+        )
+        return existing["id"]
     db.execute(
         """INSERT INTO discovered_interface
-        (id, session_id, service_name, class_name, method_name, display_name, description,
+        (id, session_id, service_name, class_name, method_name, interface_key, http_method, request_uri,
+         query_signature, body_signature, content_type, display_name, description,
          parameter_schema_json, sample_args_json, first_seen_at, last_seen_at, call_count,
          success_count, exception_count, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
         ON CONFLICT(session_id, service_name, class_name, method_name)
         DO UPDATE SET display_name=excluded.display_name, description=excluded.description,
           parameter_schema_json=excluded.parameter_schema_json, sample_args_json=excluded.sample_args_json,
+          interface_key=excluded.interface_key, http_method=excluded.http_method, request_uri=excluded.request_uri,
+          query_signature=excluded.query_signature, body_signature=excluded.body_signature, content_type=excluded.content_type,
           last_seen_at=excluded.last_seen_at, call_count=discovered_interface.call_count+1,
           updated_at=excluded.updated_at""",
         (
             interface_id,
             session_id,
             payload.get("serviceName"),
-            payload.get("className"),
+            identity["interface_key"],
             payload.get("methodName"),
+            identity["interface_key"],
+            identity["http_method"],
+            identity["request_uri"],
+            identity["query_signature"],
+            identity["body_signature"],
+            identity["content_type"],
             payload.get("displayName"),
             payload.get("description"),
             dumps(schema),
@@ -216,6 +255,28 @@ def upsert_interface(payload, session_id, now):
         ),
     )
     return interface_id
+
+
+def interface_identity(payload):
+    http_method = (payload.get("httpMethod") or "UNKNOWN").upper()
+    request_uri = payload.get("requestUri") or payload.get("methodName") or "unknown"
+    query_signature = payload.get("querySignature") or ""
+    body_signature = payload.get("bodySignature") or canonical_json(payload.get("args", {}))
+    content_type = payload.get("contentType") or ""
+    raw_key = "|".join([http_method, request_uri, query_signature, body_signature, content_type])
+    digest = sha256(raw_key.encode("utf-8")).hexdigest()[:16]
+    return {
+        "http_method": http_method,
+        "request_uri": request_uri,
+        "query_signature": query_signature,
+        "body_signature": body_signature,
+        "content_type": content_type,
+        "interface_key": f"{http_method} {request_uri}#{digest}",
+    }
+
+
+def canonical_json(value):
+    return dumps(value if value is not None else {})
 
 
 def update_interface_stats(call_row, payload, now):
@@ -230,7 +291,7 @@ def update_interface_stats(call_row, payload, now):
             max_cost_ms=CASE WHEN max_cost_ms IS NULL OR max_cost_ms < ? THEN ? ELSE max_cost_ms END,
             min_cost_ms=CASE WHEN min_cost_ms IS NULL OR min_cost_ms > ? THEN ? ELSE min_cost_ms END,
             updated_at=?
-        WHERE session_id=? AND service_name=? AND class_name=? AND method_name=?""",
+        WHERE id=?""",
         (
             success_delta,
             exception_delta,
@@ -241,10 +302,7 @@ def update_interface_stats(call_row, payload, now):
             cost,
             cost,
             now,
-            call_row["session_id"],
-            call_row["service_name"],
-            call_row["class_name"],
-            call_row["method_name"],
+            call_row["interface_id"],
         ),
     )
 
@@ -259,7 +317,7 @@ def match_breakpoint(payload):
             continue
         if item["service_name"] and item["service_name"] != payload.get("serviceName"):
             continue
-        if item["class_name"] and item["class_name"] != payload.get("className"):
+        if item["class_name"] and item["class_name"] not in (payload.get("className"), interface_identity(payload)["interface_key"]):
             continue
         condition = loads(item["condition_json"], {}) or {}
         if all(args.get(k) == v for k, v in condition.items()):
