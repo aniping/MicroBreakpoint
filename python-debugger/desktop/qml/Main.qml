@@ -249,7 +249,14 @@ ApplicationWindow {
                 BreakpointTab { appTheme: theme; items: breakpointItems }
                 JavaCallTab { appTheme: theme; stateData: root.stateData; resultText: root.resultText }
                 SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
-                SettingsTab {}
+                SettingsTab {
+                    appTheme: theme
+                    themeMode: root.themeMode
+                    onThemeModeRequested: function(mode) {
+                        root.themeMode = mode
+                        bridge.setThemeMode(mode)
+                    }
+                }
             }
         }
 
