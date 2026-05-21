@@ -1,48 +1,29 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 Item {
     id: page
+    property var appTheme
     property var items: []
     property var breakpoints: []
     property var selectedItem: items.length > 0 ? items[Math.max(0, list.currentIndex)] : null
-    property color panel: "#141a21"
-    property color border: "#2a333d"
-    property color textStrong: "#e8eef5"
-    property color textNormal: "#c7d0da"
-    property color textMuted: "#8b98a7"
-    property color blue: "#2f81f7"
-    property color green: "#55d66b"
-    property color amber: "#f4d13d"
-    property color red: "#ff5d5d"
+    property color panel: appTheme.panelBg
+    property color border: appTheme.border
+    property color textStrong: appTheme.textStrong
+    property color textNormal: appTheme.textNormal
+    property color textMuted: appTheme.textMuted
+    property color blue: appTheme.primary
+    property color green: appTheme.success
+    property color amber: appTheme.warning
+    property color red: appTheme.danger
 
     function interfaceBreakpoint(interfaceId) {
         for (var i = 0; i < breakpoints.length; i++) {
             if (breakpoints[i].source_interface_id === interfaceId) return breakpoints[i]
         }
         return null
-    }
-
-    component MiniSwitch: Rectangle {
-        id: sw
-        property bool checked: false
-        signal toggled(bool checked)
-        width: 42
-        height: 22
-        radius: 11
-        color: checked ? "#1f6feb" : "#26313d"
-        border.color: checked ? "#58a6ff" : "#4b5563"
-        Rectangle {
-            width: 16
-            height: 16
-            radius: 8
-            color: "#e8eef5"
-            anchors.verticalCenter: parent.verticalCenter
-            x: sw.checked ? 22 : 4
-            Behavior on x { NumberAnimation { duration: 110 } }
-        }
-        MouseArea { anchors.fill: parent; onClicked: sw.toggled(!sw.checked) }
     }
 
     RowLayout {
@@ -142,42 +123,36 @@ Item {
                                 spacing: 12
                                 Text { text: "调用 " + (modelData.call_count || 0); color: textNormal; font.pixelSize: 14; Layout.preferredWidth: 58; horizontalAlignment: Text.AlignHCenter }
                                 Text { text: "异常 " + (modelData.exception_count || 0); color: textMuted; font.pixelSize: 14; Layout.preferredWidth: 58; horizontalAlignment: Text.AlignHCenter }
-                                Rectangle {
+                                MbTag {
+                                    appTheme: page.appTheme
                                     Layout.preferredWidth: 78
                                     Layout.preferredHeight: 26
-                                    radius: 4
-                                    color: boundBreakpoint ? (boundBreakpoint.enabled ? "#153d24" : "#3c3617") : "#202733"
-                                    border.color: boundBreakpoint ? (boundBreakpoint.enabled ? green : amber) : "#4b5563"
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: boundBreakpoint ? (boundBreakpoint.enabled ? "断点启用" : "断点禁用") : "未设断点"
-                                        color: boundBreakpoint ? (boundBreakpoint.enabled ? green : amber) : textMuted
-                                        font.pixelSize: 12
-                                        font.weight: Font.DemiBold
-                                    }
+                                    text: boundBreakpoint ? (boundBreakpoint.enabled ? "断点启用" : "断点禁用") : "未设断点"
+                                    type: boundBreakpoint ? (boundBreakpoint.enabled ? "success" : "warning") : "neutral"
                                 }
-                                MiniSwitch {
+                                MbSwitch {
+                                    appTheme: page.appTheme
                                     visible: !!boundBreakpoint
                                     checked: boundBreakpoint ? !!boundBreakpoint.enabled : false
                                     onToggled: function(value) { bridge.setBreakpointEnabled(boundBreakpoint.id, value) }
                                 }
-                                Button {
+                                MbButton {
+                                    appTheme: page.appTheme
                                     text: boundBreakpoint ? "已设置" : "设置断点"
+                                    variant: "primary"
                                     enabled: !boundBreakpoint
                                     Layout.preferredWidth: 82
                                     Layout.preferredHeight: 34
                                     onClicked: bridge.createBreakpointFromInterface(modelData.id)
-                                    background: Rectangle { radius: 4; color: parent.enabled ? (parent.hovered ? "#1f5fb9" : "#1d4f96") : "#1a2430"; border.color: parent.enabled ? "#58a6ff" : border }
-                                    contentItem: Text { text: parent.text; color: parent.enabled ? "#ffffff" : textMuted; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                 }
-                                Button {
+                                MbButton {
+                                    appTheme: page.appTheme
                                     visible: !!boundBreakpoint
                                     text: "×"
+                                    variant: "danger"
                                     Layout.preferredWidth: 32
                                     Layout.preferredHeight: 34
                                     onClicked: bridge.deleteBreakpoint(boundBreakpoint.id)
-                                    background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
-                                    contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                 }
                             }
                         }
