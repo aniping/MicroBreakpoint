@@ -21,6 +21,8 @@ python run_backend.py
 python run_desktop.py
 ```
 
+桌面端会自动拉起 Flask 后端；`run_backend.py` 仍保留给后端单独启动和调试使用。若 `http://127.0.0.1:5050` 已经可用，桌面端会复用该后端。
+
 ## 验收主链路
 
 1. 启动 Python 后端。
