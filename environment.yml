@@ -1,0 +1,12 @@
+name: micro-breakpoint
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - flask
+  - flask-cors
+  - requests
+  - pytest
+  - pip
+  - pip:
+      - PySide6

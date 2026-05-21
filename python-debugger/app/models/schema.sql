@@ -1,0 +1,78 @@
+CREATE TABLE IF NOT EXISTS debug_session (
+  id TEXT PRIMARY KEY,
+  mode TEXT,
+  service_name TEXT,
+  operator TEXT,
+  start_time TEXT,
+  end_time TEXT,
+  recording INTEGER,
+  debugging INTEGER,
+  remark TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS call_record (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  call_id TEXT UNIQUE,
+  session_id TEXT,
+  call_index INTEGER,
+  service_name TEXT,
+  class_name TEXT,
+  method_name TEXT,
+  display_name TEXT,
+  description TEXT,
+  thread_name TEXT,
+  args_json TEXT,
+  parameter_meta_json TEXT,
+  result_json TEXT,
+  success INTEGER,
+  exception_type TEXT,
+  exception_message TEXT,
+  cost_ms INTEGER,
+  status TEXT,
+  breakpoint_id TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS discovered_interface (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,
+  service_name TEXT,
+  class_name TEXT,
+  method_name TEXT,
+  display_name TEXT,
+  description TEXT,
+  parameter_schema_json TEXT,
+  sample_args_json TEXT,
+  first_seen_at TEXT,
+  last_seen_at TEXT,
+  call_count INTEGER,
+  success_count INTEGER,
+  exception_count INTEGER,
+  avg_cost_ms REAL,
+  max_cost_ms INTEGER,
+  min_cost_ms INTEGER,
+  created_at TEXT,
+  updated_at TEXT,
+  UNIQUE(session_id, service_name, class_name, method_name)
+);
+
+CREATE TABLE IF NOT EXISTS breakpoint (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  enabled INTEGER,
+  service_name TEXT,
+  class_name TEXT,
+  method_name TEXT,
+  display_name TEXT,
+  condition_json TEXT,
+  hit_mode TEXT,
+  hit_count INTEGER,
+  source_session_id TEXT,
+  source_interface_id TEXT,
+  source_call_id TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);

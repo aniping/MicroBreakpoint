@@ -1,0 +1,10 @@
+server:
+  port: 8080
+
+debugger:
+  enabled: true
+  server-url: http://127.0.0.1:5050
+  service-name: instrument-service-demo
+  connect-timeout-ms: 300
+  read-timeout-ms: 1000
+  breakpoint-timeout-ms: 300000
