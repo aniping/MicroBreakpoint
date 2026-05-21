@@ -242,7 +242,7 @@ ApplicationWindow {
 
                 CallRecordTab { appTheme: theme; items: callItems; breakpoints: breakpointItems; canClearRecords: stateData.mode === "idle" && stateData.hasSession }
                 InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
-                BreakpointTab { items: breakpointItems }
+                BreakpointTab { appTheme: theme; items: breakpointItems }
                 JavaCallTab { appTheme: theme; resultText: root.resultText }
                 SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
                 SettingsTab {}

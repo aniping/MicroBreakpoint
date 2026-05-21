@@ -1,125 +1,239 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 Item {
-    property var items: []
-    property color panel: "#141a21"
-    property color border: "#2a333d"
-    property color textStrong: "#e8eef5"
-    property color textNormal: "#c7d0da"
-    property color textMuted: "#8b98a7"
-    property color green: "#55d66b"
-    property color red: "#ff5d5d"
+    id: page
 
-    component MiniSwitch: Rectangle {
-        id: sw
-        property bool checked: false
-        signal toggled(bool checked)
-        width: 44
-        height: 22
-        radius: 11
-        color: checked ? "#1f6feb" : "#26313d"
-        border.color: checked ? "#58a6ff" : "#4b5563"
-        Rectangle {
-            width: 16
-            height: 16
-            radius: 8
-            color: "#e8eef5"
-            anchors.verticalCenter: parent.verticalCenter
-            x: sw.checked ? 24 : 4
-            Behavior on x { NumberAnimation { duration: 110 } }
+    property var appTheme
+    property var items: []
+    property var selectedItem: items.length > 0 ? items[Math.max(0, list.currentIndex)] : null
+
+    function conditionSummary(condition) {
+        var data = condition || {}
+        var keys = Object.keys(data)
+        if (keys.length === 0) return "无条件"
+        var parts = []
+        for (var i = 0; i < Math.min(keys.length, 3); i++) {
+            parts.push(keys[i] + " = " + data[keys[i]])
         }
-        MouseArea { anchors.fill: parent; onClicked: sw.toggled(!sw.checked) }
+        if (keys.length > 3) parts.push("...")
+        return parts.join(", ")
     }
 
-    Rectangle {
+    function sourceText(item) {
+        if (!item) return "-"
+        if (item.source_call_id) return "调用记录"
+        if (item.source_interface_id || item.resolved_interface_id) return "已发现接口"
+        if (item.source_session_id) return "会话"
+        return "手动"
+    }
+
+    RowLayout {
         anchors.fill: parent
         anchors.margins: 12
-        color: panel
-        border.color: border
-        radius: 3
+        spacing: 12
 
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 56
-                color: panel
-                border.color: border
-                Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: "断点管理"; color: textStrong; font.pixelSize: 16; font.weight: Font.DemiBold }
-                Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 16; text: "共 " + items.length + " 个"; color: textMuted; font.pixelSize: 14 }
-            }
-            ListView {
-                id: list
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                model: items
-                clip: true
-                delegate: Rectangle {
-                    required property var modelData
-                    required property int index
-                    width: list.width
-                    height: 78
-                    color: index % 2 ? "#151c24" : "#111820"
-                    border.color: border
+        MbPanel {
+            appTheme: page.appTheme
+            padding: 0
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 56
+                    color: appTheme.panelBg
+                    border.color: appTheme.border
+
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 16
                         anchors.rightMargin: 16
-                        spacing: 14
-                        Rectangle { width: 10; height: 10; radius: 5; color: modelData.enabled ? green : red }
-                        ColumnLayout {
+                        Text {
+                            text: "断点管理"
+                            color: appTheme.textStrong
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
                             Layout.fillWidth: true
-                            spacing: 3
-                            Text { text: modelData.name || modelData.method_name; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
+                        }
+                        MbTag { appTheme: page.appTheme; text: "共 " + items.length + " 个"; type: "primary" }
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    ListView {
+                        id: list
+                        anchors.fill: parent
+                        model: items
+                        clip: true
+                        currentIndex: items.length > 0 ? Math.max(0, currentIndex) : -1
+
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+
+                            width: list.width
+                            height: 118
+                            color: modelData.enabled
+                                   ? (list.currentIndex === index ? appTheme.panelActive : (index % 2 ? appTheme.panelBgAlt : appTheme.panelBg))
+                                   : appTheme.panelBgAlt
+                            border.color: appTheme.borderSoft
+                            opacity: modelData.enabled ? 1 : 0.68
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: list.currentIndex = index
+                            }
+
                             RowLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 24
-                                spacing: 8
-                                Text {
-                                    text: "别名"
-                                    color: textMuted
-                                    font.pixelSize: 12
-                                    Layout.preferredWidth: 30
-                                    verticalAlignment: Text.AlignVCenter
-                                }
+                                anchors.fill: parent
+                                anchors.margins: 14
+                                spacing: 14
+
                                 Rectangle {
+                                    Layout.preferredWidth: 4
+                                    Layout.preferredHeight: 74
+                                    radius: 2
+                                    color: modelData.enabled ? appTheme.success : appTheme.textMuted
+                                }
+
+                                ColumnLayout {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 24
-                                    radius: 4
-                                    color: modelData.interface_alias ? "#142237" : "transparent"
-                                    border.color: modelData.interface_alias ? "#2a5284" : border
+                                    Layout.fillHeight: true
+                                    spacing: 5
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        MbTag { appTheme: page.appTheme; text: modelData.enabled ? "启用" : "禁用"; type: modelData.enabled ? "success" : "neutral"; Layout.preferredWidth: 60 }
+                                        Text {
+                                            text: modelData.name || modelData.method_name || "-"
+                                            color: appTheme.textStrong
+                                            font.pixelSize: 16
+                                            font.weight: Font.DemiBold
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
                                     Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        text: modelData.interface_alias || "未命名"
-                                        color: modelData.interface_alias ? "#cfe6ff" : textMuted
-                                        font.pixelSize: 12
+                                        text: (modelData.service_name || "-") + " / " + (modelData.class_name || "-") + " / " + (modelData.method_name || "-")
+                                        color: appTheme.textNormal
+                                        font.pixelSize: 13
+                                        Layout.fillWidth: true
                                         elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        text: "条件: " + page.conditionSummary(modelData.condition)
+                                        color: appTheme.textMuted
+                                        font.pixelSize: 12
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        MbStatusChip { appTheme: page.appTheme; label: "模式"; value: modelData.hit_mode || "always"; type: "neutral"; Layout.preferredWidth: 118 }
+                                        MbStatusChip { appTheme: page.appTheme; label: "命中"; value: String(modelData.hit_count || 0); type: (modelData.hit_count || 0) > 0 ? "warning" : "neutral"; Layout.preferredWidth: 92 }
+                                        MbStatusChip { appTheme: page.appTheme; label: "来源"; value: page.sourceText(modelData); type: "neutral"; Layout.preferredWidth: 126 }
+                                        MbStatusChip { appTheme: page.appTheme; label: "创建"; value: String(modelData.created_at || "-").replace("T", " ").split("+")[0]; type: "neutral"; Layout.fillWidth: true }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.preferredWidth: 118
+                                    spacing: 8
+                                    MbSwitch {
+                                        appTheme: page.appTheme
+                                        checked: !!modelData.enabled
+                                        Layout.alignment: Qt.AlignHCenter
+                                        onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
+                                    }
+                                    MbButton {
+                                        appTheme: page.appTheme
+                                        text: "编辑条件"
+                                        enabled: false
+                                        variant: "neutral"
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 32
+                                    }
+                                    MbButton {
+                                        appTheme: page.appTheme
+                                        text: "删除"
+                                        variant: "danger"
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 32
+                                        onClicked: bridge.deleteBreakpoint(modelData.id)
                                     }
                                 }
                             }
-                            Text { text: (modelData.method_name || "-") + " | 条件 " + JSON.stringify(modelData.condition || {}) + " | 命中 " + (modelData.hit_count || 0) + " 次"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-                        }
-                        Text { text: modelData.enabled ? "启用" : "禁用"; color: modelData.enabled ? green : red; font.pixelSize: 14; font.weight: Font.DemiBold }
-                        MiniSwitch {
-                            checked: !!modelData.enabled
-                            onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
-                        }
-                        Button {
-                            text: "×"
-                            Layout.preferredWidth: 34
-                            Layout.preferredHeight: 32
-                            onClicked: bridge.deleteBreakpoint(modelData.id)
-                            background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
-                            contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                     }
+
+                    Column {
+                        visible: items.length === 0
+                        anchors.centerIn: parent
+                        spacing: 8
+
+                        Text {
+                            text: "暂无断点"
+                            color: appTheme.textStrong
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            text: "可从已发现接口或调用记录创建断点"
+                            color: appTheme.textMuted
+                            font.pixelSize: 13
+                        }
+                    }
+                }
+            }
+        }
+
+        MbPanel {
+            appTheme: page.appTheme
+            padding: 0
+            Layout.preferredWidth: 430
+            Layout.fillHeight: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 48
+                    color: appTheme.panelBg
+                    border.color: appTheme.border
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        text: "断点详情"
+                        color: appTheme.textStrong
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                    }
+                }
+
+                MbJsonViewer {
+                    appTheme: page.appTheme
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: selectedItem ? JSON.stringify(selectedItem, null, 2) : "{}"
                 }
             }
         }
