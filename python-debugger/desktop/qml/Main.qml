@@ -75,13 +75,34 @@ ApplicationWindow {
         onTriggered: bridge.refreshAll()
     }
 
+    component ToolbarGroup: ColumnLayout {
+        id: group
+        property string title: ""
+        default property alias content: buttonRow.data
+
+        spacing: 4
+        Layout.alignment: Qt.AlignVCenter
+
+        Text {
+            text: group.title
+            color: theme.textMuted
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+        }
+
+        RowLayout {
+            id: buttonRow
+            spacing: 8
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 45
+            Layout.preferredHeight: 48
             color: theme.topBarBg
             border.color: theme.borderSoft
             RowLayout {
@@ -132,30 +153,44 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: 64
             color: theme.toolbarBg
             border.color: root.border
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 30
-                anchors.rightMargin: 30
-                spacing: 18
-                MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 122; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 3 } }
-                MbButton { appTheme: theme; text: "开始记录"; iconText: "●"; variant: "success"; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startRecord() }
-                MbButton { appTheme: theme; text: "停止记录"; iconText: "■"; variant: "danger"; enabled: stateData.mode === "record"; onClicked: bridge.stopRecord() }
-                MbButton { appTheme: theme; text: "开始调试"; iconText: "▶"; variant: "primary"; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startDebug() }
-                MbButton { appTheme: theme; text: "停止调试"; iconText: "■"; variant: "danger"; enabled: stateData.mode === "debug"; onClicked: bridge.stopDebug() }
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                spacing: 14
+                ToolbarGroup {
+                    title: "会话"
+                    MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 118; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 3 } }
+                }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
-                MbButton { appTheme: theme; text: "刷新"; iconText: "↻"; implicitWidth: 102; variant: "primary"; onClicked: bridge.refreshAll() }
-                MbButton { appTheme: theme; text: "继续全部"; iconText: "▶"; variant: "primary"; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
-                MbButton { appTheme: theme; text: "清空筛选"; iconText: "×"; implicitWidth: 124; variant: "neutral"; onClicked: bridge.refreshAll() }
+                ToolbarGroup {
+                    title: "记录"
+                    MbButton { appTheme: theme; text: "开始记录"; iconText: "●"; variant: "success"; implicitWidth: 118; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startRecord() }
+                    MbButton { appTheme: theme; text: "停止记录"; iconText: "■"; variant: "danger"; implicitWidth: 118; enabled: stateData.mode === "record"; onClicked: bridge.stopRecord() }
+                }
+                Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
+                ToolbarGroup {
+                    title: "调试"
+                    MbButton { appTheme: theme; text: "开始调试"; iconText: "▶"; variant: "primary"; implicitWidth: 118; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startDebug() }
+                    MbButton { appTheme: theme; text: "停止调试"; iconText: "■"; variant: "danger"; implicitWidth: 118; enabled: stateData.mode === "debug"; onClicked: bridge.stopDebug() }
+                    MbButton { appTheme: theme; text: "继续全部"; iconText: "▶"; variant: "primary"; implicitWidth: 118; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
+                }
+                Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
+                ToolbarGroup {
+                    title: "视图"
+                    MbButton { appTheme: theme; text: "刷新"; iconText: "↻"; implicitWidth: 100; variant: "primary"; onClicked: bridge.refreshAll() }
+                    MbButton { appTheme: theme; text: "清空筛选"; iconText: "×"; implicitWidth: 118; variant: "neutral"; onClicked: bridge.refreshAll() }
+                }
                 Item { Layout.fillWidth: true }
             }
         }
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 58
+            Layout.preferredHeight: 48
             color: theme.panelBgAlt
             border.color: root.border
             RowLayout {
@@ -180,7 +215,7 @@ ApplicationWindow {
             spacing: 0
 
             Rectangle {
-                Layout.preferredWidth: 152
+                Layout.preferredWidth: 168
                 Layout.fillHeight: true
                 color: theme.sidebarBg
                 border.color: root.border
