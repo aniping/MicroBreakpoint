@@ -248,7 +248,7 @@ ApplicationWindow {
                 InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
                 BreakpointTab { appTheme: theme; items: breakpointItems }
                 JavaCallTab { appTheme: theme; stateData: root.stateData; resultText: root.resultText }
-                SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
+                SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
                 SettingsTab {}
             }
         }

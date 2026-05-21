@@ -107,6 +107,40 @@ def clear_sessions():
     return state_response(success=True, deletedCount=counts)
 
 
+def delete_session(session_id):
+    if STATE["mode"] != "idle":
+        return {"success": False, "message": "请先停止记录或调试"}
+    db = get_db()
+    row = db.execute("SELECT id FROM debug_session WHERE id=?", (session_id,)).fetchone()
+    if not row:
+        return {"success": False, "message": "session not found"}
+    counts = {
+        "calls": db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0],
+        "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface WHERE session_id=?", (session_id,)).fetchone()[0],
+        "breakpoints": db.execute(
+            """SELECT COUNT(*) FROM breakpoint
+               WHERE source_session_id=?
+                  OR source_interface_id IN (SELECT id FROM discovered_interface WHERE session_id=?)
+                  OR source_call_id IN (SELECT call_id FROM call_record WHERE session_id=?)""",
+            (session_id, session_id, session_id),
+        ).fetchone()[0],
+    }
+    db.execute(
+        """DELETE FROM breakpoint
+           WHERE source_session_id=?
+              OR source_interface_id IN (SELECT id FROM discovered_interface WHERE session_id=?)
+              OR source_call_id IN (SELECT call_id FROM call_record WHERE session_id=?)""",
+        (session_id, session_id, session_id),
+    )
+    db.execute("DELETE FROM discovered_interface WHERE session_id=?", (session_id,))
+    db.execute("DELETE FROM call_record WHERE session_id=?", (session_id,))
+    db.execute("DELETE FROM debug_session WHERE id=?", (session_id,))
+    db.commit()
+    if STATE["sessionId"] == session_id:
+        STATE.update(recording=False, debugging=False, mode="idle", sessionId=None)
+    return state_response(success=True, deletedSessionId=session_id, deletedCount=counts)
+
+
 def state_response(**extra):
     db = get_db()
     session_filter = "WHERE session_id=?" if STATE["sessionId"] else ""

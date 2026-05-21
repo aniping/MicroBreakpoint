@@ -196,3 +196,28 @@ def test_clear_session_history_removes_related_data(tmp_path):
     assert client.get("/api/interfaces").get_json()["items"] == []
     assert client.get("/api/breakpoints").get_json()["items"] == []
     assert client.get("/api/debug/state").get_json()["hasSession"] is False
+
+
+def test_delete_single_session_removes_related_data(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    first_session = client.post("/api/session/create", json={}).get_json()["sessionId"]
+    client.post("/api/session/start-record", json={})
+    client.post("/api/calls/before", json=make_before("single-session-call"))
+    client.post("/api/calls/after", json={"callId": "single-session-call", "success": True, "costMs": 5, "result": {"ok": True}})
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
+    client.post("/api/session/stop-record")
+
+    second_session = client.post("/api/session/create", json={}).get_json()["sessionId"]
+
+    deleted = client.delete(f"/api/session/{first_session}")
+
+    assert deleted.status_code == 200
+    assert deleted.get_json()["deletedSessionId"] == first_session
+    sessions = client.get("/api/session").get_json()["items"]
+    assert [item["id"] for item in sessions] == [second_session]
+    assert client.get("/api/calls", query_string={"sessionId": first_session}).get_json()["items"] == []
+    assert client.get("/api/interfaces", query_string={"sessionId": first_session}).get_json()["items"] == []
+    assert client.get("/api/breakpoints").get_json()["items"] == []

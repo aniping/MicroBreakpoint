@@ -80,6 +80,11 @@ class Bridge(QObject):
         self._emit_result(self._request("DELETE", f"{self.backend}/api/session"))
         self.refreshAll()
 
+    @Slot(str)
+    def deleteSession(self, sessionId):
+        self._emit_result(self._request("DELETE", f"{self.backend}/api/session/{sessionId}"))
+        self.refreshAll()
+
     @Slot()
     def createSession(self):
         self._emit_result(self._request("POST", f"{self.backend}/api/session/create", json={"serviceName": "instrument-service-demo", "operator": "developer"}))
