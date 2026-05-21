@@ -128,6 +128,67 @@ Item {
         }
     }
 
+    component FilterCombo: ComboBox {
+        id: combo
+        property string prefix: ""
+        implicitHeight: 38
+        padding: 0
+        font.pixelSize: 14
+        background: Rectangle {
+            radius: 4
+            color: combo.pressed ? "#182333" : "#10161d"
+            border.color: combo.visualFocus ? page.blue : page.border
+        }
+        contentItem: Text {
+            text: combo.prefix + combo.displayText
+            color: page.textNormal
+            font: combo.font
+            verticalAlignment: Text.AlignVCenter
+            leftPadding: 12
+            rightPadding: 28
+            elide: Text.ElideRight
+        }
+        indicator: Text {
+            text: "⌄"
+            color: page.textMuted
+            font.pixelSize: 14
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 10
+        }
+        delegate: ItemDelegate {
+            width: combo.width
+            height: 34
+            highlighted: combo.highlightedIndex === index
+            background: Rectangle { color: highlighted ? "#173052" : (hovered ? "#182333" : "#10161d") }
+            contentItem: Text {
+                text: modelData
+                color: highlighted ? "#cfe6ff" : page.textNormal
+                font.pixelSize: 13
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: 12
+            }
+        }
+        popup: Popup {
+            y: combo.height + 4
+            width: combo.width
+            implicitHeight: Math.min(contentItem.implicitHeight + 2, 220)
+            padding: 1
+            background: Rectangle { color: "#10161d"; border.color: page.border; radius: 4 }
+            contentItem: ListView {
+                clip: true
+                implicitHeight: contentHeight
+                model: combo.popup.visible ? combo.delegateModel : null
+                currentIndex: combo.highlightedIndex
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                    contentItem: Rectangle { implicitWidth: 7; radius: 4; color: parent.pressed ? page.blue : "#4b5563" }
+                    background: Rectangle { color: "#0d1218"; radius: 4 }
+                }
+            }
+        }
+    }
+
     component HeaderCell: Rectangle {
         property string label: ""
         color: "#20262e"
@@ -215,25 +276,23 @@ Item {
                             onTextChanged: page.searchText = text
                             background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
                         }
-                        ComboBox {
+                        FilterCombo {
                             id: statusBox
                             Layout.preferredWidth: 122
                             Layout.preferredHeight: 38
+                            prefix: "状态: "
                             model: ["全部", "成功", "已暂停", "异常", "继续中"]
                             currentIndex: page.statusFilterIndex
                             onActivated: page.statusFilterIndex = currentIndex
-                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
-                            contentItem: Text { text: "状态: " + statusBox.displayText; color: textNormal; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 12; elide: Text.ElideRight }
                         }
-                        ComboBox {
+                        FilterCombo {
                             id: hitBox
                             Layout.preferredWidth: 160
                             Layout.preferredHeight: 38
+                            prefix: "命中断点: "
                             model: ["全部", "命中", "未命中"]
                             currentIndex: page.hitFilterIndex
                             onActivated: page.hitFilterIndex = currentIndex
-                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
-                            contentItem: Text { text: "命中断点: " + hitBox.displayText; color: textNormal; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 12; elide: Text.ElideRight }
                         }
                         Item { Layout.fillWidth: true }
                         Button {
@@ -476,8 +535,16 @@ Item {
                         anchors.fill: parent
                         anchors.margins: 8
                         clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                        ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? page.blue : "#4b5563" }
+                            background: Rectangle { color: "#0d1218"; radius: 4 }
+                        }
+                        ScrollBar.horizontal: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? page.blue : "#4b5563" }
+                            background: Rectangle { color: "#0d1218"; radius: 4 }
+                        }
                         TextArea {
                             readOnly: true
                             selectByMouse: true

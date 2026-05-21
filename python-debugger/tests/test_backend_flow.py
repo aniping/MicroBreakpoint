@@ -57,12 +57,15 @@ def test_record_requires_selected_session(tmp_path):
     assert response.get_json()["message"] == "请先新建或选择会话"
 
 
-def test_debug_does_not_discover_new_interfaces(tmp_path):
+def test_debug_records_and_discovers_interfaces(tmp_path):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
     client = app.test_client()
 
     client.post("/api/session/create", json={})
-    client.post("/api/session/start-debug", json={})
+    started = client.post("/api/session/start-debug", json={}).get_json()
+    assert started["mode"] == "debug"
+    assert started["recording"] is True
+    assert started["debugging"] is True
     payload = make_before("debug-new-method")
     payload["methodName"] = "newMethodOnlyInDebug"
     payload["displayName"] = "调试中新方法"
@@ -70,10 +73,13 @@ def test_debug_does_not_discover_new_interfaces(tmp_path):
     assert client.post("/api/calls/before", json=payload).get_json()["action"] == "continue"
 
     assert client.get("/api/calls").get_json()["items"][0]["method_name"] == "newMethodOnlyInDebug"
-    assert client.get("/api/interfaces").get_json()["items"] == []
+    state = client.get("/api/debug/state").get_json()
+    assert state["callCount"] == 1
+    assert state["discoveredInterfaceCount"] == 1
+    assert client.get("/api/interfaces").get_json()["items"][0]["method_name"] == "newMethodOnlyInDebug"
 
 
-def test_debug_does_not_update_existing_or_add_new_interfaces(tmp_path):
+def test_debug_updates_existing_and_adds_new_interfaces(tmp_path):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
     client = app.test_client()
 
@@ -96,10 +102,15 @@ def test_debug_does_not_update_existing_or_add_new_interfaces(tmp_path):
     client.post("/api/calls/after", json={"callId": "debug-new", "success": True, "costMs": 9, "result": {"ok": True}})
 
     after_debug = client.get("/api/interfaces").get_json()["items"]
-    assert len(after_debug) == 1
-    assert after_debug[0]["id"] == original["id"]
-    assert after_debug[0]["call_count"] == 1
-    assert after_debug[0]["success_count"] == 1
+    assert len(after_debug) == 2
+    by_query = {item["query_signature"]: item for item in after_debug}
+    create_item = by_query[dumps({"cmdName": ["create"], "instType": ["VNA"], "slotId": ["1"]})]
+    stop_item = by_query[dumps({"cmdName": ["stop"], "instType": ["VNA"], "slotId": ["1"]})]
+    assert create_item["id"] == original["id"]
+    assert create_item["call_count"] == 2
+    assert create_item["success_count"] == 2
+    assert stop_item["call_count"] == 1
+    assert stop_item["success_count"] == 1
 
 
 def test_interface_identity_uses_http_signature(tmp_path):

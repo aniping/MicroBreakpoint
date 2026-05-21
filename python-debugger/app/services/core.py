@@ -49,11 +49,13 @@ def start_session(mode, payload):
     if not STATE["sessionId"]:
         return {"success": False, "message": "请先新建或选择会话", **state_response()}
     now = now_iso()
-    STATE.update(recording=True, debugging=mode == "debug", mode=mode)
+    recording = True
+    debugging = mode == "debug"
+    STATE.update(recording=recording, debugging=debugging, mode=mode)
     db = get_db()
     db.execute(
         "UPDATE debug_session SET mode=?, recording=1, debugging=?, end_time=NULL, updated_at=? WHERE id=?",
-        (mode, 1 if mode == "debug" else 0, now, STATE["sessionId"]),
+        (mode, 1 if debugging else 0, now, STATE["sessionId"]),
     )
     db.commit()
     return state_response(success=True)
@@ -139,7 +141,7 @@ def before_call(payload):
     now = now_iso()
     session_id = STATE["sessionId"]
     call_index = db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0] + 1
-    discovery_enabled = 0 if STATE["debugging"] else 1
+    discovery_enabled = 1
     interface_id = None
     if discovery_enabled:
         interface_id = upsert_interface(payload, session_id, now)

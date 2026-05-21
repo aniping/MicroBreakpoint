@@ -24,8 +24,16 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            ScrollBar.vertical.policy: ScrollBar.AsNeeded
-            ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AsNeeded
+                contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? "#2f81f7" : "#4b5563" }
+                background: Rectangle { color: "#0d1218"; radius: 4 }
+            }
+            ScrollBar.horizontal: ScrollBar {
+                policy: ScrollBar.AsNeeded
+                contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? "#2f81f7" : "#4b5563" }
+                background: Rectangle { color: "#0d1218"; radius: 4 }
+            }
 
             TextArea {
                 readOnly: true
