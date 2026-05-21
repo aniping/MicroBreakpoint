@@ -132,7 +132,11 @@ ApplicationWindow {
                     Layout.preferredWidth: 38
                     Layout.preferredHeight: 32
                     text: root.themeMode === "dark" ? "☀" : "🌙"
-                    onClicked: bridge.setThemeMode(root.themeMode === "dark" ? "light" : "dark")
+                    onClicked: {
+                        var nextMode = root.themeMode === "dark" ? "light" : "dark"
+                        root.themeMode = nextMode
+                        bridge.setThemeMode(nextMode)
+                    }
                     ToolTip.visible: hovered
                     ToolTip.text: root.themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"
                     background: Rectangle {
@@ -243,7 +247,7 @@ ApplicationWindow {
                 CallRecordTab { appTheme: theme; items: callItems; breakpoints: breakpointItems; canClearRecords: stateData.mode === "idle" && stateData.hasSession }
                 InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
                 BreakpointTab { appTheme: theme; items: breakpointItems }
-                JavaCallTab { appTheme: theme; resultText: root.resultText }
+                JavaCallTab { appTheme: theme; stateData: root.stateData; resultText: root.resultText }
                 SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
                 SettingsTab {}
             }
