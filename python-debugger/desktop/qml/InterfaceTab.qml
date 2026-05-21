@@ -79,97 +79,106 @@ Item {
                         required property int index
                         property var boundBreakpoint: page.interfaceBreakpoint(modelData.id)
                         width: list.width
-                        height: 108
+                        height: 88
                         color: list.currentIndex === index ? "#173052" : (index % 2 ? "#151c24" : "#111820")
                         border.color: border
                         MouseArea { anchors.fill: parent; onClicked: list.currentIndex = index }
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 12
-                            spacing: 12
-                            Rectangle { width: 10; height: 36; radius: 2; color: blue }
+                            spacing: 14
+                            Rectangle { width: 10; height: 46; radius: 2; color: blue }
                             ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 5
+                                Layout.preferredWidth: 330
+                                Layout.fillHeight: true
+                                spacing: 6
+                                Item { Layout.fillHeight: true }
                                 Text { text: modelData.method_name + "  " + (modelData.display_name || ""); color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 36
-                                    radius: 6
-                                    color: "#10161d"
-                                    border.color: "#2a5284"
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 10
-                                        anchors.rightMargin: 10
-                                        spacing: 10
-                                        Text {
-                                            text: "别名"
-                                            color: "#8fbce8"
-                                            font.pixelSize: 12
-                                            font.weight: Font.DemiBold
-                                            Layout.preferredWidth: 34
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-                                        TextField {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            text: modelData.interface_alias || ""
-                                            placeholderText: "为接口命名，便于调用记录和断点识别"
-                                            color: textStrong
-                                            placeholderTextColor: textMuted
-                                            font.pixelSize: 14
-                                            font.weight: Font.DemiBold
-                                            selectByMouse: true
-                                            onEditingFinished: {
-                                                if (text !== (modelData.interface_alias || "")) {
-                                                    bridge.setInterfaceAlias(modelData.id, text)
-                                                }
+                                Text { text: (modelData.http_method || "UNKNOWN") + " " + (modelData.request_uri || modelData.class_name || "-"); color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Item { Layout.fillHeight: true }
+                            }
+                            Rectangle {
+                                Layout.preferredWidth: 520
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+                                radius: 6
+                                color: "#10161d"
+                                border.color: "#2a5284"
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 12
+                                    anchors.rightMargin: 12
+                                    spacing: 12
+                                    Text {
+                                        text: "别名"
+                                        color: "#8fbce8"
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                        Layout.preferredWidth: 38
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    TextField {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        text: modelData.interface_alias || ""
+                                        placeholderText: "为接口命名，便于调用记录和断点识别"
+                                        color: textStrong
+                                        placeholderTextColor: textMuted
+                                        font.pixelSize: 14
+                                        font.weight: Font.DemiBold
+                                        selectByMouse: true
+                                        onEditingFinished: {
+                                            if (text !== (modelData.interface_alias || "")) {
+                                                bridge.setInterfaceAlias(modelData.id, text)
                                             }
-                                            background: Rectangle { color: "transparent" }
                                         }
+                                        background: Rectangle { color: "transparent" }
                                     }
                                 }
-                                Text { text: modelData.class_name || "-"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
-                            Text { text: "调用 " + (modelData.call_count || 0); color: textNormal; font.pixelSize: 14 }
-                            Text { text: "异常 " + (modelData.exception_count || 0); color: textMuted; font.pixelSize: 14 }
-                            Rectangle {
-                                Layout.preferredWidth: 78
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                color: boundBreakpoint ? (boundBreakpoint.enabled ? "#153d24" : "#3c3617") : "#202733"
-                                border.color: boundBreakpoint ? (boundBreakpoint.enabled ? green : amber) : "#4b5563"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: boundBreakpoint ? (boundBreakpoint.enabled ? "断点启用" : "断点禁用") : "未设断点"
-                                    color: boundBreakpoint ? (boundBreakpoint.enabled ? green : amber) : textMuted
-                                    font.pixelSize: 12
-                                    font.weight: Font.DemiBold
+                            RowLayout {
+                                Layout.preferredWidth: 320
+                                Layout.fillHeight: true
+                                spacing: 12
+                                Text { text: "调用 " + (modelData.call_count || 0); color: textNormal; font.pixelSize: 14; Layout.preferredWidth: 58; horizontalAlignment: Text.AlignHCenter }
+                                Text { text: "异常 " + (modelData.exception_count || 0); color: textMuted; font.pixelSize: 14; Layout.preferredWidth: 58; horizontalAlignment: Text.AlignHCenter }
+                                Rectangle {
+                                    Layout.preferredWidth: 78
+                                    Layout.preferredHeight: 26
+                                    radius: 4
+                                    color: boundBreakpoint ? (boundBreakpoint.enabled ? "#153d24" : "#3c3617") : "#202733"
+                                    border.color: boundBreakpoint ? (boundBreakpoint.enabled ? green : amber) : "#4b5563"
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: boundBreakpoint ? (boundBreakpoint.enabled ? "断点启用" : "断点禁用") : "未设断点"
+                                        color: boundBreakpoint ? (boundBreakpoint.enabled ? green : amber) : textMuted
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                    }
                                 }
-                            }
-                            MiniSwitch {
-                                visible: !!boundBreakpoint
-                                checked: boundBreakpoint ? !!boundBreakpoint.enabled : false
-                                onToggled: function(value) { bridge.setBreakpointEnabled(boundBreakpoint.id, value) }
-                            }
-                            Button {
-                                text: boundBreakpoint ? "已设置" : "设置断点"
-                                enabled: !boundBreakpoint
-                                Layout.preferredWidth: 88
-                                Layout.preferredHeight: 34
-                                onClicked: bridge.createBreakpointFromInterface(modelData.id)
-                                background: Rectangle { radius: 4; color: parent.enabled ? (parent.hovered ? "#1f5fb9" : "#1d4f96") : "#1a2430"; border.color: parent.enabled ? "#58a6ff" : border }
-                                contentItem: Text { text: parent.text; color: parent.enabled ? "#ffffff" : textMuted; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            }
-                            Button {
-                                visible: !!boundBreakpoint
-                                text: "×"
-                                Layout.preferredWidth: 34
-                                Layout.preferredHeight: 34
-                                onClicked: bridge.deleteBreakpoint(boundBreakpoint.id)
-                                background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
-                                contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                MiniSwitch {
+                                    visible: !!boundBreakpoint
+                                    checked: boundBreakpoint ? !!boundBreakpoint.enabled : false
+                                    onToggled: function(value) { bridge.setBreakpointEnabled(boundBreakpoint.id, value) }
+                                }
+                                Button {
+                                    text: boundBreakpoint ? "已设置" : "设置断点"
+                                    enabled: !boundBreakpoint
+                                    Layout.preferredWidth: 82
+                                    Layout.preferredHeight: 34
+                                    onClicked: bridge.createBreakpointFromInterface(modelData.id)
+                                    background: Rectangle { radius: 4; color: parent.enabled ? (parent.hovered ? "#1f5fb9" : "#1d4f96") : "#1a2430"; border.color: parent.enabled ? "#58a6ff" : border }
+                                    contentItem: Text { text: parent.text; color: parent.enabled ? "#ffffff" : textMuted; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                }
+                                Button {
+                                    visible: !!boundBreakpoint
+                                    text: "×"
+                                    Layout.preferredWidth: 32
+                                    Layout.preferredHeight: 34
+                                    onClicked: bridge.deleteBreakpoint(boundBreakpoint.id)
+                                    background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
+                                    contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                }
                             }
                         }
                     }
