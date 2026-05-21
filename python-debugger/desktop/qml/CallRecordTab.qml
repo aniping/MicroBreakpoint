@@ -94,7 +94,7 @@ Item {
         var status = statusFilterValue()
         for (var i = 0; i < items.length; i++) {
             var item = items[i]
-            var haystack = ((item.method_name || "") + " " + (item.class_name || "") + " " + (item.thread_name || "") + " " + (item.display_name || "")).toLowerCase()
+            var haystack = ((item.method_name || "") + " " + (item.class_name || "") + " " + (item.thread_name || "") + " " + (item.display_name || "") + " " + (item.interface_alias || "")).toLowerCase()
             if (keyword.length > 0 && haystack.indexOf(keyword) < 0) continue
             if (status.length > 0 && item.status !== status) continue
             if (hitFilterIndex === 1 && !item.breakpoint_id) continue

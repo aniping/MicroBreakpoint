@@ -1,4 +1,9 @@
+from pathlib import Path
+
 from desktop.bridge import Bridge
+
+
+QML_ROOT = Path(__file__).resolve().parents[1] / "desktop" / "qml"
 
 
 def test_theme_mode_persists_between_bridge_instances():
@@ -15,3 +20,9 @@ def test_theme_mode_persists_between_bridge_instances():
         assert Bridge().getThemeMode() == "dark"
     finally:
         bridge.setThemeMode(original)
+
+
+def test_call_record_filter_includes_interface_alias():
+    qml = (QML_ROOT / "CallRecordTab.qml").read_text(encoding="utf-8")
+
+    assert "item.interface_alias" in qml
