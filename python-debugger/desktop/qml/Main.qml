@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 import "theme"
 
 ApplicationWindow {
@@ -72,38 +73,6 @@ ApplicationWindow {
         repeat: true
         interval: 1500
         onTriggered: bridge.refreshAll()
-    }
-
-    component MbButton: Button {
-        id: btn
-        implicitWidth: 132
-        implicitHeight: 44
-        padding: 0
-        font.pixelSize: 15
-        font.weight: Font.Medium
-        property color accent: root.blue
-        contentItem: Row {
-            anchors.centerIn: parent
-            spacing: 10
-            Rectangle {
-                width: 15
-                height: 15
-                radius: 3
-                color: btn.enabled ? btn.accent : theme.textDisabled
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            Text {
-                text: btn.text
-                color: btn.enabled ? root.textStrong : theme.textDisabled
-                font: btn.font
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-        background: Rectangle {
-            radius: 4
-            color: btn.pressed ? theme.panelActive : (btn.hovered ? theme.panelHover : theme.panelBgAlt)
-            border.color: btn.enabled ? theme.border : theme.borderSoft
-        }
     }
 
     component NavButton: Button {
@@ -202,15 +171,15 @@ ApplicationWindow {
                 anchors.leftMargin: 30
                 anchors.rightMargin: 30
                 spacing: 18
-                MbButton { text: "新建会话"; accent: root.blue; implicitWidth: 122; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 3 } }
-                MbButton { text: "开始记录"; accent: root.green; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startRecord() }
-                MbButton { text: "停止记录"; accent: root.red; enabled: stateData.mode === "record"; onClicked: bridge.stopRecord() }
-                MbButton { text: "开始调试"; accent: root.blue; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startDebug() }
-                MbButton { text: "停止调试"; accent: root.red; enabled: stateData.mode === "debug"; onClicked: bridge.stopDebug() }
+                MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 122; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 3 } }
+                MbButton { appTheme: theme; text: "开始记录"; iconText: "●"; variant: "success"; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startRecord() }
+                MbButton { appTheme: theme; text: "停止记录"; iconText: "■"; variant: "danger"; enabled: stateData.mode === "record"; onClicked: bridge.stopRecord() }
+                MbButton { appTheme: theme; text: "开始调试"; iconText: "▶"; variant: "primary"; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startDebug() }
+                MbButton { appTheme: theme; text: "停止调试"; iconText: "■"; variant: "danger"; enabled: stateData.mode === "debug"; onClicked: bridge.stopDebug() }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
-                MbButton { text: "刷新"; implicitWidth: 102; accent: root.blue; onClicked: bridge.refreshAll() }
-                MbButton { text: "继续全部"; accent: root.blue; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
-                MbButton { text: "清空筛选"; implicitWidth: 124; accent: theme.textMuted; onClicked: bridge.refreshAll() }
+                MbButton { appTheme: theme; text: "刷新"; iconText: "↻"; implicitWidth: 102; variant: "primary"; onClicked: bridge.refreshAll() }
+                MbButton { appTheme: theme; text: "继续全部"; iconText: "▶"; variant: "primary"; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
+                MbButton { appTheme: theme; text: "清空筛选"; iconText: "×"; implicitWidth: 124; variant: "neutral"; onClicked: bridge.refreshAll() }
                 Item { Layout.fillWidth: true }
             }
         }
