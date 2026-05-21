@@ -1,7 +1,7 @@
 import json
 
 import requests
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, Signal, Slot
 
 
 class Bridge(QObject):
@@ -11,10 +11,12 @@ class Bridge(QObject):
     breakpointsChanged = Signal(str)
     sessionsChanged = Signal(str)
     resultChanged = Signal(str)
+    themeChanged = Signal(str)
 
     def __init__(self):
         super().__init__()
         self.backend = "http://127.0.0.1:5050"
+        self.settings = QSettings("MicroBreakpoint", "Desktop")
 
     def _request(self, method, url, **kwargs):
         try:
@@ -29,6 +31,18 @@ class Bridge(QObject):
 
     def _emit_result(self, value):
         self.resultChanged.emit(json.dumps(value, ensure_ascii=False, indent=2))
+
+    @Slot(result=str)
+    def getThemeMode(self):
+        value = self.settings.value("theme/mode", "dark")
+        return "light" if value == "light" else "dark"
+
+    @Slot(str)
+    def setThemeMode(self, mode):
+        theme_mode = "light" if mode == "light" else "dark"
+        self.settings.setValue("theme/mode", theme_mode)
+        self.settings.sync()
+        self.themeChanged.emit(theme_mode)
 
     @Slot()
     def startRecord(self):

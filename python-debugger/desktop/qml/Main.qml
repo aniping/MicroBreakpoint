@@ -51,7 +51,10 @@ ApplicationWindow {
         return root.textMuted
     }
 
-    Component.onCompleted: bridge.refreshAll()
+    Component.onCompleted: {
+        root.themeMode = bridge.getThemeMode()
+        bridge.refreshAll()
+    }
 
     Connections {
         target: bridge
@@ -61,6 +64,7 @@ ApplicationWindow {
         function onBreakpointsChanged(payload) { breakpointItems = JSON.parse(payload).items || [] }
         function onSessionsChanged(payload) { sessionItems = JSON.parse(payload).items || [] }
         function onResultChanged(payload) { resultText = payload }
+        function onThemeChanged(mode) { root.themeMode = mode }
     }
 
     Timer {
@@ -163,6 +167,27 @@ ApplicationWindow {
                     font.pixelSize: 17
                     font.weight: Font.DemiBold
                     Layout.fillWidth: true
+                }
+                Button {
+                    id: themeButton
+                    Layout.preferredWidth: 38
+                    Layout.preferredHeight: 32
+                    text: root.themeMode === "dark" ? "☀" : "🌙"
+                    onClicked: bridge.setThemeMode(root.themeMode === "dark" ? "light" : "dark")
+                    ToolTip.visible: hovered
+                    ToolTip.text: root.themeMode === "dark" ? "切换到亮色模式" : "切换到暗色模式"
+                    background: Rectangle {
+                        radius: 4
+                        color: themeButton.pressed ? theme.panelActive : (themeButton.hovered ? theme.panelHover : theme.panelBgAlt)
+                        border.color: theme.border
+                    }
+                    contentItem: Text {
+                        text: themeButton.text
+                        color: theme.textStrong
+                        font.pixelSize: 17
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
         }
