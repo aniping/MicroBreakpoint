@@ -2,6 +2,7 @@ import json
 
 import requests
 from PySide6.QtCore import QObject, QSettings, Signal, Slot
+from PySide6.QtWidgets import QApplication
 
 
 class Bridge(QObject):
@@ -131,6 +132,18 @@ class Bridge(QObject):
     def createBreakpointFromCall(self, callId):
         self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "selectedArgs": ["cmdName"], "hitMode": "always"}))
         self.refreshAll()
+
+    @Slot(str)
+    def createMethodBreakpointFromCall(self, callId):
+        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "selectedArgs": [], "hitMode": "always"}))
+        self.refreshAll()
+
+    @Slot(str)
+    def copyText(self, text):
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            clipboard.setText(text)
+            self._emit_result({"success": True, "message": "已复制到剪贴板"})
 
     @Slot(str, str)
     def setInterfaceAlias(self, interfaceId, alias):

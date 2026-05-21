@@ -1,23 +1,25 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 Item {
     id: page
+    property var appTheme
     property var items: []
     property var breakpoints: []
     property bool canClearRecords: false
-    property color bg: "#0d1218"
-    property color panel: "#141a21"
-    property color panel2: "#10161d"
-    property color border: "#2a333d"
-    property color textStrong: "#e8eef5"
-    property color textNormal: "#c7d0da"
-    property color textMuted: "#8b98a7"
-    property color blue: "#2f81f7"
-    property color green: "#55d66b"
-    property color red: "#ff5d5d"
-    property color amber: "#f4d13d"
+    property color bg: appTheme.windowBg
+    property color panel: appTheme.panelBg
+    property color panel2: appTheme.panelBgAlt
+    property color border: appTheme.border
+    property color textStrong: appTheme.textStrong
+    property color textNormal: appTheme.textNormal
+    property color textMuted: appTheme.textMuted
+    property color blue: appTheme.primary
+    property color green: appTheme.success
+    property color red: appTheme.danger
+    property color amber: appTheme.warning
     property string searchText: ""
     property int statusFilterIndex: 0
     property int hitFilterIndex: 0
@@ -27,18 +29,40 @@ Item {
     property int detailTabIndex: 0
 
     function statusText(status) {
+        if (status === "running") return "运行中"
         if (status === "finished") return "成功"
         if (status === "paused") return "已暂停"
         if (status === "exception") return "异常"
         if (status === "continued") return "继续中"
+        if (status === "timeout") return "超时"
+        if (status === "ignored") return "忽略"
         return status || "-"
     }
 
     function statusColor(status) {
+        if (status === "running") return blue
         if (status === "finished") return green
         if (status === "paused") return amber
+        if (status === "continued") return blue
         if (status === "exception") return red
+        if (status === "timeout") return amber
         return textMuted
+    }
+
+    function statusType(status) {
+        if (status === "finished") return "success"
+        if (status === "paused") return "warning"
+        if (status === "exception") return "danger"
+        if (status === "timeout") return "warning"
+        if (status === "running" || status === "continued") return "primary"
+        return "neutral"
+    }
+
+    function detailText() {
+        if (!selectedItem) return "{}"
+        if (page.detailTabIndex === 0) return JSON.stringify(selectedItem.args || {}, null, 2)
+        if (page.detailTabIndex === 1) return JSON.stringify(selectedItem.result || {}, null, 2)
+        return JSON.stringify({exceptionType: selectedItem.exception_type, exceptionMessage: selectedItem.exception_message}, null, 2)
     }
 
     function shortTime(value) {
@@ -60,7 +84,7 @@ Item {
     }
 
     function statusFilterValue() {
-        var values = ["", "finished", "paused", "exception", "continued"]
+        var values = ["", "running", "paused", "continued", "finished", "exception", "timeout", "ignored"]
         return values[statusFilterIndex] || ""
     }
 
@@ -115,8 +139,8 @@ Item {
         font.pixelSize: 13
         font.weight: Font.DemiBold
         background: Rectangle {
-            color: seg.selected ? "#1f5fb9" : (seg.hovered ? "#182333" : "#10161d")
-            border.color: seg.selected ? "#58a6ff" : page.border
+            color: seg.selected ? page.appTheme.primary : (seg.hovered ? page.appTheme.panelHover : page.appTheme.panelBgAlt)
+            border.color: seg.selected ? page.appTheme.primaryHover : page.border
         }
         contentItem: Text {
             text: seg.text
@@ -136,7 +160,7 @@ Item {
         font.pixelSize: 14
         background: Rectangle {
             radius: 4
-            color: combo.pressed ? "#182333" : "#10161d"
+            color: combo.pressed ? page.appTheme.panelHover : page.appTheme.inputBg
             border.color: combo.visualFocus ? page.blue : page.border
         }
         contentItem: Text {
@@ -160,10 +184,10 @@ Item {
             width: combo.width
             height: 34
             highlighted: combo.highlightedIndex === index
-            background: Rectangle { color: highlighted ? "#173052" : (hovered ? "#182333" : "#10161d") }
+            background: Rectangle { color: highlighted ? page.appTheme.panelActive : (hovered ? page.appTheme.panelHover : page.appTheme.panelBg) }
             contentItem: Text {
                 text: modelData
-                color: highlighted ? "#cfe6ff" : page.textNormal
+                color: highlighted ? page.appTheme.textStrong : page.textNormal
                 font.pixelSize: 13
                 verticalAlignment: Text.AlignVCenter
                 leftPadding: 12
@@ -174,7 +198,7 @@ Item {
             width: combo.width
             implicitHeight: Math.min(contentItem.implicitHeight + 2, 220)
             padding: 1
-            background: Rectangle { color: "#10161d"; border.color: page.border; radius: 4 }
+            background: Rectangle { color: page.appTheme.panelBg; border.color: page.border; radius: 4 }
             contentItem: ListView {
                 clip: true
                 implicitHeight: contentHeight
@@ -182,8 +206,8 @@ Item {
                 currentIndex: combo.highlightedIndex
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
-                    contentItem: Rectangle { implicitWidth: 7; radius: 4; color: parent.pressed ? page.blue : "#4b5563" }
-                    background: Rectangle { color: "#0d1218"; radius: 4 }
+                    contentItem: Rectangle { implicitWidth: 7; radius: 4; color: parent.pressed ? page.blue : page.appTheme.textDisabled }
+                    background: Rectangle { color: page.appTheme.panelBgAlt; radius: 4 }
                 }
             }
         }
@@ -191,7 +215,7 @@ Item {
 
     component HeaderCell: Rectangle {
         property string label: ""
-        color: "#20262e"
+        color: page.appTheme.panelBgAlt
         border.color: page.border
         Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -224,10 +248,14 @@ Item {
 
     component StatusBadge: Rectangle {
         property string status: ""
-        width: 58
+        width: 64
         height: 24
         radius: 4
-        color: Qt.rgba(statusColor(status).r, statusColor(status).g, statusColor(status).b, 0.16)
+        color: statusType(status) === "success" ? page.appTheme.successSoft
+              : statusType(status) === "warning" ? page.appTheme.warningSoft
+              : statusType(status) === "danger" ? page.appTheme.dangerSoft
+              : statusType(status) === "primary" ? page.appTheme.primarySoft
+              : page.appTheme.panelBgAlt
         border.color: statusColor(status)
         Text {
             anchors.centerIn: parent
@@ -263,25 +291,21 @@ Item {
                         anchors.fill: parent
                         anchors.margins: 12
                         spacing: 14
-                        TextField {
+                        MbTextField {
                             id: searchInput
+                            appTheme: page.appTheme
                             Layout.preferredWidth: 230
                             Layout.preferredHeight: 38
                             placeholderText: "搜索方法名、类名、线程名..."
                             text: page.searchText
-                            color: textStrong
-                            placeholderTextColor: textMuted
-                            font.pixelSize: 14
-                            selectByMouse: true
                             onTextChanged: page.searchText = text
-                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
                         }
                         FilterCombo {
                             id: statusBox
                             Layout.preferredWidth: 122
                             Layout.preferredHeight: 38
                             prefix: "状态: "
-                            model: ["全部", "成功", "已暂停", "异常", "继续中"]
+                            model: ["全部", "运行中", "已暂停", "继续中", "成功", "异常", "超时", "忽略"]
                             currentIndex: page.statusFilterIndex
                             onActivated: page.statusFilterIndex = currentIndex
                         }
@@ -295,24 +319,22 @@ Item {
                             onActivated: page.hitFilterIndex = currentIndex
                         }
                         Item { Layout.fillWidth: true }
-                        Button {
+                        MbButton {
+                            appTheme: page.appTheme
                             Layout.preferredWidth: 44
                             Layout.preferredHeight: 38
                             text: "刷新"
-                            font.pixelSize: 13
+                            variant: "neutral"
                             onClicked: bridge.refreshAll()
-                            background: Rectangle { radius: 4; color: parent.hovered ? "#1d2631" : "#10161d"; border.color: border }
-                            contentItem: Text { text: parent.text; color: textMuted; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
-                        Button {
+                        MbButton {
+                            appTheme: page.appTheme
                             Layout.preferredWidth: 92
                             Layout.preferredHeight: 38
                             text: "清空记录"
+                            variant: "danger"
                             enabled: page.canClearRecords && items.length > 0
-                            font.pixelSize: 13
                             onClicked: bridge.clearCalls()
-                            background: Rectangle { radius: 4; color: parent.enabled ? (parent.hovered ? "#5a1f2a" : "#2b1720") : "#151b23"; border.color: parent.enabled ? "#7f2d3a" : "#222a33" }
-                            contentItem: Text { text: parent.text; color: parent.enabled ? "#ffb4b4" : "#687483"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                     }
                 }
@@ -346,13 +368,22 @@ Item {
                         width: table.width
                         height: 52
                         color: table.currentIndex === index
-                               ? (modelData.status === "paused" ? "#4c4714" : "#173052")
-                               : (modelData.status === "paused" ? "#393716" : (index % 2 ? "#151c24" : "#111820"))
-                        border.color: page.border
+                               ? (modelData.status === "paused" ? page.appTheme.warningSoft : page.appTheme.panelActive)
+                               : (modelData.status === "paused" ? page.appTheme.warningSoft : (index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg))
+                        border.color: page.appTheme.borderSoft
 
                         MouseArea {
                             anchors.fill: parent
                             onClicked: table.currentIndex = index
+                        }
+
+                        Rectangle {
+                            width: 3
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            visible: modelData.status === "paused"
+                            color: page.amber
                         }
 
                         GridLayout {
@@ -376,8 +407,8 @@ Item {
                                     anchors.rightMargin: 8
                                     height: 26
                                     radius: 4
-                                    color: modelData.interface_alias ? "#142237" : "transparent"
-                                    border.color: modelData.interface_alias ? "#2a5284" : "transparent"
+                                    color: modelData.interface_alias ? page.appTheme.primarySoft : "transparent"
+                                    border.color: modelData.interface_alias ? page.appTheme.primary : "transparent"
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.left: parent.left
@@ -385,7 +416,7 @@ Item {
                                         anchors.leftMargin: 8
                                         anchors.rightMargin: 8
                                         text: modelData.interface_alias || "未命名"
-                                        color: modelData.interface_alias ? "#cfe6ff" : page.textMuted
+                                        color: modelData.interface_alias ? page.appTheme.textStrong : page.textMuted
                                         font.pixelSize: 13
                                         font.weight: modelData.interface_alias ? Font.DemiBold : Font.Normal
                                         elide: Text.ElideRight
@@ -423,7 +454,7 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 62
-                    color: "#111820"
+                    color: page.appTheme.panelBgAlt
                     border.color: border
                     RowLayout {
                         anchors.fill: parent
@@ -435,29 +466,29 @@ Item {
                             text: "‹"
                             Layout.preferredWidth: 36
                             Layout.preferredHeight: 36
-                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
+                            background: Rectangle { radius: 4; color: page.appTheme.inputBg; border.color: border }
                             contentItem: Text { text: parent.text; color: textMuted; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                         Rectangle {
                             Layout.preferredWidth: 38
                             Layout.preferredHeight: 36
-                            color: "#143f75"
+                            color: page.appTheme.primarySoft
                             border.color: blue
                             radius: 4
-                            Text { anchors.centerIn: parent; text: "1"; color: "#cfe6ff"; font.pixelSize: 16 }
+                            Text { anchors.centerIn: parent; text: "1"; color: page.appTheme.primary; font.pixelSize: 16; font.weight: Font.DemiBold }
                         }
                         Button {
                             text: "›"
                             Layout.preferredWidth: 36
                             Layout.preferredHeight: 36
-                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
+                            background: Rectangle { radius: 4; color: page.appTheme.inputBg; border.color: border }
                             contentItem: Text { text: parent.text; color: textMuted; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                         Rectangle {
                             Layout.preferredWidth: 98
                             Layout.preferredHeight: 36
                             radius: 4
-                            color: "#10161d"
+                            color: page.appTheme.inputBg
                             border.color: border
                             Text { anchors.centerIn: parent; text: "20 条/页"; color: textNormal; font.pixelSize: 14 }
                         }
@@ -556,68 +587,70 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
-                Rectangle {
+                MbJsonViewer {
+                    appTheme: page.appTheme
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#0f151c"
-                    border.color: border
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        clip: true
-                        ScrollBar.vertical: ScrollBar {
-                            policy: ScrollBar.AsNeeded
-                            contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? page.blue : "#4b5563" }
-                            background: Rectangle { color: "#0d1218"; radius: 4 }
-                        }
-                        ScrollBar.horizontal: ScrollBar {
-                            policy: ScrollBar.AsNeeded
-                            contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? page.blue : "#4b5563" }
-                            background: Rectangle { color: "#0d1218"; radius: 4 }
-                        }
-                        TextArea {
-                            readOnly: true
-                            selectByMouse: true
-                            text: selectedItem
-                                  ? (page.detailTabIndex === 0 ? JSON.stringify(selectedItem.args || {}, null, 2)
-                                     : page.detailTabIndex === 1 ? JSON.stringify(selectedItem.result || {}, null, 2)
-                                     : JSON.stringify({exceptionType: selectedItem.exception_type, exceptionMessage: selectedItem.exception_message}, null, 2))
-                                  : "{}"
-                            color: "#b6e3ff"
-                            selectedTextColor: "#ffffff"
-                            selectionColor: "#1f6feb"
-                            font.family: "Consolas"
-                            font.pixelSize: 13
-                            background: Rectangle { color: "transparent" }
-                            wrapMode: TextArea.NoWrap
-                        }
-                    }
+                    text: page.detailText()
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 64
+                    Layout.preferredHeight: 112
                     color: panel
                     border.color: border
-                    RowLayout {
+                    GridLayout {
                         anchors.fill: parent
                         anchors.margins: 10
-                        spacing: 10
-                        Button {
+                        columns: 3
+                        rowSpacing: 8
+                        columnSpacing: 10
+                        MbButton {
+                            appTheme: page.appTheme
                             text: "继续执行"
                             enabled: selectedItem && selectedItem.status === "paused"
+                            variant: "primary"
                             Layout.fillWidth: true
                             onClicked: bridge.continueCall(selectedItem.call_id)
-                            background: Rectangle { radius: 4; color: parent.enabled ? "#1f5fb9" : "#1a2430"; border.color: parent.enabled ? "#58a6ff" : border }
-                            contentItem: Text { text: parent.text; color: parent.enabled ? "#ffffff" : textMuted; font.pixelSize: 14; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
-                        Button {
-                            text: "按参数创建断点"
+                        MbButton {
+                            appTheme: page.appTheme
+                            text: "按方法创建断点"
                             enabled: selectedItem !== null
+                            variant: "primary"
+                            Layout.fillWidth: true
+                            onClicked: bridge.createMethodBreakpointFromCall(selectedItem.call_id)
+                        }
+                        MbButton {
+                            appTheme: page.appTheme
+                            text: "按本次参数创建断点"
+                            enabled: selectedItem !== null
+                            variant: "primary"
                             Layout.fillWidth: true
                             onClicked: bridge.createBreakpointFromCall(selectedItem.call_id)
-                            background: Rectangle { radius: 4; color: parent.enabled ? "#1d4f96" : "#1a2430"; border.color: parent.enabled ? "#58a6ff" : border }
-                            contentItem: Text { text: parent.text; color: parent.enabled ? "#ffffff" : textMuted; font.pixelSize: 14; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        }
+                        MbButton {
+                            appTheme: page.appTheme
+                            text: "复制入参"
+                            enabled: selectedItem !== null
+                            variant: "neutral"
+                            Layout.fillWidth: true
+                            onClicked: bridge.copyText(JSON.stringify(selectedItem.args || {}, null, 2))
+                        }
+                        MbButton {
+                            appTheme: page.appTheme
+                            text: "复制返回值"
+                            enabled: selectedItem !== null
+                            variant: "neutral"
+                            Layout.fillWidth: true
+                            onClicked: bridge.copyText(JSON.stringify(selectedItem.result || {}, null, 2))
+                        }
+                        MbButton {
+                            appTheme: page.appTheme
+                            text: "刷新详情"
+                            variant: "neutral"
+                            Layout.fillWidth: true
+                            onClicked: bridge.refreshAll()
                         }
                     }
                 }
@@ -643,7 +676,7 @@ Item {
                         required property int index
                         width: parent ? parent.width : 480
                         height: 58
-                        color: index % 2 ? "#121920" : "#10161d"
+                        color: index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg
                         border.color: border
                         RowLayout {
                             anchors.fill: parent
@@ -657,18 +690,19 @@ Item {
                                 Text { text: modelData.id + "   " + modelData.method_name; color: textStrong; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
                                 Text { text: modelData.class_name || "-"; color: textMuted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
                             }
-                            Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? "#cfe6ff" : textMuted; font.pixelSize: 13 }
-                            MiniSwitch {
+                            Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.green : textMuted; font.pixelSize: 13 }
+                            MbSwitch {
+                                appTheme: page.appTheme
                                 checked: !!modelData.enabled
                                 onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
                             }
-                            Button {
+                            MbButton {
+                                appTheme: page.appTheme
                                 text: "×"
+                                variant: "danger"
                                 Layout.preferredWidth: 34
                                 Layout.preferredHeight: 28
                                 onClicked: bridge.deleteBreakpoint(modelData.id)
-                                background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
-                                contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                             }
                         }
                     }
