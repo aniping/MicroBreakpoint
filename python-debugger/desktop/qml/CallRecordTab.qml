@@ -18,6 +18,7 @@ Item {
     property color red: "#ff5d5d"
     property color amber: "#f4d13d"
     property var selectedItem: items.length > 0 ? items[Math.max(0, table.currentIndex)] : null
+    property int detailTabIndex: 0
 
     function statusText(status) {
         if (status === "finished") return "成功"
@@ -37,6 +38,67 @@ Item {
     function shortTime(value) {
         if (!value) return "-"
         return String(value).replace("T", " ").split("+")[0]
+    }
+
+    function breakpointById(id) {
+        if (!id) return null
+        for (var i = 0; i < breakpoints.length; i++) {
+            if (breakpoints[i].id === id) return breakpoints[i]
+        }
+        return null
+    }
+
+    function breakpointEnabled(id) {
+        var bp = breakpointById(id)
+        return bp ? !!bp.enabled : false
+    }
+
+    component MiniSwitch: Rectangle {
+        id: sw
+        property bool checked: false
+        property bool enabledSwitch: true
+        signal toggled(bool checked)
+        width: 42
+        height: 22
+        radius: 11
+        color: checked ? "#1f6feb" : "#26313d"
+        border.color: checked ? "#58a6ff" : "#4b5563"
+        opacity: enabledSwitch ? 1 : 0.45
+        Rectangle {
+            width: 16
+            height: 16
+            radius: 8
+            color: "#e8eef5"
+            anchors.verticalCenter: parent.verticalCenter
+            x: sw.checked ? 22 : 4
+            Behavior on x { NumberAnimation { duration: 110 } }
+        }
+        MouseArea {
+            anchors.fill: parent
+            enabled: sw.enabledSwitch
+            onClicked: sw.toggled(!sw.checked)
+        }
+    }
+
+    component SegmentButton: Button {
+        id: seg
+        property bool selected: false
+        implicitHeight: 38
+        padding: 0
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+        background: Rectangle {
+            color: seg.selected ? "#1f5fb9" : (seg.hovered ? "#182333" : "#10161d")
+            border.color: seg.selected ? "#58a6ff" : page.border
+        }
+        contentItem: Text {
+            text: seg.text
+            color: seg.selected ? "#ffffff" : page.textNormal
+            font: seg.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
     }
 
     component HeaderCell: Rectangle {
@@ -161,7 +223,7 @@ Item {
                     HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 92; Layout.preferredHeight: 46 }
                     HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
                     HeaderCell { label: "调用时间"; Layout.preferredWidth: 140; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "命中断点"; Layout.preferredWidth: 96; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "断点"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
                 }
 
                 ListView {
@@ -205,7 +267,27 @@ Item {
                             DataCell { label: modelData.cost_ms === null || modelData.cost_ms === undefined ? "-" : String(modelData.cost_ms); Layout.preferredWidth: 92; Layout.fillHeight: true }
                             DataCell { label: modelData.thread_name || "-"; Layout.fillWidth: true; Layout.fillHeight: true }
                             DataCell { label: shortTime(modelData.created_at); Layout.preferredWidth: 140; Layout.fillHeight: true }
-                            DataCell { label: modelData.breakpoint_id ? "是 (" + modelData.breakpoint_id + ")" : "否"; labelColor: modelData.breakpoint_id ? page.amber : page.textNormal; Layout.preferredWidth: 96; Layout.fillHeight: true }
+                            Rectangle {
+                                Layout.preferredWidth: 126
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: page.border
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 8
+                                    Text {
+                                        text: modelData.breakpoint_id ? "命中" : "无"
+                                        color: modelData.breakpoint_id ? page.amber : page.textMuted
+                                        font.pixelSize: 13
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    MiniSwitch {
+                                        visible: modelData.breakpoint_id
+                                        checked: breakpointEnabled(modelData.breakpoint_id)
+                                        onToggled: function(value) { bridge.setBreakpointEnabled(modelData.breakpoint_id, value) }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -317,14 +399,30 @@ Item {
                     color: border
                 }
 
-                TabBar {
+                RowLayout {
                     id: detailTabs
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
-                    background: Rectangle { color: panel }
-                    TabButton { text: "参数 (args)"; width: 110 }
-                    TabButton { text: "返回值 (result)"; width: 130 }
-                    TabButton { text: "异常 (exception)"; width: 140 }
+                    spacing: 0
+                    SegmentButton {
+                        text: "参数 (args)"
+                        selected: page.detailTabIndex === 0
+                        Layout.preferredWidth: 126
+                        onClicked: page.detailTabIndex = 0
+                    }
+                    SegmentButton {
+                        text: "返回值 (result)"
+                        selected: page.detailTabIndex === 1
+                        Layout.preferredWidth: 142
+                        onClicked: page.detailTabIndex = 1
+                    }
+                    SegmentButton {
+                        text: "异常 (exception)"
+                        selected: page.detailTabIndex === 2
+                        Layout.preferredWidth: 154
+                        onClicked: page.detailTabIndex = 2
+                    }
+                    Item { Layout.fillWidth: true }
                 }
 
                 Rectangle {
@@ -337,8 +435,8 @@ Item {
                         anchors.margins: 12
                         readOnly: true
                         text: selectedItem
-                              ? (detailTabs.currentIndex === 0 ? JSON.stringify(selectedItem.args || {}, null, 2)
-                                 : detailTabs.currentIndex === 1 ? JSON.stringify(selectedItem.result || {}, null, 2)
+                              ? (page.detailTabIndex === 0 ? JSON.stringify(selectedItem.args || {}, null, 2)
+                                 : page.detailTabIndex === 1 ? JSON.stringify(selectedItem.result || {}, null, 2)
                                  : JSON.stringify({exceptionType: selectedItem.exception_type, exceptionMessage: selectedItem.exception_message}, null, 2))
                               : "{}"
                         color: "#b6e3ff"
@@ -413,6 +511,18 @@ Item {
                                 Text { text: modelData.class_name || "-"; color: textMuted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
                             }
                             Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? "#cfe6ff" : textMuted; font.pixelSize: 13 }
+                            MiniSwitch {
+                                checked: !!modelData.enabled
+                                onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
+                            }
+                            Button {
+                                text: "删"
+                                Layout.preferredWidth: 34
+                                Layout.preferredHeight: 28
+                                onClicked: bridge.deleteBreakpoint(modelData.id)
+                                background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
+                                contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            }
                         }
                     }
                 }

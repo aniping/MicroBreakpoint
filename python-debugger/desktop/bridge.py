@@ -108,6 +108,17 @@ class Bridge(QObject):
         self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "selectedArgs": ["cmdName"], "hitMode": "always"}))
         self.refreshAll()
 
+    @Slot(str, bool)
+    def setBreakpointEnabled(self, breakpointId, enabled):
+        action = "enable" if enabled else "disable"
+        self._emit_result(self._request("POST", f"{self.backend}/api/breakpoints/{breakpointId}/{action}"))
+        self.refreshAll()
+
+    @Slot(str)
+    def deleteBreakpoint(self, breakpointId):
+        self._emit_result(self._request("DELETE", f"{self.backend}/api/breakpoints/{breakpointId}"))
+        self.refreshAll()
+
     @Slot(str)
     def javaPing(self, baseUrl):
         self._emit_result(self._request("GET", f"{baseUrl.rstrip('/')}/api/demo/ping"))

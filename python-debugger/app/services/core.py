@@ -127,7 +127,9 @@ def before_call(payload):
             now,
         ),
     )
-    interface_id = upsert_interface(payload, session_id, now)
+    interface_id = None
+    if not STATE["debugging"]:
+        interface_id = upsert_interface(payload, session_id, now)
     matched = match_breakpoint(payload)
     if STATE["debugging"] and matched:
         wait_manager.create(payload["callId"])
@@ -169,7 +171,7 @@ def after_call(payload):
         ),
     )
     row = db.execute("SELECT * FROM call_record WHERE call_id=?", (payload.get("callId"),)).fetchone()
-    if row:
+    if row and not STATE["debugging"]:
         update_interface_stats(row, payload, now)
     db.commit()
     return {"success": True}

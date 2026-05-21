@@ -21,11 +21,14 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Aspect
 @Component
 public class DebugBreakpointAspect {
+    private static final Logger log = LoggerFactory.getLogger(DebugBreakpointAspect.class);
     private final DebugClient debugClient;
     private final DebuggerProperties properties;
 
@@ -51,22 +54,36 @@ public class DebugBreakpointAspect {
                 argsMap(method, joinPoint.getArgs()),
                 parameterMeta(method));
 
+        log.info("[MicroBreakpoint] before-call report start callId={} method={} thread={} args={}",
+                callId, method.getName(), Thread.currentThread().getName(), before.args());
         BeforeCallResponse beforeResponse = debugClient.reportBefore(before);
+        log.info("[MicroBreakpoint] before-call report done callId={} method={} action={} breakpointId={}",
+                callId, method.getName(), beforeResponse.getAction(), beforeResponse.getBreakpointId());
         if ("pause".equalsIgnoreCase(beforeResponse.getAction())) {
+            log.info("[MicroBreakpoint] breakpoint paused callId={} method={} waiting for continue...",
+                    callId, method.getName());
             debugClient.waitUntilContinue(callId);
+            log.info("[MicroBreakpoint] breakpoint resumed callId={} method={} continue business",
+                    callId, method.getName());
         }
 
         long start = System.currentTimeMillis();
         Object result = null;
         Throwable failure = null;
         try {
+            log.info("[MicroBreakpoint] business invoke start callId={} method={}", callId, method.getName());
             result = joinPoint.proceed();
+            log.info("[MicroBreakpoint] business invoke success callId={} method={}", callId, method.getName());
             return result;
         } catch (Throwable t) {
             failure = t;
+            log.info("[MicroBreakpoint] business invoke exception callId={} method={} exception={} message={}",
+                    callId, method.getName(), t.getClass().getName(), t.getMessage());
             throw t;
         } finally {
             long costMs = System.currentTimeMillis() - start;
+            log.info("[MicroBreakpoint] after-call report start callId={} method={} success={} costMs={}",
+                    callId, method.getName(), failure == null, costMs);
             debugClient.reportAfter(new AfterCallRequest(
                     callId,
                     failure == null,
@@ -74,6 +91,7 @@ public class DebugBreakpointAspect {
                     result,
                     failure == null ? null : failure.getClass().getName(),
                     failure == null ? null : failure.getMessage()));
+            log.info("[MicroBreakpoint] after-call report done callId={} method={}", callId, method.getName());
         }
     }
 

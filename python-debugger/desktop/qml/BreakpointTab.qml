@@ -12,6 +12,27 @@ Item {
     property color green: "#55d66b"
     property color red: "#ff5d5d"
 
+    component MiniSwitch: Rectangle {
+        id: sw
+        property bool checked: false
+        signal toggled(bool checked)
+        width: 44
+        height: 22
+        radius: 11
+        color: checked ? "#1f6feb" : "#26313d"
+        border.color: checked ? "#58a6ff" : "#4b5563"
+        Rectangle {
+            width: 16
+            height: 16
+            radius: 8
+            color: "#e8eef5"
+            anchors.verticalCenter: parent.verticalCenter
+            x: sw.checked ? 24 : 4
+            Behavior on x { NumberAnimation { duration: 110 } }
+        }
+        MouseArea { anchors.fill: parent; onClicked: sw.toggled(!sw.checked) }
+    }
+
     Rectangle {
         anchors.fill: parent
         anchors.margins: 12
@@ -38,6 +59,7 @@ Item {
                 clip: true
                 delegate: Rectangle {
                     required property var modelData
+                    required property int index
                     width: list.width
                     height: 70
                     color: index % 2 ? "#151c24" : "#111820"
@@ -55,6 +77,18 @@ Item {
                             Text { text: (modelData.method_name || "-") + " | 条件 " + JSON.stringify(modelData.condition || {}) + " | 命中 " + (modelData.hit_count || 0) + " 次"; color: textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                         }
                         Text { text: modelData.enabled ? "启用" : "禁用"; color: modelData.enabled ? green : red; font.pixelSize: 14; font.weight: Font.DemiBold }
+                        MiniSwitch {
+                            checked: !!modelData.enabled
+                            onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
+                        }
+                        Button {
+                            text: "删除"
+                            Layout.preferredWidth: 64
+                            Layout.preferredHeight: 32
+                            onClicked: bridge.deleteBreakpoint(modelData.id)
+                            background: Rectangle { radius: 4; color: parent.hovered ? "#5a1f2a" : "#2b1720"; border.color: "#7f2d3a" }
+                            contentItem: Text { text: parent.text; color: "#ffb4b4"; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        }
                     }
                 }
             }

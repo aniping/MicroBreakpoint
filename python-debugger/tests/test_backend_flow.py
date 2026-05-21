@@ -47,3 +47,19 @@ def test_record_requires_selected_session(tmp_path):
 
     assert response.status_code == 400
     assert response.get_json()["message"] == "请先新建或选择会话"
+
+
+def test_debug_does_not_discover_new_interfaces(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    client.post("/api/session/create", json={})
+    client.post("/api/session/start-debug", json={})
+    payload = make_before("debug-new-method")
+    payload["methodName"] = "newMethodOnlyInDebug"
+    payload["displayName"] = "调试中新方法"
+
+    assert client.post("/api/calls/before", json=payload).get_json()["action"] == "continue"
+
+    assert client.get("/api/calls").get_json()["items"][0]["method_name"] == "newMethodOnlyInDebug"
+    assert client.get("/api/interfaces").get_json()["items"] == []
