@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
+from PySide6.QtGui import QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication
 
@@ -13,6 +14,7 @@ def main():
     backend = DesktopBackendRuntime()
     backend.start()
     app = QApplication(sys.argv)
+    app.setFont(QFont("Microsoft YaHei UI", 10))
     app.aboutToQuit.connect(backend.stop)
     engine = QQmlApplicationEngine()
     bridge = Bridge()

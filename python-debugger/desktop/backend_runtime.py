@@ -8,9 +8,10 @@ from app import create_app
 
 
 class DesktopBackendRuntime:
-    def __init__(self, host="127.0.0.1", port=5050):
+    def __init__(self, host="127.0.0.1", port=5050, app_config=None):
         self.host = host
         self.port = port
+        self.app_config = app_config
         self.url = f"http://{host}:{port}"
         self._server = None
         self._thread = None
@@ -23,7 +24,7 @@ class DesktopBackendRuntime:
     def start(self, timeout=8.0):
         if self.is_ready():
             return False
-        app = create_app()
+        app = create_app(self.app_config)
         self._server = make_server(self.host, self.port, app, threaded=True)
         self._thread = Thread(target=self._server.serve_forever, name="micro-breakpoint-backend", daemon=True)
         self._thread.start()
