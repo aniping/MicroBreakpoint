@@ -18,7 +18,12 @@ Item {
     property color green: "#55d66b"
     property color red: "#ff5d5d"
     property color amber: "#f4d13d"
-    property var selectedItem: items.length > 0 ? items[Math.max(0, table.currentIndex)] : null
+    property string searchText: ""
+    property int statusFilterIndex: 0
+    property int hitFilterIndex: 0
+    property bool callDetailExpanded: true
+    property bool breakpointPanelExpanded: true
+    property var selectedItem: filterItems().length > 0 ? filterItems()[Math.max(0, table.currentIndex)] : null
     property int detailTabIndex: 0
 
     function statusText(status) {
@@ -52,6 +57,27 @@ Item {
     function breakpointEnabled(id) {
         var bp = breakpointById(id)
         return bp ? !!bp.enabled : false
+    }
+
+    function statusFilterValue() {
+        var values = ["", "finished", "paused", "exception", "continued"]
+        return values[statusFilterIndex] || ""
+    }
+
+    function filterItems() {
+        var result = []
+        var keyword = searchText.toLowerCase()
+        var status = statusFilterValue()
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i]
+            var haystack = ((item.method_name || "") + " " + (item.class_name || "") + " " + (item.thread_name || "") + " " + (item.display_name || "")).toLowerCase()
+            if (keyword.length > 0 && haystack.indexOf(keyword) < 0) continue
+            if (status.length > 0 && item.status !== status) continue
+            if (hitFilterIndex === 1 && !item.breakpoint_id) continue
+            if (hitFilterIndex === 2 && item.breakpoint_id) continue
+            result.push(item)
+        }
+        return result
     }
 
     component MiniSwitch: Rectangle {
@@ -176,29 +202,38 @@ Item {
                         anchors.fill: parent
                         anchors.margins: 12
                         spacing: 14
-                        Rectangle {
+                        TextField {
+                            id: searchInput
                             Layout.preferredWidth: 230
                             Layout.preferredHeight: 38
-                            radius: 4
-                            color: "#10161d"
-                            border.color: border
-                            Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "搜索方法名、类名、线程名..."; color: textMuted; font.pixelSize: 14 }
+                            placeholderText: "搜索方法名、类名、线程名..."
+                            text: page.searchText
+                            color: textStrong
+                            placeholderTextColor: textMuted
+                            font.pixelSize: 14
+                            selectByMouse: true
+                            onTextChanged: page.searchText = text
+                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
                         }
-                        Rectangle {
+                        ComboBox {
+                            id: statusBox
                             Layout.preferredWidth: 122
                             Layout.preferredHeight: 38
-                            radius: 4
-                            color: "#10161d"
-                            border.color: border
-                            Text { anchors.centerIn: parent; text: "状态:  全部"; color: textNormal; font.pixelSize: 14 }
+                            model: ["全部", "成功", "已暂停", "异常", "继续中"]
+                            currentIndex: page.statusFilterIndex
+                            onActivated: page.statusFilterIndex = currentIndex
+                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
+                            contentItem: Text { text: "状态: " + statusBox.displayText; color: textNormal; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 12; elide: Text.ElideRight }
                         }
-                        Rectangle {
+                        ComboBox {
+                            id: hitBox
                             Layout.preferredWidth: 160
                             Layout.preferredHeight: 38
-                            radius: 4
-                            color: "#10161d"
-                            border.color: border
-                            Text { anchors.centerIn: parent; text: "命中断点:  全部"; color: textNormal; font.pixelSize: 14 }
+                            model: ["全部", "命中", "未命中"]
+                            currentIndex: page.hitFilterIndex
+                            onActivated: page.hitFilterIndex = currentIndex
+                            background: Rectangle { radius: 4; color: "#10161d"; border.color: border }
+                            contentItem: Text { text: "命中断点: " + hitBox.displayText; color: textNormal; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 12; elide: Text.ElideRight }
                         }
                         Item { Layout.fillWidth: true }
                         Button {
@@ -241,9 +276,9 @@ Item {
                     id: table
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: items
+                    model: page.filterItems()
                     clip: true
-                    currentIndex: items.length > 0 ? Math.max(0, currentIndex) : -1
+                    currentIndex: page.filterItems().length > 0 ? Math.max(0, currentIndex) : -1
                     boundsBehavior: Flickable.StopAtBounds
                     delegate: Rectangle {
                         required property var modelData
@@ -305,7 +340,7 @@ Item {
                         anchors.fill: parent
                         anchors.leftMargin: 18
                         anchors.rightMargin: 18
-                        Text { text: "共 " + items.length + " 条"; color: textNormal; font.pixelSize: 15 }
+                        Text { text: "共 " + page.filterItems().length + " / " + items.length + " 条"; color: textNormal; font.pixelSize: 15 }
                         Item { Layout.fillWidth: true }
                         Button {
                             text: "‹"
@@ -359,12 +394,14 @@ Item {
                     color: panel
                     border.color: border
                     Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "调用详情"; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: "⌃"; color: textMuted; font.pixelSize: 16 }
+                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: page.callDetailExpanded ? "⌃" : "⌄"; color: textMuted; font.pixelSize: 16 }
+                    MouseArea { anchors.fill: parent; onClicked: page.callDetailExpanded = !page.callDetailExpanded }
                 }
 
                 GridLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 246
+                    Layout.preferredHeight: page.callDetailExpanded ? 246 : 0
+                    visible: page.callDetailExpanded
                     columns: 2
                     rowSpacing: 8
                     columnSpacing: 12
@@ -399,7 +436,8 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 1
+                    Layout.preferredHeight: page.callDetailExpanded ? 1 : 0
+                    visible: page.callDetailExpanded
                     color: border
                 }
 
@@ -434,22 +472,28 @@ Item {
                     Layout.fillHeight: true
                     color: "#0f151c"
                     border.color: border
-                    TextArea {
+                    ScrollView {
                         anchors.fill: parent
-                        anchors.margins: 12
-                        readOnly: true
-                        text: selectedItem
-                              ? (page.detailTabIndex === 0 ? JSON.stringify(selectedItem.args || {}, null, 2)
-                                 : page.detailTabIndex === 1 ? JSON.stringify(selectedItem.result || {}, null, 2)
-                                 : JSON.stringify({exceptionType: selectedItem.exception_type, exceptionMessage: selectedItem.exception_message}, null, 2))
-                              : "{}"
-                        color: "#b6e3ff"
-                        selectedTextColor: "#ffffff"
-                        selectionColor: "#1f6feb"
-                        font.family: "Consolas"
-                        font.pixelSize: 13
-                        background: Rectangle { color: "transparent" }
-                        wrapMode: TextArea.NoWrap
+                        anchors.margins: 8
+                        clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                        ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                        TextArea {
+                            readOnly: true
+                            selectByMouse: true
+                            text: selectedItem
+                                  ? (page.detailTabIndex === 0 ? JSON.stringify(selectedItem.args || {}, null, 2)
+                                     : page.detailTabIndex === 1 ? JSON.stringify(selectedItem.result || {}, null, 2)
+                                     : JSON.stringify({exceptionType: selectedItem.exception_type, exceptionMessage: selectedItem.exception_message}, null, 2))
+                                  : "{}"
+                            color: "#b6e3ff"
+                            selectedTextColor: "#ffffff"
+                            selectionColor: "#1f6feb"
+                            font.family: "Consolas"
+                            font.pixelSize: 13
+                            background: Rectangle { color: "transparent" }
+                            wrapMode: TextArea.NoWrap
+                        }
                     }
                 }
 
@@ -487,12 +531,14 @@ Item {
                     color: panel
                     border.color: border
                     Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "断点列表 (" + breakpoints.length + ")"; color: textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: "⌃"; color: textMuted; font.pixelSize: 16 }
+                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 14; text: page.breakpointPanelExpanded ? "⌃" : "⌄"; color: textMuted; font.pixelSize: 16 }
+                    MouseArea { anchors.fill: parent; onClicked: page.breakpointPanelExpanded = !page.breakpointPanelExpanded }
                 }
 
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 176
+                    Layout.preferredHeight: page.breakpointPanelExpanded ? 176 : 0
+                    visible: page.breakpointPanelExpanded
                     model: breakpoints
                     clip: true
                     delegate: Rectangle {
