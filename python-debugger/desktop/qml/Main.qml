@@ -27,7 +27,7 @@ ApplicationWindow {
     property color red: theme.danger
     property color amber: theme.warning
 
-    property int currentPage: 3
+    property int currentPage: 4
     property var stateData: ({mode: "idle", callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0})
     property var callItems: []
     property var interfaceItems: []
@@ -163,7 +163,7 @@ ApplicationWindow {
                 spacing: 14
                 ToolbarGroup {
                     title: "会话"
-                    MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 118; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 3 } }
+                    MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 118; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 4 } }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 ToolbarGroup {
@@ -227,8 +227,8 @@ ApplicationWindow {
                     MbNavButton { appTheme: theme; text: "调用记录"; iconText: "☷"; selected: currentPage === 0; onClicked: currentPage = 0 }
                     MbNavButton { appTheme: theme; text: "已发现接口"; iconText: "◇"; selected: currentPage === 1; onClicked: currentPage = 1 }
                     MbNavButton { appTheme: theme; text: "断点管理"; iconText: "◎"; selected: currentPage === 2; onClicked: currentPage = 2 }
-                    MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 3; onClicked: currentPage = 3 }
-                    MbNavButton { appTheme: theme; text: "Java调用"; iconText: "J"; selected: currentPage === 4; onClicked: currentPage = 4 }
+                    MbNavButton { appTheme: theme; text: "Java调用"; iconText: "J"; selected: currentPage === 3; onClicked: currentPage = 3 }
+                    MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 4; onClicked: currentPage = 4 }
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.border }
                     MbNavButton { appTheme: theme; text: "设置"; iconText: "⚙"; selected: currentPage === 5; onClicked: currentPage = 5 }
@@ -243,8 +243,8 @@ ApplicationWindow {
                 CallRecordTab { items: callItems; breakpoints: breakpointItems; canClearRecords: stateData.mode === "idle" && stateData.hasSession }
                 InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
                 BreakpointTab { items: breakpointItems }
-                SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
                 JavaCallTab { appTheme: theme; resultText: root.resultText }
+                SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
                 SettingsTab {}
             }
         }
