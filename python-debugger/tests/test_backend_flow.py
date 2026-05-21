@@ -120,3 +120,47 @@ def test_interface_identity_uses_http_signature(tmp_path):
     by_query = {item["query_signature"]: item for item in items}
     assert by_query[dumps({"cmdName": ["create"], "instType": ["VNA"], "slotId": ["1"]})]["call_count"] == 2
     assert by_query[dumps({"cmdName": ["stop"], "instType": ["VNA"], "slotId": ["1"]})]["call_count"] == 1
+
+
+def test_clear_current_session_call_records(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    client.post("/api/session/create", json={})
+    client.post("/api/session/start-record", json={})
+    blocked = client.delete("/api/calls")
+    assert blocked.status_code == 400
+    assert blocked.get_json()["message"] == "请先停止记录或调试"
+    client.post("/api/calls/before", json=make_before("call-to-clear"))
+    client.post("/api/calls/after", json={"callId": "call-to-clear", "success": True, "costMs": 5, "result": {"ok": True}})
+    client.post("/api/session/stop-record")
+
+    cleared = client.delete("/api/calls")
+
+    assert cleared.status_code == 200
+    assert cleared.get_json()["deletedCount"] == 1
+    assert client.get("/api/calls").get_json()["items"] == []
+    assert len(client.get("/api/interfaces").get_json()["items"]) == 1
+
+
+def test_clear_session_history_removes_related_data(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    client.post("/api/session/create", json={})
+    client.post("/api/session/start-record", json={})
+    client.post("/api/calls/before", json=make_before("history-call"))
+    client.post("/api/calls/after", json={"callId": "history-call", "success": True, "costMs": 5, "result": {"ok": True}})
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
+    client.post("/api/session/stop-record")
+
+    cleared = client.delete("/api/session")
+
+    assert cleared.status_code == 200
+    assert cleared.get_json()["deletedCount"]["sessions"] == 1
+    assert client.get("/api/session").get_json()["items"] == []
+    assert client.get("/api/calls").get_json()["items"] == []
+    assert client.get("/api/interfaces").get_json()["items"] == []
+    assert client.get("/api/breakpoints").get_json()["items"] == []
+    assert client.get("/api/debug/state").get_json()["hasSession"] is False

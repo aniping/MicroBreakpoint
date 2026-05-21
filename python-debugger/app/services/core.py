@@ -73,6 +73,38 @@ def stop_activity():
     return released
 
 
+def clear_call_records():
+    if STATE["mode"] != "idle":
+        return {"success": False, "message": "请先停止记录或调试"}
+    if not STATE["sessionId"]:
+        return {"success": False, "message": "请先新建或选择会话"}
+    db = get_db()
+    deleted = db.execute("DELETE FROM call_record WHERE session_id=?", (STATE["sessionId"],)).rowcount
+    db.commit()
+    return state_response(success=True, deletedCount=deleted)
+
+
+def clear_sessions():
+    if STATE["mode"] != "idle":
+        return {"success": False, "message": "请先停止记录或调试"}
+    db = get_db()
+    counts = {
+        "sessions": db.execute("SELECT COUNT(*) FROM debug_session").fetchone()[0],
+        "calls": db.execute("SELECT COUNT(*) FROM call_record").fetchone()[0],
+        "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface").fetchone()[0],
+        "breakpoints": db.execute(
+            "SELECT COUNT(*) FROM breakpoint WHERE source_session_id IS NOT NULL OR source_interface_id IS NOT NULL OR source_call_id IS NOT NULL"
+        ).fetchone()[0],
+    }
+    db.execute("DELETE FROM call_record")
+    db.execute("DELETE FROM discovered_interface")
+    db.execute("DELETE FROM breakpoint WHERE source_session_id IS NOT NULL OR source_interface_id IS NOT NULL OR source_call_id IS NOT NULL")
+    db.execute("DELETE FROM debug_session")
+    db.commit()
+    STATE.update(recording=False, debugging=False, mode="idle", sessionId=None)
+    return state_response(success=True, deletedCount=counts)
+
+
 def state_response(**extra):
     db = get_db()
     session_filter = "WHERE session_id=?" if STATE["sessionId"] else ""

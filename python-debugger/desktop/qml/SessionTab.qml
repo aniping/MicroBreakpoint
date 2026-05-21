@@ -6,6 +6,7 @@ Item {
     id: page
     property var items: []
     property string activeSessionId: ""
+    property bool canClearSessions: false
     property color panel: "#141a21"
     property color border: "#2a333d"
     property color textStrong: "#e8eef5"
@@ -55,6 +56,15 @@ Item {
                         onClicked: bridge.createSession()
                         background: Rectangle { radius: 4; color: parent.hovered ? "#1f5fb9" : "#1d4f96"; border.color: "#58a6ff" }
                         contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 14; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    }
+                    Button {
+                        text: "清空历史"
+                        enabled: page.canClearSessions && items.length > 0
+                        Layout.preferredWidth: 118
+                        Layout.preferredHeight: 38
+                        onClicked: bridge.clearSessions()
+                        background: Rectangle { radius: 4; color: parent.enabled ? (parent.hovered ? "#5a1f2a" : "#2b1720") : "#151b23"; border.color: parent.enabled ? "#7f2d3a" : "#222a33" }
+                        contentItem: Text { text: parent.text; color: parent.enabled ? "#ffb4b4" : "#687483"; font.pixelSize: 14; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     }
                 }
             }

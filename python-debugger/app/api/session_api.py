@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from app.services.core import create_session, list_sessions, select_session, start_session, stop_activity, state_response
+from app.services.core import clear_sessions, create_session, list_sessions, select_session, start_session, stop_activity, state_response
 
 session_api = Blueprint("session_api", __name__, url_prefix="/api/session")
 
@@ -8,6 +8,12 @@ session_api = Blueprint("session_api", __name__, url_prefix="/api/session")
 @session_api.get("")
 def sessions():
     return jsonify({"items": list_sessions()})
+
+
+@session_api.delete("")
+def clear_history():
+    result = clear_sessions()
+    return jsonify(result), 200 if result.get("success") else 400
 
 
 @session_api.post("/create")

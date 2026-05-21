@@ -6,6 +6,7 @@ Item {
     id: page
     property var items: []
     property var breakpoints: []
+    property bool canClearRecords: false
     property color bg: "#0d1218"
     property color panel: "#141a21"
     property color panel2: "#10161d"
@@ -176,7 +177,7 @@ Item {
                         anchors.margins: 12
                         spacing: 14
                         Rectangle {
-                            Layout.preferredWidth: 300
+                            Layout.preferredWidth: 230
                             Layout.preferredHeight: 38
                             radius: 4
                             color: "#10161d"
@@ -184,7 +185,7 @@ Item {
                             Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "搜索方法名、类名、线程名..."; color: textMuted; font.pixelSize: 14 }
                         }
                         Rectangle {
-                            Layout.preferredWidth: 158
+                            Layout.preferredWidth: 122
                             Layout.preferredHeight: 38
                             radius: 4
                             color: "#10161d"
@@ -192,7 +193,7 @@ Item {
                             Text { anchors.centerIn: parent; text: "状态:  全部"; color: textNormal; font.pixelSize: 14 }
                         }
                         Rectangle {
-                            Layout.preferredWidth: 202
+                            Layout.preferredWidth: 160
                             Layout.preferredHeight: 38
                             radius: 4
                             color: "#10161d"
@@ -209,6 +210,16 @@ Item {
                             background: Rectangle { radius: 4; color: parent.hovered ? "#1d2631" : "#10161d"; border.color: border }
                             contentItem: Text { text: parent.text; color: textMuted; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
+                        Button {
+                            Layout.preferredWidth: 92
+                            Layout.preferredHeight: 38
+                            text: "清空记录"
+                            enabled: page.canClearRecords && items.length > 0
+                            font.pixelSize: 13
+                            onClicked: bridge.clearCalls()
+                            background: Rectangle { radius: 4; color: parent.enabled ? (parent.hovered ? "#5a1f2a" : "#2b1720") : "#151b23"; border.color: parent.enabled ? "#7f2d3a" : "#222a33" }
+                            contentItem: Text { text: parent.text; color: parent.enabled ? "#ffb4b4" : "#687483"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        }
                     }
                 }
 
@@ -223,7 +234,7 @@ Item {
                     HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 92; Layout.preferredHeight: 46 }
                     HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
                     HeaderCell { label: "调用时间"; Layout.preferredWidth: 140; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "断点"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "命中断点"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
                 }
 
                 ListView {

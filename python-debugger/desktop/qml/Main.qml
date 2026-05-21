@@ -247,10 +247,10 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 currentIndex: currentPage
 
-                CallRecordTab { items: callItems; breakpoints: breakpointItems }
+                CallRecordTab { items: callItems; breakpoints: breakpointItems; canClearRecords: stateData.mode === "idle" && stateData.hasSession }
                 InterfaceTab { items: interfaceItems }
                 BreakpointTab { items: breakpointItems }
-                SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || "" }
+                SessionTab { items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
                 JavaCallTab { resultText: root.resultText }
                 SettingsTab {}
             }

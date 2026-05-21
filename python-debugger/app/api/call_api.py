@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
-from app.services.core import after_call, before_call, create_breakpoint, list_calls, normalize
+from app.services.core import after_call, before_call, clear_call_records, create_breakpoint, list_calls, normalize
 from app.services.wait_manager import wait_manager
 
 call_api = Blueprint("call_api", __name__, url_prefix="/api/calls")
@@ -20,6 +20,12 @@ def after():
 @call_api.get("")
 def calls():
     return jsonify({"items": list_calls(request.args.get("sessionId"))})
+
+
+@call_api.delete("")
+def clear_calls():
+    result = clear_call_records()
+    return jsonify(result), 200 if result.get("success") else 400
 
 
 @call_api.get("/<call_id>")
