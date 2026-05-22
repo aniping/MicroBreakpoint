@@ -1,9 +1,22 @@
 package com.example.instrumentdemo.controller.dto;
 
-import lombok.Data;
-
-@Data
 public class InitParams {
-    String instType;
-    int slotId;
+    private String instType;
+    private int slotId;
+
+    public String getInstType() {
+        return instType;
+    }
+
+    public void setInstType(String instType) {
+        this.instType = instType;
+    }
+
+    public int getSlotId() {
+        return slotId;
+    }
+
+    public void setSlotId(int slotId) {
+        this.slotId = slotId;
+    }
 }

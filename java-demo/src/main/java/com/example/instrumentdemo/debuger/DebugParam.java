@@ -1,10 +1,5 @@
 package com.example.instrumentdemo.debuger;
 
-import lombok.Getter;
-import lombok.Setter;
-
-@Setter
-@Getter
 public class DebugParam {
 
     private String name;
@@ -17,6 +12,30 @@ public class DebugParam {
     public DebugParam(String name, String displayName, String javaType) {
         this.name = name;
         this.displayName = displayName;
+        this.javaType = javaType;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getJavaType() {
+        return javaType;
+    }
+
+    public void setJavaType(String javaType) {
         this.javaType = javaType;
     }
 }

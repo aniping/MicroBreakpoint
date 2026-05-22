@@ -16,7 +16,7 @@ conda env create -f environment.yml
 conda activate micro-breakpoint
 ```
 
-Java 需要 JDK 17+ 和 Maven。
+Java 需要 JDK 17+ 和 Maven，Demo 代码不依赖 IDE Lombok 插件或额外注解处理配置。
 
 ## 启动
 

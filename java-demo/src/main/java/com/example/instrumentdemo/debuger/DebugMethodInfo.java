@@ -1,15 +1,10 @@
 package com.example.instrumentdemo.debuger;
 
-import lombok.Setter;
-import lombok.Getter;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-@Setter
-@Getter
 public class DebugMethodInfo {
 
     private String objectName;
@@ -92,5 +87,85 @@ public class DebugMethodInfo {
 
                 .arg("params", params)
                 .param("params", "操作传参", "java.util.Map");
+    }
+
+    public String getObjectName() {
+        return objectName;
+    }
+
+    public void setObjectName(String objectName) {
+        this.objectName = objectName;
+    }
+
+    public Integer getSlotId() {
+        return slotId;
+    }
+
+    public void setSlotId(Integer slotId) {
+        this.slotId = slotId;
+    }
+
+    public String getCmdName() {
+        return cmdName;
+    }
+
+    public void setCmdName(String cmdName) {
+        this.cmdName = cmdName;
+    }
+
+    public String getServiceName() {
+        return serviceName;
+    }
+
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+
+    public String getClassName() {
+        return className;
+    }
+
+    public void setClassName(String className) {
+        this.className = className;
+    }
+
+    public String getMethodName() {
+        return methodName;
+    }
+
+    public void setMethodName(String methodName) {
+        this.methodName = methodName;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public Map<String, Object> getArgs() {
+        return args;
+    }
+
+    public void setArgs(Map<String, Object> args) {
+        this.args = args;
+    }
+
+    public List<DebugParam> getParameterMeta() {
+        return parameterMeta;
+    }
+
+    public void setParameterMeta(List<DebugParam> parameterMeta) {
+        this.parameterMeta = parameterMeta;
     }
 }

@@ -1,10 +1,5 @@
 package com.example.instrumentdemo.debuger;
 
-import lombok.Getter;
-import lombok.Setter;
-
-@Setter
-@Getter
 public class AfterCallRequest {
 
     private String callId;
@@ -14,4 +9,51 @@ public class AfterCallRequest {
     private String exceptionType;
     private String exceptionMessage;
 
+    public String getCallId() {
+        return callId;
+    }
+
+    public void setCallId(String callId) {
+        this.callId = callId;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
+    }
+
+    public long getCostMs() {
+        return costMs;
+    }
+
+    public void setCostMs(long costMs) {
+        this.costMs = costMs;
+    }
+
+    public Object getResult() {
+        return result;
+    }
+
+    public void setResult(Object result) {
+        this.result = result;
+    }
+
+    public String getExceptionType() {
+        return exceptionType;
+    }
+
+    public void setExceptionType(String exceptionType) {
+        this.exceptionType = exceptionType;
+    }
+
+    public String getExceptionMessage() {
+        return exceptionMessage;
+    }
+
+    public void setExceptionMessage(String exceptionMessage) {
+        this.exceptionMessage = exceptionMessage;
+    }
 }
