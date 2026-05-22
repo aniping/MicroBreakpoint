@@ -16,6 +16,7 @@ public class DebugMethodInfo {
     private String displayName;
     private String description;
 
+    private Map<String, Object> params = new LinkedHashMap<>();
     private Map<String, Object> args = new LinkedHashMap<>();
     private List<DebugParam> parameterMeta = new ArrayList<>();
 
@@ -59,6 +60,11 @@ public class DebugMethodInfo {
         return this;
     }
 
+    public DebugMethodInfo params(Map<String, Object> params) {
+        this.params = params == null ? new LinkedHashMap<>() : params;
+        return this;
+    }
+
     public DebugMethodInfo arg(String name, Object value) {
         this.args.put(name, value);
         return this;
@@ -72,18 +78,19 @@ public class DebugMethodInfo {
     public static DebugMethodInfo commonMethodData(
             String instType,
             String cmdName,
-            String description,
+            String methodName,
             Integer slotId,
             Map<String, Object> params) {
         return new DebugMethodInfo()
                 .objectName(instType)
                 .slotId(slotId)
                 .cmdName(cmdName)
-                .description(description)
+                .description(methodName)
+                .params(params)
 
-                .serviceName("serviceName")
-                .className("className")
-                .methodName("methodName")
+                .serviceName(DebuggerSettings.serviceName)
+                .className("InstrumentService")
+                .methodName(methodName)
 
                 .arg("params", params)
                 .param("params", "操作传参", "java.util.Map");
@@ -155,6 +162,14 @@ public class DebugMethodInfo {
 
     public Map<String, Object> getArgs() {
         return args;
+    }
+
+    public Map<String, Object> getParams() {
+        return params;
+    }
+
+    public void setParams(Map<String, Object> params) {
+        this.params = params;
     }
 
     public void setArgs(Map<String, Object> args) {

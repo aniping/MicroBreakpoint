@@ -1,5 +1,7 @@
 package com.example.instrumentdemo.debuger;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class DebugInvoker {
@@ -64,9 +66,13 @@ public class DebugInvoker {
         }
     }
 
-    private static BeforeCallRequest buildBeforeCallRequest(String callId, DebugMethodInfo methodInfo) {
+    static BeforeCallRequest buildBeforeCallRequest(String callId, DebugMethodInfo methodInfo) {
         BeforeCallRequest request = new BeforeCallRequest();
         request.setCallId(callId);
+        request.setObjectName(methodInfo.getObjectName());
+        request.setCmdName(methodInfo.getCmdName());
+        request.setSlotId(methodInfo.getSlotId());
+        request.setParams(nonNullMap(methodInfo.getParams()));
         request.setServiceName(methodInfo.getServiceName());
         request.setClassName(methodInfo.getClassName());
         request.setMethodName(methodInfo.getMethodName());
@@ -74,9 +80,14 @@ public class DebugInvoker {
         request.setDescription(methodInfo.getDescription());
         request.setThreadName(Thread.currentThread().getName());
         request.setTimestamp(System.currentTimeMillis());
-        request.setArgs(methodInfo.getArgs());
+        request.setArgs(nonNullMap(methodInfo.getArgs()));
+        request.setRawArgs(nonNullMap(methodInfo.getArgs()));
         request.setParameterMeta(methodInfo.getParameterMeta());
         return request;
+    }
+
+    private static Map<String, Object> nonNullMap(Map<String, Object> value) {
+        return value == null ? new LinkedHashMap<>() : value;
     }
 
     private static AfterCallRequest buildAfterSuccessRequest(String callId, Object result, long costMs) {

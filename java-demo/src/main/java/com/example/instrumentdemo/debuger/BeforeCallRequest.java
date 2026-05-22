@@ -6,6 +6,10 @@ import java.util.Map;
 public class BeforeCallRequest {
 
     private String callId;
+    private String objectName;
+    private String cmdName;
+    private Integer slotId;
+    private Map<String, Object> params;
     private String serviceName;
     private String className;
     private String methodName;
@@ -14,6 +18,7 @@ public class BeforeCallRequest {
     private String threadName;
     private long timestamp;
     private Map<String, Object> args;
+    private Map<String, Object> rawArgs;
     private List<DebugParam> parameterMeta;
 
     public String getCallId() {
@@ -22,6 +27,38 @@ public class BeforeCallRequest {
 
     public void setCallId(String callId) {
         this.callId = callId;
+    }
+
+    public String getObjectName() {
+        return objectName;
+    }
+
+    public void setObjectName(String objectName) {
+        this.objectName = objectName;
+    }
+
+    public String getCmdName() {
+        return cmdName;
+    }
+
+    public void setCmdName(String cmdName) {
+        this.cmdName = cmdName;
+    }
+
+    public Integer getSlotId() {
+        return slotId;
+    }
+
+    public void setSlotId(Integer slotId) {
+        this.slotId = slotId;
+    }
+
+    public Map<String, Object> getParams() {
+        return params;
+    }
+
+    public void setParams(Map<String, Object> params) {
+        this.params = params;
     }
 
     public String getServiceName() {
@@ -86,6 +123,14 @@ public class BeforeCallRequest {
 
     public void setArgs(Map<String, Object> args) {
         this.args = args;
+    }
+
+    public Map<String, Object> getRawArgs() {
+        return rawArgs;
+    }
+
+    public void setRawArgs(Map<String, Object> rawArgs) {
+        this.rawArgs = rawArgs;
     }
 
     public List<DebugParam> getParameterMeta() {
