@@ -1,223 +1,213 @@
 from app import create_app
-from app.utils.json_utils import dumps
 
 
-def make_before(call_id="call-1", cmd="create", http_method="GET", request_uri="/api/demo/control", content_type=""):
-    args = {"instType": "VNA", "cmdName": cmd, "slotId": 1, "params": {}}
-    query_signature = dumps({"cmdName": [cmd], "instType": ["VNA"], "slotId": ["1"]}) if http_method == "GET" else ""
+def make_before(call_id="call-1", object_name="SA", cmd="start", slot_id=1, params=None):
+    params = params if params is not None else {}
     return {
         "callId": call_id,
+        "objectName": object_name,
+        "cmdName": cmd,
+        "slotId": slot_id,
+        "description": f"{object_name} {cmd}",
+        "params": params,
         "serviceName": "instrument-service-demo",
         "className": "com.example.instrumentdemo.service.InstrumentServiceImpl",
         "methodName": "instrumentControl",
-        "httpMethod": http_method,
-        "requestUri": request_uri,
-        "querySignature": query_signature,
-        "bodySignature": dumps(args),
-        "contentType": content_type,
         "displayName": "仪表控制",
-        "description": "通过槽位号转换 hid 号，操作对应仪器仪表实例",
         "threadName": "test",
-        "timestamp": 1,
-        "args": args,
-        "parameterMeta": [{"name": "cmdName", "displayName": "仪表操作", "description": "仪表操作", "javaType": "java.lang.String"}],
+        "rawArgs": {"instType": object_name, "cmdName": cmd, "slotId": slot_id, "params": params},
+        "parameterMeta": [{"name": "params", "displayName": "操作传参", "javaType": "java.util.Map"}],
     }
 
 
-def test_record_discover_and_breakpoint_match(tmp_path):
+def make_client(tmp_path):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
+    return app.test_client()
 
-    created = client.post("/api/session/create", json={}).get_json()
-    assert created["mode"] == "idle"
-    assert created["sessionId"].startswith("session-")
-    start = client.post("/api/session/start-record", json={}).get_json()
-    assert start["mode"] == "record"
+
+def create_and_start(client):
+    created = client.post("/api/sessions", json={}).get_json()
+    started = client.post("/api/debug/start", json={}).get_json()
+    return created["sessionId"], started
+
+
+def finish(client, call_id, success=True, cost_ms=5):
+    return client.post(
+        "/api/calls/after",
+        json={"callId": call_id, "success": success, "costMs": cost_ms, "result": {"ok": success}},
+    ).get_json()
+
+
+def test_non_debug_reports_are_ignored(tmp_path):
+    client = make_client(tmp_path)
+
     assert client.post("/api/calls/before", json=make_before()).get_json()["action"] == "continue"
-    assert client.post("/api/calls/after", json={"callId": "call-1", "success": True, "costMs": 3, "result": {"ok": True}}).get_json()["success"]
-    assert client.get("/api/interfaces").get_json()["items"][0]["method_name"] == "instrumentControl"
+    assert finish(client, "call-1")["ignored"] is True
 
-    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
-    assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
-    client.post("/api/session/stop-record")
-    client.post("/api/session/start-debug", json={})
-
-    paused = client.post("/api/calls/before", json=make_before("call-2")).get_json()
-    assert paused["action"] == "pause"
-    assert client.post("/api/calls/call-2/continue").get_json()["success"]
-
-
-def test_record_requires_selected_session(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    response = client.post("/api/session/start-record", json={})
-
-    assert response.status_code == 400
-    assert response.get_json()["message"] == "请先新建或选择会话"
-
-
-def test_debug_records_and_discovers_interfaces(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    client.post("/api/session/create", json={})
-    started = client.post("/api/session/start-debug", json={}).get_json()
-    assert started["mode"] == "debug"
-    assert started["recording"] is True
-    assert started["debugging"] is True
-    payload = make_before("debug-new-method")
-    payload["methodName"] = "newMethodOnlyInDebug"
-    payload["displayName"] = "调试中新方法"
-
-    assert client.post("/api/calls/before", json=payload).get_json()["action"] == "continue"
-
-    assert client.get("/api/calls").get_json()["items"][0]["method_name"] == "newMethodOnlyInDebug"
     state = client.get("/api/debug/state").get_json()
-    assert state["callCount"] == 1
-    assert state["discoveredInterfaceCount"] == 1
-    assert client.get("/api/interfaces").get_json()["items"][0]["method_name"] == "newMethodOnlyInDebug"
-
-
-def test_debug_updates_existing_and_adds_new_interfaces(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    client.post("/api/session/create", json={})
-    client.post("/api/session/start-record", json={})
-    client.post("/api/calls/before", json=make_before("record-create", cmd="create"))
-    client.post("/api/calls/after", json={"callId": "record-create", "success": True, "costMs": 5, "result": {"ok": True}})
-
-    before_debug = client.get("/api/interfaces").get_json()["items"]
-    assert len(before_debug) == 1
-    original = before_debug[0]
-    assert original["call_count"] == 1
-    assert original["success_count"] == 1
-
-    client.post("/api/session/stop-record")
-    client.post("/api/session/start-debug", json={})
-    client.post("/api/calls/before", json=make_before("debug-same", cmd="create"))
-    client.post("/api/calls/after", json={"callId": "debug-same", "success": True, "costMs": 7, "result": {"ok": True}})
-    client.post("/api/calls/before", json=make_before("debug-new", cmd="stop", request_uri="/api/demo/control"))
-    client.post("/api/calls/after", json={"callId": "debug-new", "success": True, "costMs": 9, "result": {"ok": True}})
-
-    after_debug = client.get("/api/interfaces").get_json()["items"]
-    assert len(after_debug) == 2
-    by_query = {item["query_signature"]: item for item in after_debug}
-    create_item = by_query[dumps({"cmdName": ["create"], "instType": ["VNA"], "slotId": ["1"]})]
-    stop_item = by_query[dumps({"cmdName": ["stop"], "instType": ["VNA"], "slotId": ["1"]})]
-    assert create_item["id"] == original["id"]
-    assert create_item["call_count"] == 2
-    assert create_item["success_count"] == 2
-    assert stop_item["call_count"] == 1
-    assert stop_item["success_count"] == 1
-
-
-def test_interface_identity_uses_http_signature(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    client.post("/api/session/create", json={})
-    client.post("/api/session/start-record", json={})
-    client.post("/api/calls/before", json=make_before("create-1", cmd="create"))
-    client.post("/api/calls/after", json={"callId": "create-1", "success": True, "costMs": 5, "result": {"ok": True}})
-    client.post("/api/calls/before", json=make_before("stop-1", cmd="stop"))
-    client.post("/api/calls/after", json={"callId": "stop-1", "success": True, "costMs": 6, "result": {"ok": True}})
-    client.post("/api/calls/before", json=make_before("create-2", cmd="create"))
-    client.post("/api/calls/after", json={"callId": "create-2", "success": True, "costMs": 7, "result": {"ok": True}})
-
-    items = client.get("/api/interfaces").get_json()["items"]
-    assert len(items) == 2
-    by_query = {item["query_signature"]: item for item in items}
-    assert by_query[dumps({"cmdName": ["create"], "instType": ["VNA"], "slotId": ["1"]})]["call_count"] == 2
-    assert by_query[dumps({"cmdName": ["stop"], "instType": ["VNA"], "slotId": ["1"]})]["call_count"] == 1
-
-
-def test_interface_alias_syncs_across_calls_interfaces_and_breakpoints(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    client.post("/api/session/create", json={})
-    client.post("/api/session/start-record", json={})
-    client.post("/api/calls/before", json=make_before("alias-call"))
-    client.post("/api/calls/after", json={"callId": "alias-call", "success": True, "costMs": 5, "result": {"ok": True}})
-    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
-    assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
-    assert client.post("/api/calls/alias-call/breakpoint", json={}).get_json()["success"]
-
-    assert client.patch(f"/api/interfaces/{interface_id}/alias", json={"alias": "启动仪表"}).get_json()["success"]
-    assert client.get("/api/interfaces").get_json()["items"][0]["interface_alias"] == "启动仪表"
-    assert client.get("/api/calls").get_json()["items"][0]["interface_alias"] == "启动仪表"
-    assert {item["interface_alias"] for item in client.get("/api/breakpoints").get_json()["items"]} == {"启动仪表"}
-    assert client.patch("/api/calls/alias-call/alias", json={"alias": "调用侧别名"}).status_code == 404
-    breakpoint_id = client.get("/api/breakpoints").get_json()["items"][0]["id"]
-    assert client.patch(f"/api/breakpoints/{breakpoint_id}/alias", json={"alias": "断点侧别名"}).status_code == 404
-
-
-def test_clear_current_session_call_records(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    client.post("/api/session/create", json={})
-    client.post("/api/session/start-record", json={})
-    blocked = client.delete("/api/calls")
-    assert blocked.status_code == 400
-    assert blocked.get_json()["message"] == "请先停止记录或调试"
-    client.post("/api/calls/before", json=make_before("call-to-clear"))
-    client.post("/api/calls/after", json={"callId": "call-to-clear", "success": True, "costMs": 5, "result": {"ok": True}})
-    client.post("/api/session/stop-record")
-
-    cleared = client.delete("/api/calls")
-
-    assert cleared.status_code == 200
-    assert cleared.get_json()["deletedCount"] == 1
-    assert client.get("/api/calls").get_json()["items"] == []
-    assert len(client.get("/api/interfaces").get_json()["items"]) == 1
-
-
-def test_clear_session_history_removes_related_data(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
-
-    client.post("/api/session/create", json={})
-    client.post("/api/session/start-record", json={})
-    client.post("/api/calls/before", json=make_before("history-call"))
-    client.post("/api/calls/after", json={"callId": "history-call", "success": True, "costMs": 5, "result": {"ok": True}})
-    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
-    assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
-    client.post("/api/session/stop-record")
-
-    cleared = client.delete("/api/session")
-
-    assert cleared.status_code == 200
-    assert cleared.get_json()["deletedCount"]["sessions"] == 1
-    assert client.get("/api/session").get_json()["items"] == []
+    assert state["state"] == "NO_SESSION"
+    assert state["callCount"] == 0
     assert client.get("/api/calls").get_json()["items"] == []
     assert client.get("/api/interfaces").get_json()["items"] == []
-    assert client.get("/api/breakpoints").get_json()["items"] == []
-    assert client.get("/api/debug/state").get_json()["hasSession"] is False
 
 
-def test_delete_single_session_removes_related_data(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    client = app.test_client()
+def test_debug_records_and_discovers_by_business_identity(tmp_path):
+    client = make_client(tmp_path)
 
-    first_session = client.post("/api/session/create", json={}).get_json()["sessionId"]
-    client.post("/api/session/start-record", json={})
-    client.post("/api/calls/before", json=make_before("single-session-call"))
-    client.post("/api/calls/after", json={"callId": "single-session-call", "success": True, "costMs": 5, "result": {"ok": True}})
+    session_id, started = create_and_start(client)
+    assert started["state"] == "DEBUGGING"
+    assert started["debugging"] is True
+
+    client.post("/api/calls/before", json=make_before("call-a", cmd="start", params={"mode": "A"}))
+    finish(client, "call-a", cost_ms=8)
+    client.post("/api/calls/before", json=make_before("call-b", cmd="start", params={"mode": "B"}))
+    finish(client, "call-b", cost_ms=12)
+    client.post("/api/calls/before", json=make_before("call-c", cmd="stop", params={"mode": "A"}))
+    finish(client, "call-c", cost_ms=4)
+
+    calls = client.get("/api/calls").get_json()["items"]
+    assert len(calls) == 3
+    assert {item["object_name"] for item in calls} == {"SA"}
+    assert {item["cmd_name"] for item in calls} == {"start", "stop"}
+    assert calls[0]["params"] == {"mode": "A"}
+
+    interfaces = client.get("/api/interfaces").get_json()["items"]
+    by_cmd = {item["cmd_name"]: item for item in interfaces}
+    assert set(by_cmd) == {"start", "stop"}
+    assert by_cmd["start"]["session_id"] == session_id
+    assert by_cmd["start"]["call_count"] == 2
+    assert by_cmd["start"]["params_sample_count"] == 2
+    assert by_cmd["stop"]["call_count"] == 1
+
+
+def test_stop_then_restart_same_session_appends_data(tmp_path):
+    client = make_client(tmp_path)
+
+    session_id, _ = create_and_start(client)
+    client.post("/api/calls/before", json=make_before("first", cmd="start"))
+    finish(client, "first")
+    assert client.post("/api/debug/stop").get_json()["debugging"] is False
+
+    assert client.post("/api/calls/before", json=make_before("ignored", cmd="middle")).get_json()["action"] == "continue"
+    finish(client, "ignored")
+    assert len(client.get("/api/calls").get_json()["items"]) == 1
+
+    client.post("/api/debug/start", json={})
+    client.post("/api/calls/before", json=make_before("second", cmd="stop"))
+    finish(client, "second")
+
+    calls = client.get("/api/calls").get_json()["items"]
+    assert len(calls) == 2
+    assert {item["session_id"] for item in calls} == {session_id}
+    assert [item["call_index"] for item in sorted(calls, key=lambda item: item["call_index"])] == [1, 2]
+
+
+def test_after_call_updates_existing_record_even_after_stop(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("late-after", cmd="start"))
+    client.post("/api/debug/stop")
+    assert finish(client, "late-after", cost_ms=19)["success"] is True
+
+    call = client.get("/api/calls").get_json()["items"][0]
+    assert call["status"] == "finished"
+    assert call["cost_ms"] == 19
+
+
+def test_slot_null_uses_stable_unique_key(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("null-1", slot_id=None, params={"a": 1}))
+    finish(client, "null-1")
+    client.post("/api/calls/before", json=make_before("null-2", slot_id=None, params={"a": 2}))
+    finish(client, "null-2")
+
+    interfaces = client.get("/api/interfaces").get_json()["items"]
+    assert len(interfaces) == 1
+    assert interfaces[0]["slot_id"] is None
+    assert interfaces[0]["slot_key"] == "__NULL__"
+    assert interfaces[0]["call_count"] == 2
+    assert interfaces[0]["params_sample_count"] == 2
+
+
+def test_breakpoints_are_session_scoped(tmp_path):
+    client = make_client(tmp_path)
+
+    first_session, _ = create_and_start(client)
+    client.post("/api/calls/before", json=make_before("s1-discover"))
+    finish(client, "s1-discover")
     interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
     assert client.post(f"/api/interfaces/{interface_id}/breakpoint", json={}).get_json()["success"]
-    client.post("/api/session/stop-record")
+    client.post("/api/debug/stop")
 
-    second_session = client.post("/api/session/create", json={}).get_json()["sessionId"]
+    second_session = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    assert second_session != first_session
+    client.post("/api/debug/start", json={})
+    assert client.post("/api/calls/before", json=make_before("s2-same")).get_json()["action"] == "continue"
+    finish(client, "s2-same")
 
-    deleted = client.delete(f"/api/session/{first_session}")
-
-    assert deleted.status_code == 200
-    assert deleted.get_json()["deletedSessionId"] == first_session
-    sessions = client.get("/api/session").get_json()["items"]
-    assert [item["id"] for item in sessions] == [second_session]
-    assert client.get("/api/calls", query_string={"sessionId": first_session}).get_json()["items"] == []
-    assert client.get("/api/interfaces", query_string={"sessionId": first_session}).get_json()["items"] == []
     assert client.get("/api/breakpoints").get_json()["items"] == []
+
+    client.post(f"/api/sessions/{first_session}/select")
+    first_breakpoints = client.get("/api/breakpoints").get_json()["items"]
+    assert len(first_breakpoints) == 1
+
+
+def test_command_and_params_snapshot_breakpoints(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("seed", params={"mode": "A"}))
+    finish(client, "seed")
+
+    call_id = client.get("/api/calls").get_json()["items"][0]["call_id"]
+    assert client.post(f"/api/calls/{call_id}/breakpoint", json={"matchMode": "params_snapshot"}).get_json()["success"]
+
+    paused = client.post("/api/calls/before", json=make_before("hit", params={"mode": "A"})).get_json()
+    assert paused["action"] == "pause"
+    assert client.get("/api/debug/state").get_json()["state"] == "DEBUGGING_PAUSED"
+    assert client.post("/api/calls/hit/continue").get_json()["released"] is True
+
+    missed = client.post("/api/calls/before", json=make_before("miss", params={"mode": "B"})).get_json()
+    assert missed["action"] == "continue"
+
+
+def test_clear_and_delete_session_respect_session_boundaries(tmp_path):
+    client = make_client(tmp_path)
+
+    first_session, _ = create_and_start(client)
+    client.post("/api/calls/before", json=make_before("clear-me"))
+    finish(client, "clear-me")
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    client.post(f"/api/interfaces/{interface_id}/breakpoint", json={})
+    client.post("/api/debug/stop")
+
+    cleared = client.post("/api/sessions/current/clear")
+    assert cleared.status_code == 200
+    assert client.get("/api/calls").get_json()["items"] == []
+    assert client.get("/api/interfaces").get_json()["items"] == []
+    assert len(client.get("/api/breakpoints").get_json()["items"]) == 1
+
+    second_session = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    deleted = client.delete(f"/api/sessions/{first_session}")
+    assert deleted.status_code == 200
+    sessions = client.get("/api/sessions").get_json()["items"]
+    assert [item["id"] for item in sessions] == [second_session]
+    assert client.get("/api/breakpoints", query_string={"sessionId": first_session}).get_json()["items"] == []
+
+
+def test_grouped_endpoints_return_object_groups(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("sa", object_name="SA", cmd="start"))
+    finish(client, "sa")
+    client.post("/api/calls/before", json=make_before("sg", object_name="SG", cmd="start", params={"freq": 1}))
+    finish(client, "sg")
+
+    call_groups = client.get("/api/calls/grouped").get_json()["groups"]
+    interface_groups = client.get("/api/interfaces/grouped").get_json()["groups"]
+    assert {group["objectName"] for group in call_groups} == {"SA", "SG"}
+    assert {group["objectName"] for group in interface_groups} == {"SA", "SG"}

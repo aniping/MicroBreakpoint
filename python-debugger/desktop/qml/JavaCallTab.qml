@@ -12,17 +12,17 @@ Item {
     property string connectionState: "unknown"
 
     function isCaptureActive() {
-        return stateData && (stateData.mode === "record" || stateData.mode === "debug")
+        return stateData && stateData.mode === "debug"
     }
 
     function captureHint() {
         if (isCaptureActive()) {
-            return stateData.mode === "debug" ? "调试中，Java 调用会进入断点判断流程" : "记录中，Java 调用会写入调用记录和接口发现"
+            return "调试中，Java 调用会进入断点判断流程"
         }
         if (stateData && stateData.hasSession) {
-            return "请先点击“开始记录”或“开始调试”，否则 Java 调用不会被记录"
+            return "请先点击“开始调试”，否则 Java 调用不会被记录"
         }
-        return "请先新建会话并开始记录或调试，否则 Java 调用不会被记录"
+        return "请先新建 Session 并开始调试，否则 Java 调用不会被记录"
     }
 
     function connectionLabel() {

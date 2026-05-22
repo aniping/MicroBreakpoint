@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
-from app.services.core import (
+from app.services.debug_service import (
     after_call,
     before_call,
-    clear_call_records,
-    create_breakpoint,
+    breakpoint_from_call as create_breakpoint_from_call,
+    continue_all_calls,
+    continue_call as continue_one_call,
+    grouped_calls,
     list_calls,
     normalize,
 )
@@ -26,13 +28,21 @@ def after():
 
 @call_api.get("")
 def calls():
-    return jsonify({"items": list_calls(request.args.get("sessionId"))})
+    return jsonify({
+        "items": list_calls(
+            request.args.get("sessionId"),
+            request.args.get("objectName"),
+            request.args.get("keyword"),
+            request.args.get("status"),
+            request.args.get("sortBy"),
+            request.args.get("sortOrder"),
+        )
+    })
 
 
-@call_api.delete("")
-def clear_calls():
-    result = clear_call_records()
-    return jsonify(result), 200 if result.get("success") else 400
+@call_api.get("/grouped")
+def calls_grouped():
+    return jsonify({"success": True, "groups": grouped_calls(request.args.get("sessionId"))})
 
 
 @call_api.get("/<call_id>")
@@ -52,39 +62,16 @@ def wait_call(call_id):
 
 @call_api.post("/<call_id>/continue")
 def continue_call(call_id):
-    released = wait_manager.continue_one(call_id)
-    get_db().execute("UPDATE call_record SET status='continued' WHERE call_id=?", (call_id,))
-    get_db().commit()
-    return jsonify({"success": True, "released": released})
+    return jsonify(continue_one_call(call_id))
 
 
 @call_api.post("/continue-all")
 def continue_all():
-    count = wait_manager.continue_all()
-    get_db().execute("UPDATE call_record SET status='continued' WHERE status='paused'")
-    get_db().commit()
-    return jsonify({"success": True, "releasedCount": count})
+    return jsonify(continue_all_calls())
 
 
 @call_api.post("/<call_id>/breakpoint")
 def breakpoint_from_call(call_id):
-    row = get_db().execute("SELECT * FROM call_record WHERE call_id=?", (call_id,)).fetchone()
-    if not row:
-        return jsonify({"success": False, "message": "call not found"}), 404
-    call = normalize(row_to_dict(row))
     body = request.get_json(silent=True) or {}
-    selected = body.get("selectedArgs", [])
-    condition = {k: call.get("args", {}).get(k) for k in selected if k in call.get("args", {})}
-    return jsonify(create_breakpoint({
-        "name": body.get("name") or f"{call.get('interface_alias') or call['method_name']} args breakpoint",
-        "enabled": body.get("enabled", True),
-        "serviceName": call["service_name"],
-        "className": call["class_name"],
-        "methodName": call["method_name"],
-        "displayName": call["display_name"],
-        "condition": condition,
-        "hitMode": body.get("hitMode", "always"),
-        "sourceSessionId": call["session_id"],
-        "sourceInterfaceId": call.get("interface_id"),
-        "sourceCallId": call_id,
-    }))
+    result = create_breakpoint_from_call(call_id, body)
+    return jsonify(result), 200 if result.get("success") else 404

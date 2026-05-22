@@ -28,7 +28,7 @@ Item {
     }
 
     function currentHint() {
-        return activeSessionId ? "当前会话: " + activeSessionId : "请先新建会话，再开始记录或调试"
+        return activeSessionId ? "当前 Session: " + activeSessionId : "请先新建 Session，再开始调试"
     }
 
     MbPanel {
@@ -222,7 +222,7 @@ Item {
                     }
 
                     Text {
-                        text: "点击“新建会话”后开始记录或调试"
+                        text: "点击“新建 Session”后开始调试"
                         color: appTheme.textMuted
                         font.pixelSize: 13
                     }

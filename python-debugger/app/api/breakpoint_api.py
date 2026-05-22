@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db
-from app.services.core import create_breakpoint, list_breakpoints
+from app.services.debug_service import create_breakpoint, list_breakpoints
 
 bp_api = Blueprint("bp_api", __name__, url_prefix="/api/breakpoints")
 

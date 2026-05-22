@@ -16,8 +16,8 @@ from desktop.bridge import Bridge
 
 
 def seed_backend(base):
-    requests.post(base + "/api/session/create", json={}, timeout=3)
-    requests.post(base + "/api/session/start-record", json={}, timeout=3)
+    requests.post(base + "/api/sessions", json={}, timeout=3)
+    requests.post(base + "/api/debug/start", json={}, timeout=3)
     for index in range(1, 11):
         method = "instrumentControl" if index % 2 == 0 else "instrumentInitialize"
         call_id = f"shot-{index}"
@@ -26,6 +26,10 @@ def seed_backend(base):
             base + "/api/calls/before",
             json={
                 "callId": call_id,
+                "objectName": args["instType"],
+                "cmdName": args["cmdName"],
+                "slotId": args["slotId"],
+                "params": args["params"],
                 "serviceName": "instrument-service-demo",
                 "className": "com.example.instrumentdemo.service.InstrumentServiceImpl",
                 "methodName": method,
@@ -33,7 +37,7 @@ def seed_backend(base):
                 "description": "通过槽位号转换 hid 号，操作对应仪器仪表实例",
                 "threadName": f"http-nio-8080-exec-{index % 4 + 1}",
                 "timestamp": 1,
-                "args": args,
+                "rawArgs": args,
                 "parameterMeta": [{"name": "cmdName", "displayName": "仪表操作", "description": "仪表操作", "javaType": "java.lang.String"}],
             },
             timeout=3,
@@ -54,12 +58,14 @@ def seed_backend(base):
     interfaces = requests.get(base + "/api/interfaces", timeout=3).json()["items"]
     for item in interfaces[:2]:
         requests.post(base + f"/api/interfaces/{item['id']}/breakpoint", json={}, timeout=3)
-    requests.post(base + "/api/session/stop-record", timeout=3)
-    requests.post(base + "/api/session/start-debug", json={}, timeout=3)
     requests.post(
         base + "/api/calls/before",
         json={
             "callId": "shot-paused",
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotId": 1,
+            "params": {"source": "screenshot"},
             "serviceName": "instrument-service-demo",
             "className": "com.example.instrumentdemo.service.InstrumentServiceImpl",
             "methodName": "instrumentControl",
@@ -67,7 +73,7 @@ def seed_backend(base):
             "description": "通过槽位号转换 hid 号，操作对应仪器仪表实例",
             "threadName": "http-nio-8080-exec-1",
             "timestamp": 1,
-            "args": {"instType": "VNA", "cmdName": "create", "slotId": 1, "params": {"source": "screenshot"}},
+            "rawArgs": {"instType": "VNA", "cmdName": "create", "slotId": 1, "params": {"source": "screenshot"}},
             "parameterMeta": [{"name": "cmdName", "displayName": "仪表操作", "description": "仪表操作", "javaType": "java.lang.String"}],
         },
         timeout=3,

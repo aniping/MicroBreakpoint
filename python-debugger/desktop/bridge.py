@@ -47,22 +47,25 @@ class Bridge(QObject):
 
     @Slot()
     def startRecord(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/session/start-record", json={}))
-        self.refreshAll()
+        self._emit_result({"success": False, "message": "记录模式已移除，请使用开始调试"})
 
     @Slot()
     def stopRecord(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/session/stop-record"))
-        self.refreshAll()
+        self._emit_result({"success": False, "message": "记录模式已移除，请使用停止调试"})
 
     @Slot()
     def startDebug(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/session/start-debug", json={}))
+        self._emit_result(self._request("POST", f"{self.backend}/api/debug/start", json={}))
         self.refreshAll()
 
     @Slot()
     def stopDebug(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/session/stop-debug"))
+        self._emit_result(self._request("POST", f"{self.backend}/api/debug/stop"))
+        self.refreshAll()
+
+    @Slot()
+    def resetDebug(self):
+        self._emit_result(self._request("POST", f"{self.backend}/api/debug/reset"))
         self.refreshAll()
 
     @Slot()
@@ -72,27 +75,27 @@ class Bridge(QObject):
 
     @Slot()
     def clearCalls(self):
-        self._emit_result(self._request("DELETE", f"{self.backend}/api/calls"))
+        self._emit_result(self._request("POST", f"{self.backend}/api/sessions/current/clear"))
         self.refreshAll()
 
     @Slot()
     def clearSessions(self):
-        self._emit_result(self._request("DELETE", f"{self.backend}/api/session"))
+        self._emit_result({"success": False, "message": "请逐个删除 Session"})
         self.refreshAll()
 
     @Slot(str)
     def deleteSession(self, sessionId):
-        self._emit_result(self._request("DELETE", f"{self.backend}/api/session/{sessionId}"))
+        self._emit_result(self._request("DELETE", f"{self.backend}/api/sessions/{sessionId}"))
         self.refreshAll()
 
     @Slot()
     def createSession(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/session/create", json={"serviceName": "instrument-service-demo", "operator": "developer"}))
+        self._emit_result(self._request("POST", f"{self.backend}/api/sessions", json={"serviceName": "instrument-service-demo", "operator": "developer"}))
         self.refreshAll()
 
     @Slot(str)
     def selectSession(self, sessionId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/session/{sessionId}/select"))
+        self._emit_result(self._request("POST", f"{self.backend}/api/sessions/{sessionId}/select"))
         self.refreshAll()
 
     @Slot()
@@ -109,7 +112,7 @@ class Bridge(QObject):
 
     @Slot()
     def loadSessions(self):
-        self.sessionsChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/session"), ensure_ascii=False))
+        self.sessionsChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/sessions"), ensure_ascii=False))
 
     @Slot()
     def loadCalls(self):

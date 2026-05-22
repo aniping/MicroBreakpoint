@@ -27,8 +27,8 @@ ApplicationWindow {
     property color red: theme.danger
     property color amber: theme.warning
 
-    property int currentPage: 4
-    property var stateData: ({mode: "idle", callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0})
+    property int currentPage: 3
+    property var stateData: ({state: "NO_SESSION", mode: "idle", debugging: false, callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0})
     property var callItems: []
     property var interfaceItems: []
     property var breakpointItems: []
@@ -41,13 +41,12 @@ ApplicationWindow {
     }
 
     function modeText(mode) {
-        if (mode === "record") return "记录中"
         if (mode === "debug") return "调试中"
+        if (stateData.state === "NO_SESSION") return "无 Session"
         return "空闲"
     }
 
     function modeColor(mode) {
-        if (mode === "record") return root.blue
         if (mode === "debug") return root.green
         return root.textMuted
     }
@@ -167,20 +166,20 @@ ApplicationWindow {
                 spacing: 14
                 ToolbarGroup {
                     title: "会话"
-                    MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 118; enabled: stateData.mode === "idle"; onClicked: { bridge.createSession(); currentPage = 4 } }
-                }
-                Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
-                ToolbarGroup {
-                    title: "记录"
-                    MbButton { appTheme: theme; text: "开始记录"; iconText: "●"; variant: "success"; implicitWidth: 118; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startRecord() }
-                    MbButton { appTheme: theme; text: "停止记录"; iconText: "■"; variant: "danger"; implicitWidth: 118; enabled: stateData.mode === "record"; onClicked: bridge.stopRecord() }
+                    MbButton { appTheme: theme; text: "新建 Session"; iconText: "+"; variant: "primary"; implicitWidth: 134; enabled: !stateData.debugging; onClicked: { bridge.createSession(); currentPage = 3 } }
+                    MbButton { appTheme: theme; text: "清空当前"; iconText: "×"; variant: "danger"; implicitWidth: 118; enabled: !stateData.debugging && stateData.hasSession; onClicked: bridge.clearCalls() }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 ToolbarGroup {
                     title: "调试"
-                    MbButton { appTheme: theme; text: "开始调试"; iconText: "▶"; variant: "primary"; implicitWidth: 118; enabled: stateData.mode === "idle" && stateData.hasSession; onClicked: bridge.startDebug() }
-                    MbButton { appTheme: theme; text: "停止调试"; iconText: "■"; variant: "danger"; implicitWidth: 118; enabled: stateData.mode === "debug"; onClicked: bridge.stopDebug() }
-                    MbButton { appTheme: theme; text: "继续全部"; iconText: "▶"; variant: "primary"; implicitWidth: 118; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
+                    MbButton { appTheme: theme; text: "开始调试"; iconText: "▶"; variant: "primary"; implicitWidth: 118; enabled: !stateData.debugging; onClicked: bridge.startDebug() }
+                    MbButton { appTheme: theme; text: "停止调试"; iconText: "■"; variant: "danger"; implicitWidth: 118; enabled: stateData.debugging; onClicked: bridge.stopDebug() }
+                    MbButton { appTheme: theme; text: "重置状态"; iconText: "↺"; variant: "neutral"; implicitWidth: 118; enabled: stateData.debugging; onClicked: bridge.resetDebug() }
+                }
+                Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
+                ToolbarGroup {
+                    title: "执行"
+                    MbButton { appTheme: theme; text: "继续全部"; iconText: "▶"; variant: stateData.pausedCount > 0 ? "success" : "primary"; implicitWidth: 118; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 ToolbarGroup {
@@ -203,7 +202,7 @@ ApplicationWindow {
                 anchors.rightMargin: 18
                 spacing: 10
 
-                MbStatusChip { appTheme: theme; label: "状态"; value: modeText(stateData.mode); type: stateData.mode === "debug" ? "success" : (stateData.mode === "record" ? "primary" : "neutral"); Layout.preferredWidth: 140 }
+                MbStatusChip { appTheme: theme; label: "状态"; value: modeText(stateData.mode); type: stateData.mode === "debug" ? "success" : "neutral"; Layout.preferredWidth: 140 }
                 MbStatusChip { appTheme: theme; label: "Session"; value: stateData.sessionId || "请先新建会话"; type: stateData.hasSession ? "neutral" : "warning"; Layout.preferredWidth: 300; Layout.maximumWidth: 360 }
                 MbStatusChip { appTheme: theme; label: "调用"; value: String(stateData.callCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "接口"; value: String(stateData.discoveredInterfaceCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
@@ -231,11 +230,10 @@ ApplicationWindow {
                     MbNavButton { appTheme: theme; text: "调用记录"; iconText: "☷"; selected: currentPage === 0; onClicked: currentPage = 0 }
                     MbNavButton { appTheme: theme; text: "已发现接口"; iconText: "◇"; selected: currentPage === 1; onClicked: currentPage = 1 }
                     MbNavButton { appTheme: theme; text: "断点管理"; iconText: "◎"; selected: currentPage === 2; onClicked: currentPage = 2 }
-                    MbNavButton { appTheme: theme; text: "Java调用"; iconText: "J"; selected: currentPage === 3; onClicked: currentPage = 3 }
-                    MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 4; onClicked: currentPage = 4 }
+                    MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 3; onClicked: currentPage = 3 }
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.border }
-                    MbNavButton { appTheme: theme; text: "设置"; iconText: "⚙"; selected: currentPage === 5; onClicked: currentPage = 5 }
+                    MbNavButton { appTheme: theme; text: "设置"; iconText: "⚙"; selected: currentPage === 4; onClicked: currentPage = 4 }
                 }
             }
 
@@ -247,8 +245,7 @@ ApplicationWindow {
                 CallRecordTab { appTheme: theme; items: callItems; breakpoints: breakpointItems; canClearRecords: stateData.mode === "idle" && stateData.hasSession }
                 InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
                 BreakpointTab { appTheme: theme; items: breakpointItems }
-                JavaCallTab { appTheme: theme; stateData: root.stateData; resultText: root.resultText }
-                SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: stateData.mode === "idle" }
+                SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: !stateData.debugging }
                 SettingsTab {
                     appTheme: theme
                     themeMode: root.themeMode

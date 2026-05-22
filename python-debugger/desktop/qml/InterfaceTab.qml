@@ -249,7 +249,7 @@ Item {
                         }
 
                         Text {
-                            text: "开始记录或调试后，在 Java 调用页主动触发 Demo 接口"
+                            text: "开始调试后，通过脚本或业务流量触发 Java 接口"
                             color: appTheme.textMuted
                             font.pixelSize: 13
                             horizontalAlignment: Text.AlignHCenter

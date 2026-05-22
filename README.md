@@ -3,9 +3,9 @@
 MicroBreakpoint 是一个面向 Java 微服务的接口级断点调试 Demo。它由两部分组成：
 
 - `java-demo/`：Spring Boot 3 微服务示例，提供仪表初始化和控制接口，并通过 AOP 上报调用。
-- `python-debugger/`：Flask 后端 + SQLite + PySide6/QML 桌面端，用于记录调用、动态发现接口、设置断点并控制 Java 请求继续执行。
+- `python-debugger/`：Flask 后端 + SQLite + PySide6/QML 桌面端，用于 Session 化采集调用、动态发现接口、设置断点并控制 Java 请求继续执行。
 
-关键原则：点击“开始记录”只会切换 Python 调试器状态，不会自动调用 Java。必须在桌面端“Java 调用”页面主动点击按钮，Java Controller 调用 Service 后，AOP 才会上报 before-call / after-call。
+关键原则：当前模型只有“开始调试 / 停止调试”。点击“开始调试”后，Java 上报的 before-call 才会进入调用记录、接口发现和断点判断；停止调试后新的 before-call 会直接放行，不污染当前 Session。Java 调用由外部脚本、业务系统或手动 HTTP 请求触发，桌面端不再承担 Java 请求发起器职责。
 
 ## 环境
 
@@ -47,8 +47,8 @@ mvn spring-boot:run
 
 1. 启动或打开桌面端，确认 Python 后端可用。
 2. 启动 Java Demo。
-3. 在桌面端创建或打开会话，再开始记录或开始调试。
-4. 进入“Java 调用”页主动触发 Demo 接口。
+3. 在桌面端创建或打开 Session，再点击“开始调试”。
+4. 通过脚本、接口工具或真实业务流量触发 Java Demo 接口。
 
 ## 界面主题
 
@@ -60,20 +60,20 @@ mvn spring-boot:run
 
 ## 验收流程
 
-1. 桌面端进入“历史会话”，点击“新建会话”或选择已有会话。
-2. 点击“开始记录”。
-3. 进入“Java 调用”页，点击“测试连接”，应返回 `pong`。
-4. 点击“调用 initialize”和“调用 control-create”。
-5. “调用记录”页应出现当前会话的调用记录，“已发现接口”页应出现当前会话发现的 `instrumentInitialize` 和 `instrumentControl`。
-6. 点击“停止记录”，对 `instrumentControl` 设置断点。
-7. 点击“开始调试”，再次在“Java 调用”页点击 `control-create`。
-8. 当前会话的调用记录状态应变为 `paused`，点击“继续执行”后 Java 请求恢复，状态最终变为 `finished`。
+1. 桌面端进入“历史会话”，点击“新建 Session”或选择已有 Session。
+2. 点击“开始调试”。
+3. 手动调用 Java Demo 的 `POST /api/demo/control` 或真实业务接口。
+4. “调用记录”页应出现当前 Session 的调用记录，“已发现接口”页应按 `objectName` 分组展示接口。
+5. 从已发现接口或调用记录创建断点。
+6. 再次触发同一业务接口，命中断点后调用状态应变为 `paused`。
+7. 点击“继续执行”或“继续全部”后 Java 请求恢复，状态最终变为 `finished`。
+8. 点击“停止调试”后，再触发 Java 接口不会新增调用记录；再次开始同一 Session 时会继续追加数据。
 
 ## 验证命令
 
 ```powershell
 cd python-debugger
-pytest
+conda run -n micro-breakpoint pytest
 
 cd ..\java-demo
 mvn test

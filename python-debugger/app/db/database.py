@@ -35,8 +35,24 @@ def row_to_dict(row):
 
 
 def migrate_db(db):
+    ensure_column(db, "debug_session", "status", "TEXT")
+    ensure_column(db, "call_record", "object_name", "TEXT")
+    ensure_column(db, "call_record", "cmd_name", "TEXT")
+    ensure_column(db, "call_record", "slot_id", "INTEGER")
+    ensure_column(db, "call_record", "slot_key", "TEXT")
+    ensure_column(db, "call_record", "raw_args_json", "TEXT")
+    ensure_column(db, "call_record", "params_json", "TEXT")
+    ensure_column(db, "call_record", "params_fingerprint", "TEXT")
+    ensure_column(db, "call_record", "params_summary", "TEXT")
+    ensure_column(db, "call_record", "breakpoint_name", "TEXT")
     ensure_column(db, "call_record", "interface_id", "TEXT")
     ensure_column(db, "call_record", "discovery_enabled", "INTEGER DEFAULT 1")
+    ensure_column(db, "call_record", "continued_at", "TEXT")
+    ensure_column(db, "call_record", "finished_at", "TEXT")
+    ensure_column(db, "discovered_interface", "object_name", "TEXT")
+    ensure_column(db, "discovered_interface", "cmd_name", "TEXT")
+    ensure_column(db, "discovered_interface", "slot_id", "INTEGER")
+    ensure_column(db, "discovered_interface", "slot_key", "TEXT")
     ensure_column(db, "discovered_interface", "interface_key", "TEXT")
     ensure_column(db, "discovered_interface", "http_method", "TEXT")
     ensure_column(db, "discovered_interface", "request_uri", "TEXT")
@@ -44,6 +60,35 @@ def migrate_db(db):
     ensure_column(db, "discovered_interface", "body_signature", "TEXT")
     ensure_column(db, "discovered_interface", "content_type", "TEXT")
     ensure_column(db, "discovered_interface", "interface_alias", "TEXT")
+    ensure_column(db, "discovered_interface", "params_schema_json", "TEXT")
+    ensure_column(db, "discovered_interface", "latest_params_json", "TEXT")
+    ensure_column(db, "discovered_interface", "latest_params_fingerprint", "TEXT")
+    ensure_column(db, "discovered_interface", "params_sample_count", "INTEGER DEFAULT 0")
+    ensure_column(db, "discovered_interface", "params_summary", "TEXT")
+    ensure_column(db, "breakpoint", "scope", "TEXT")
+    ensure_column(db, "breakpoint", "session_id", "TEXT")
+    ensure_column(db, "breakpoint", "object_name", "TEXT")
+    ensure_column(db, "breakpoint", "cmd_name", "TEXT")
+    ensure_column(db, "breakpoint", "slot_id", "INTEGER")
+    ensure_column(db, "breakpoint", "slot_key", "TEXT")
+    ensure_column(db, "breakpoint", "match_mode", "TEXT")
+    ensure_column(db, "breakpoint", "params_fingerprint", "TEXT")
+    ensure_column(db, "breakpoint", "params_snapshot_json", "TEXT")
+    ensure_column(db, "breakpoint", "conditions_json", "TEXT")
+    ensure_column(db, "breakpoint", "hit_limit", "INTEGER")
+    ensure_column(db, "breakpoint", "source_type", "TEXT")
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS interface_param_sample (
+          id TEXT PRIMARY KEY,
+          interface_id TEXT,
+          params_fingerprint TEXT,
+          params_json TEXT,
+          first_seen_at TEXT,
+          last_seen_at TEXT,
+          seen_count INTEGER,
+          UNIQUE(interface_id, params_fingerprint)
+        )"""
+    )
 
 
 def ensure_column(db, table, column, definition):
