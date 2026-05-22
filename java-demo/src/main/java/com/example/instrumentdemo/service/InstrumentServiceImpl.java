@@ -3,9 +3,13 @@ package com.example.instrumentdemo.service;
 import com.example.instrumentdemo.annotation.Description;
 import com.example.instrumentdemo.annotation.EntryDefine;
 import com.example.instrumentdemo.annotation.ParameterDefine;
+import com.example.instrumentdemo.debuger.DebugInvoker;
+import com.example.instrumentdemo.debuger.DebugMethodInfo;
 import com.example.instrumentdemo.model.ValueResult;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,15 +19,17 @@ public class InstrumentServiceImpl implements InstrumentService {
     @Description("初始化指定类型和编号的仪表")
     public ValueResult instrumentInitialize(
             @ParameterDefine("仪表类型") @Description("仪表类型") String instType,
-            @ParameterDefine("仪表编号") @Description("仪表编号") String indexId,
+            @ParameterDefine("仪表编号") @Description("仪表编号") int slotId,
             @ParameterDefine("参数") @Description("扩展参数") Map<String, Object> params) {
-        sleep(300);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("instType", instType);
-        data.put("indexId", indexId);
-        data.put("initialized", true);
-        data.put("params", params);
-        return ValueResult.success("initialize success", data);
+        return DebugInvoker.invoke(
+                DebugMethodInfo.commonMethodData(
+                        instType, "INIT", "instrumentInitialize", slotId, params),
+                () -> {
+                    // 这里先放原来的真实业务逻辑
+                    sleep(300);
+                    return ValueResult.success(String.format("%s%d: INIT success.", instType, slotId), params);
+                }
+        );
     }
 
     @Override
@@ -34,17 +40,17 @@ public class InstrumentServiceImpl implements InstrumentService {
             @ParameterDefine("仪表操作") @Description("仪表操作") String cmdName,
             @ParameterDefine("槽位id") @Description("槽位id") int slotId,
             @ParameterDefine("参数") @Description("扩展参数") Map<String, Object> params) {
-        sleep(500);
-        if ("error".equalsIgnoreCase(cmdName)) {
-            throw new RuntimeException("simulated instrument control error");
-        }
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("instType", instType);
-        data.put("cmdName", cmdName);
-        data.put("slotId", slotId);
-        data.put("hid", "hid-" + slotId);
-        data.put("params", params);
-        return ValueResult.success("control success: " + cmdName, data);
+        return DebugInvoker.invoke(
+                DebugMethodInfo.commonMethodData(instType, cmdName, "instrumentControl", slotId, params),
+                () -> {
+                    // 这里先放原来的真实业务逻辑
+                    sleep(500);
+                    if ("error".equalsIgnoreCase(cmdName)) {
+                        throw new RuntimeException("simulated instrument control error");
+                    }
+                    return ValueResult.success(String.format("%s%d: %s success.", instType, slotId, cmdName), params);
+                }
+        );
     }
 
     private void sleep(long millis) {

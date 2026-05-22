@@ -1,15 +1,16 @@
 package com.example.instrumentdemo.controller;
 
+import com.example.instrumentdemo.controller.dto.ControlParams;
+import com.example.instrumentdemo.controller.dto.InitParams;
 import com.example.instrumentdemo.model.ValueResult;
 import com.example.instrumentdemo.service.InstrumentService;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/demo")
@@ -26,28 +27,17 @@ public class InstrumentController {
         return "pong";
     }
 
-    @GetMapping("/initialize")
-    public ValueResult initialize() {
-        log.info("[MicroBreakpoint] REST /api/demo/initialize received");
-        return instrumentService.instrumentInitialize("VNA", "1", Map.of("source", "demo"));
+    @PostMapping("/initialize")
+    public ValueResult initialize(
+            @RequestBody InitParams params) {
+        log.info("[MicroBreakpoint] REST 仪表对象: {} 编号: {} 命令: {}", params.getInstType(), params.getSlotId(), "INIT");
+        return instrumentService.instrumentInitialize(params.getInstType(), params.getSlotId(), null);
     }
 
-    @GetMapping("/control")
+    @PostMapping("/control")
     public ValueResult control(
-            @RequestParam(defaultValue = "VNA") String instType,
-            @RequestParam(defaultValue = "create") String cmdName,
-            @RequestParam(defaultValue = "1") int slotId) {
-        log.info("[MicroBreakpoint] REST /api/demo/control received instType={} cmdName={} slotId={}",
-                instType, cmdName, slotId);
-        Map<String, Object> params = new LinkedHashMap<>();
-        params.put("source", "demo");
-        params.put("requestedBy", "rest-controller");
-        return instrumentService.instrumentControl(instType, cmdName, slotId, params);
-    }
-
-    @GetMapping("/error")
-    public ValueResult error() {
-        log.info("[MicroBreakpoint] REST /api/demo/error received");
-        return instrumentService.instrumentControl("VNA", "error", 1, Map.of("source", "demo"));
+            @RequestBody ControlParams params) {
+        log.info("[MicroBreakpoint] REST 仪表对象: {} 编号: {} 命令: {}", params.getInstType(), params.getSlotId(), params.getCmdName());
+        return instrumentService.instrumentControl(params.getInstType(), params.getCmdName(), params.getSlotId(), params.getParams());
     }
 }
