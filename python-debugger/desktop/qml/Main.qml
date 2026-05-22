@@ -41,6 +41,7 @@ ApplicationWindow {
     }
 
     function modeText(mode) {
+        if (stateData.state === "DEBUGGING_PAUSED") return "已暂停"
         if (mode === "debug") return "调试中"
         if (stateData.state === "NO_SESSION") return "无 Session"
         return "空闲"
@@ -202,13 +203,44 @@ ApplicationWindow {
                 anchors.rightMargin: 18
                 spacing: 10
 
-                MbStatusChip { appTheme: theme; label: "状态"; value: modeText(stateData.mode); type: stateData.mode === "debug" ? "success" : "neutral"; Layout.preferredWidth: 140 }
+                MbStatusChip { appTheme: theme; label: "状态"; value: modeText(stateData.mode); type: stateData.state === "DEBUGGING_PAUSED" ? "warning" : (stateData.mode === "debug" ? "success" : "neutral"); Layout.preferredWidth: 140 }
                 MbStatusChip { appTheme: theme; label: "Session"; value: stateData.sessionId || "请先新建会话"; type: stateData.hasSession ? "neutral" : "warning"; Layout.preferredWidth: 300; Layout.maximumWidth: 360 }
                 MbStatusChip { appTheme: theme; label: "调用"; value: String(stateData.callCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "接口"; value: String(stateData.discoveredInterfaceCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "断点"; value: String(stateData.breakpointCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "暂停"; value: String(stateData.pausedCount || 0); type: stateData.pausedCount > 0 ? "warning" : "neutral"; Layout.preferredWidth: 104 }
                 Item { Layout.fillWidth: true }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: stateData.pausedCount > 0 ? 42 : 0
+            visible: stateData.pausedCount > 0
+            color: theme.warningSoft
+            border.color: theme.warning
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                spacing: 12
+                Rectangle { Layout.preferredWidth: 8; Layout.preferredHeight: 8; radius: 4; color: theme.warning }
+                Text {
+                    text: "当前 Session 有 " + String(stateData.pausedCount || 0) + " 个请求命中断点并暂停"
+                    color: theme.textStrong
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                MbButton {
+                    appTheme: theme
+                    text: "继续全部"
+                    iconText: "▶"
+                    variant: "success"
+                    implicitWidth: 110
+                    onClicked: bridge.continueAll()
+                }
             }
         }
 

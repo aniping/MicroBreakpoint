@@ -2684,3 +2684,35 @@ chore: 移除 Java 调用页面并补充开发测试脚本
 ```text
 MicroBreakpoint 从“记录按钮驱动的接口采集工具”，重构为“Session 驱动的 Java 微服务接口断点调试器”。
 ```
+
+---
+
+## 36. 当前实现状态与落地调整
+
+本轮重构已经落地以下主链路：
+
+```text
+1. 记录模式已移除，桌面端主流程只保留 Session + 调试状态。
+2. Java 调用页已从主 UI 删除，Java 请求由外部脚本、接口工具或真实业务系统触发。
+3. Java before-call 已上报顶层 objectName / cmdName / slotId / params，并保留 rawArgs / parameterMeta 作为技术信息。
+4. 后端调用记录、已发现接口、接口样本和断点都按 Session 隔离。
+5. 已发现接口唯一键为 session_id + object_name + cmd_name + slot_key。
+6. command_only 与 params_snapshot 断点已可从 UI 创建。
+7. 调用记录和已发现接口页面已按 objectName 分段展示，并以 objectName / cmdName / slotId / params 摘要为主字段。
+8. paused 行高亮、顶部暂停提示条、继续全部高亮和自动选中 paused 调用已实现。
+```
+
+与原文档的落地调整：
+
+```text
+1. 当前 UI 使用单列表中的 objectName 分段头，而不是完整的可折叠分组控件。
+   原因：第一版更重视稳定调试主链路和离屏渲染可靠性；后端已经提供 /api/calls/grouped 与 /api/interfaces/grouped，后续可平滑切到真正折叠分组。
+
+2. 当前搜索仍是页面级搜索，覆盖 objectName / cmdName / slot_key / params_summary / 技术字段。
+   原因：桌面端当前数据规模较小，页面级搜索更直接；如后续 Session 数据量增大，再把搜索控件下沉到每个 objectName 分组内部。
+
+3. `JavaCallTab.qml` 文件暂时保留但不再挂载到 `Main.qml`。
+   原因：遵守“不批量删除文件”的项目约束，同时避免在主链路稳定前做无收益清理；产品入口已经移除。
+```
+
+以上调整不改变核心产品语义：MicroBreakpoint 仍是 Session 驱动的 Java 微服务接口断点调试器，断点默认只在当前 Session 内生效。

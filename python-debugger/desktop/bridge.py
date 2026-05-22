@@ -133,17 +133,17 @@ class Bridge(QObject):
 
     @Slot(str)
     def createBreakpointFromInterface(self, interfaceId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/interfaces/{interfaceId}/breakpoint", json={"enabled": True, "hitMode": "always"}))
+        self._emit_result(self._request("POST", f"{self.backend}/api/interfaces/{interfaceId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
         self.refreshAll()
 
     @Slot(str)
     def createBreakpointFromCall(self, callId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "selectedArgs": ["cmdName"], "hitMode": "always"}))
+        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "params_snapshot", "hitMode": "always"}))
         self.refreshAll()
 
     @Slot(str)
     def createMethodBreakpointFromCall(self, callId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "selectedArgs": [], "hitMode": "always"}))
+        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
         self.refreshAll()
 
     @Slot(str)

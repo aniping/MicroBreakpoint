@@ -25,7 +25,7 @@ Item {
     property int hitFilterIndex: 0
     property bool callDetailExpanded: true
     property bool breakpointPanelExpanded: true
-    property var selectedItem: filterItems().length > 0 ? filterItems()[Math.max(0, table.currentIndex)] : null
+    property var selectedItem: displayItems().length > 0 ? displayItems()[Math.max(0, table.currentIndex)] : null
     property int detailTabIndex: 0
 
     function statusText(status) {
@@ -60,9 +60,18 @@ Item {
 
     function detailText() {
         if (!selectedItem) return "{}"
-        if (page.detailTabIndex === 0) return JSON.stringify(selectedItem.args || {}, null, 2)
-        if (page.detailTabIndex === 1) return JSON.stringify(selectedItem.result || {}, null, 2)
-        return JSON.stringify({exceptionType: selectedItem.exception_type, exceptionMessage: selectedItem.exception_message}, null, 2)
+        if (page.detailTabIndex === 0) return JSON.stringify(selectedItem.params || {}, null, 2)
+        if (page.detailTabIndex === 1) return JSON.stringify(selectedItem.raw_args || selectedItem.args || {}, null, 2)
+        if (page.detailTabIndex === 2) return JSON.stringify(selectedItem.result || {}, null, 2)
+        return JSON.stringify({
+            serviceName: selectedItem.service_name,
+            className: selectedItem.class_name,
+            methodName: selectedItem.method_name,
+            displayName: selectedItem.display_name,
+            parameterMeta: selectedItem.parameter_meta || [],
+            exceptionType: selectedItem.exception_type,
+            exceptionMessage: selectedItem.exception_message
+        }, null, 2)
     }
 
     function shortTime(value) {
@@ -88,13 +97,30 @@ Item {
         return values[statusFilterIndex] || ""
     }
 
+    function slotText(item) {
+        if (!item) return "-"
+        if (item.slot_id === null || item.slot_id === undefined) return "无槽位"
+        return String(item.slot_id)
+    }
+
+    function paramsSummary(item) {
+        if (!item) return "-"
+        return item.params_summary || JSON.stringify(item.params || {})
+    }
+
+    function matchModeText(mode) {
+        if (mode === "params_snapshot") return "参数快照"
+        if (mode === "params_condition") return "参数条件"
+        return "命令"
+    }
+
     function filterItems() {
         var result = []
         var keyword = searchText.toLowerCase()
         var status = statusFilterValue()
         for (var i = 0; i < items.length; i++) {
             var item = items[i]
-            var haystack = ((item.method_name || "") + " " + (item.class_name || "") + " " + (item.thread_name || "") + " " + (item.display_name || "") + " " + (item.interface_alias || "")).toLowerCase()
+            var haystack = ((item.object_name || "") + " " + (item.cmd_name || "") + " " + (item.slot_key || "") + " " + (item.params_summary || "") + " " + (item.method_name || "") + " " + (item.class_name || "") + " " + (item.thread_name || "") + " " + (item.display_name || "") + " " + (item.interface_alias || "")).toLowerCase()
             if (keyword.length > 0 && haystack.indexOf(keyword) < 0) continue
             if (status.length > 0 && item.status !== status) continue
             if (hitFilterIndex === 1 && !item.breakpoint_id) continue
@@ -103,6 +129,33 @@ Item {
         }
         return result
     }
+
+    function displayItems() {
+        var result = filterItems().slice()
+        result.sort(function(a, b) {
+            var objectCompare = String(a.object_name || "").localeCompare(String(b.object_name || ""))
+            if (objectCompare !== 0) return objectCompare
+            var cmdCompare = String(a.cmd_name || "").localeCompare(String(b.cmd_name || ""))
+            if (cmdCompare !== 0) return cmdCompare
+            return (b.call_index || 0) - (a.call_index || 0)
+        })
+        return result
+    }
+
+    function selectFirstPaused() {
+        if (selectedItem && selectedItem.status === "paused") return
+        var rows = displayItems()
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].status === "paused") {
+                table.currentIndex = i
+                table.positionViewAtIndex(i, ListView.Beginning)
+                page.callDetailExpanded = true
+                return
+            }
+        }
+    }
+
+    onItemsChanged: Qt.callLater(selectFirstPaused)
 
     component SegmentButton: Button {
         id: seg
@@ -269,7 +322,7 @@ Item {
                             appTheme: page.appTheme
                             Layout.preferredWidth: 230
                             Layout.preferredHeight: 38
-                            placeholderText: "搜索方法名、类名、线程名..."
+                            placeholderText: "搜索对象、命令、槽位、参数..."
                             text: page.searchText
                             onTextChanged: page.searchText = text
                         }
@@ -317,12 +370,13 @@ Item {
                     Layout.preferredHeight: 46
                     spacing: 0
                     HeaderCell { label: "序号"; Layout.preferredWidth: 58; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "方法名"; Layout.preferredWidth: 150; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "中文描述"; Layout.preferredWidth: 104; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "接口别名"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "对象"; Layout.preferredWidth: 110; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "命令"; Layout.preferredWidth: 126; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "槽位"; Layout.preferredWidth: 78; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "参数摘要"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
                     HeaderCell { label: "状态"; Layout.preferredWidth: 76; Layout.preferredHeight: 46 }
                     HeaderCell { label: "耗时(ms)"; Layout.preferredWidth: 84; Layout.preferredHeight: 46 }
-                    HeaderCell { label: "线程名"; Layout.fillWidth: true; Layout.preferredHeight: 46 }
+                    HeaderCell { label: "线程名"; Layout.preferredWidth: 138; Layout.preferredHeight: 46 }
                     HeaderCell { label: "调用时间"; Layout.preferredWidth: 134; Layout.preferredHeight: 46 }
                     HeaderCell { label: "命中断点"; Layout.preferredWidth: 112; Layout.preferredHeight: 46 }
                 }
@@ -331,92 +385,89 @@ Item {
                     id: table
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: page.filterItems()
+                    model: page.displayItems()
                     clip: true
-                    currentIndex: page.filterItems().length > 0 ? Math.max(0, currentIndex) : -1
+                    currentIndex: page.displayItems().length > 0 ? Math.max(0, currentIndex) : -1
                     boundsBehavior: Flickable.StopAtBounds
-                    delegate: Rectangle {
+                    delegate: Item {
                         required property var modelData
                         required property int index
+                        property var previousItem: index > 0 ? table.model[index - 1] : null
+                        property bool showGroupHeader: index === 0 || !previousItem || previousItem.object_name !== modelData.object_name
                         width: table.width
-                        height: 52
-                        color: table.currentIndex === index
-                               ? (modelData.status === "paused" ? page.appTheme.warningSoft : page.appTheme.panelActive)
-                               : (modelData.status === "paused" ? page.appTheme.warningSoft : (index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg))
-                        border.color: page.appTheme.borderSoft
+                        height: (showGroupHeader ? 34 : 0) + 52
 
-                        MouseArea {
+                        Column {
                             anchors.fill: parent
-                            onClicked: table.currentIndex = index
-                        }
-
-                        Rectangle {
-                            width: 3
-                            anchors.left: parent.left
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            visible: modelData.status === "paused"
-                            color: page.amber
-                        }
-
-                        GridLayout {
-                            anchors.fill: parent
-                            columns: 9
-                            rowSpacing: 0
-                            columnSpacing: 0
-                            DataCell { label: String(modelData.call_index || index + 1); labelColor: modelData.status === "paused" ? page.amber : page.textNormal; Layout.preferredWidth: 58; Layout.fillHeight: true }
-                            DataCell { label: modelData.method_name || "-"; labelColor: modelData.status === "exception" ? page.red : (modelData.status === "paused" ? page.amber : page.textStrong); Layout.preferredWidth: 150; Layout.fillHeight: true }
-                            DataCell { label: modelData.display_name || "-"; Layout.preferredWidth: 104; Layout.fillHeight: true }
                             Rectangle {
-                                Layout.preferredWidth: 126
-                                Layout.fillHeight: true
-                                color: "transparent"
-                                border.color: page.border
-                                Rectangle {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 8
-                                    height: 26
-                                    radius: 4
-                                    color: modelData.interface_alias ? page.appTheme.primarySoft : "transparent"
-                                    border.color: modelData.interface_alias ? page.appTheme.primary : "transparent"
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        text: modelData.interface_alias || "未命名"
-                                        color: modelData.interface_alias ? page.appTheme.textStrong : page.textMuted
-                                        font.pixelSize: 13
-                                        font.weight: modelData.interface_alias ? Font.DemiBold : Font.Normal
-                                        elide: Text.ElideRight
-                                    }
+                                width: parent.width
+                                height: showGroupHeader ? 34 : 0
+                                visible: showGroupHeader
+                                color: page.appTheme.panelBgAlt
+                                border.color: page.appTheme.borderSoft
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 12
+                                    anchors.rightMargin: 12
+                                    spacing: 10
+                                    Rectangle { Layout.preferredWidth: 8; Layout.preferredHeight: 8; radius: 4; color: page.blue }
+                                    Text { text: modelData.object_name || "未归类对象"; color: page.textStrong; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: "Session 内调用"; color: page.textMuted; font.pixelSize: 12 }
                                 }
                             }
                             Rectangle {
-                                Layout.preferredWidth: 76
-                                Layout.fillHeight: true
-                                color: "transparent"
-                                border.color: page.border
-                                StatusBadge { status: modelData.status || ""; anchors.centerIn: parent }
-                            }
-                            DataCell { label: modelData.cost_ms === null || modelData.cost_ms === undefined ? "-" : String(modelData.cost_ms); Layout.preferredWidth: 84; Layout.fillHeight: true }
-                            DataCell { label: modelData.thread_name || "-"; Layout.fillWidth: true; Layout.fillHeight: true }
-                            DataCell { label: shortTime(modelData.created_at); Layout.preferredWidth: 134; Layout.fillHeight: true }
-                            Rectangle {
-                                Layout.preferredWidth: 112
-                                Layout.fillHeight: true
-                                color: "transparent"
-                                border.color: page.border
-                                Row {
-                                    anchors.centerIn: parent
-                                    Text {
-                                        text: modelData.breakpoint_id ? "命中" : "未命中"
-                                        color: modelData.breakpoint_id ? page.amber : page.textMuted
-                                        font.pixelSize: 13
+                                width: parent.width
+                                height: 52
+                                color: table.currentIndex === index
+                                       ? (modelData.status === "paused" ? page.appTheme.warningSoft : page.appTheme.panelActive)
+                                       : (modelData.status === "paused" ? page.appTheme.warningSoft : (index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg))
+                                border.color: page.appTheme.borderSoft
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: table.currentIndex = index
+                                }
+
+                                Rectangle {
+                                    width: 3
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    visible: modelData.status === "paused"
+                                    color: page.amber
+                                }
+
+                                GridLayout {
+                                    anchors.fill: parent
+                                    columns: 10
+                                    rowSpacing: 0
+                                    columnSpacing: 0
+                                    DataCell { label: String(modelData.call_index || index + 1); labelColor: modelData.status === "paused" ? page.amber : page.textNormal; Layout.preferredWidth: 58; Layout.fillHeight: true }
+                                    DataCell { label: modelData.object_name || "-"; labelColor: modelData.status === "paused" ? page.amber : page.textStrong; Layout.preferredWidth: 110; Layout.fillHeight: true }
+                                    DataCell { label: modelData.cmd_name || "-"; labelColor: modelData.status === "exception" ? page.red : page.textStrong; Layout.preferredWidth: 126; Layout.fillHeight: true }
+                                    DataCell { label: page.slotText(modelData); Layout.preferredWidth: 78; Layout.fillHeight: true }
+                                    DataCell { label: page.paramsSummary(modelData); Layout.fillWidth: true; Layout.fillHeight: true }
+                                    Rectangle {
+                                        Layout.preferredWidth: 76
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: page.border
+                                        StatusBadge { status: modelData.status || ""; anchors.centerIn: parent }
+                                    }
+                                    DataCell { label: modelData.cost_ms === null || modelData.cost_ms === undefined ? "-" : String(modelData.cost_ms); Layout.preferredWidth: 84; Layout.fillHeight: true }
+                                    DataCell { label: modelData.thread_name || "-"; Layout.preferredWidth: 138; Layout.fillHeight: true }
+                                    DataCell { label: shortTime(modelData.created_at); Layout.preferredWidth: 134; Layout.fillHeight: true }
+                                    Rectangle {
+                                        Layout.preferredWidth: 112
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: page.border
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData.breakpoint_id ? "命中" : "未命中"
+                                            color: modelData.breakpoint_id ? page.amber : page.textMuted
+                                            font.pixelSize: 13
+                                        }
                                     }
                                 }
                             }
@@ -493,7 +544,7 @@ Item {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: page.callDetailExpanded ? 246 : 0
+                    Layout.preferredHeight: page.callDetailExpanded ? 270 : 0
                     visible: page.callDetailExpanded
                     columns: 2
                     rowSpacing: 8
@@ -503,10 +554,11 @@ Item {
                     Repeater {
                         model: [
                             ["callId", selectedItem ? selectedItem.call_id : "-"],
-                            ["serviceName", selectedItem ? selectedItem.service_name : "-"],
-                            ["className", selectedItem ? selectedItem.class_name : "-"],
-                            ["methodName", selectedItem ? selectedItem.method_name : "-"],
-                            ["displayName", selectedItem ? selectedItem.display_name : "-"],
+                            ["sessionId", selectedItem ? selectedItem.session_id : "-"],
+                            ["objectName", selectedItem ? selectedItem.object_name : "-"],
+                            ["cmdName", selectedItem ? selectedItem.cmd_name : "-"],
+                            ["slotId", selectedItem ? page.slotText(selectedItem) : "-"],
+                            ["params", selectedItem ? page.paramsSummary(selectedItem) : "-"],
                             ["status", selectedItem ? statusText(selectedItem.status) : "-"],
                             ["线程名", selectedItem ? selectedItem.thread_name : "-"],
                             ["调用时间", selectedItem ? shortTime(selectedItem.created_at) : "-"],
@@ -540,22 +592,28 @@ Item {
                     Layout.preferredHeight: 38
                     spacing: 0
                     SegmentButton {
-                        text: "参数 (args)"
+                        text: "业务参数"
                         selected: page.detailTabIndex === 0
-                        Layout.preferredWidth: 126
+                        Layout.preferredWidth: 104
                         onClicked: page.detailTabIndex = 0
                     }
                     SegmentButton {
-                        text: "返回值 (result)"
+                        text: "原始入参"
                         selected: page.detailTabIndex === 1
-                        Layout.preferredWidth: 142
+                        Layout.preferredWidth: 104
                         onClicked: page.detailTabIndex = 1
                     }
                     SegmentButton {
-                        text: "异常 (exception)"
+                        text: "返回值"
                         selected: page.detailTabIndex === 2
-                        Layout.preferredWidth: 154
+                        Layout.preferredWidth: 96
                         onClicked: page.detailTabIndex = 2
+                    }
+                    SegmentButton {
+                        text: "技术信息"
+                        selected: page.detailTabIndex === 3
+                        Layout.preferredWidth: 104
+                        onClicked: page.detailTabIndex = 3
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -588,7 +646,7 @@ Item {
                         }
                         MbButton {
                             appTheme: page.appTheme
-                            text: "按方法创建断点"
+                            text: "创建命令断点"
                             enabled: selectedItem !== null
                             variant: "primary"
                             Layout.fillWidth: true
@@ -596,7 +654,7 @@ Item {
                         }
                         MbButton {
                             appTheme: page.appTheme
-                            text: "按本次参数创建断点"
+                            text: "创建参数快照"
                             enabled: selectedItem !== null
                             variant: "primary"
                             Layout.fillWidth: true
@@ -604,11 +662,11 @@ Item {
                         }
                         MbButton {
                             appTheme: page.appTheme
-                            text: "复制入参"
+                            text: "复制业务参数"
                             enabled: selectedItem !== null
                             variant: "neutral"
                             Layout.fillWidth: true
-                            onClicked: bridge.copyText(JSON.stringify(selectedItem.args || {}, null, 2))
+                            onClicked: bridge.copyText(JSON.stringify(selectedItem.params || {}, null, 2))
                         }
                         MbButton {
                             appTheme: page.appTheme
@@ -660,8 +718,8 @@ Item {
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 2
-                                Text { text: modelData.id + "   " + modelData.method_name; color: page.textStrong; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
-                                Text { text: modelData.class_name || "-"; color: page.textMuted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
+                                Text { text: modelData.id + "   " + (modelData.name || ((modelData.object_name || "-") + " / " + (modelData.cmd_name || "-"))); color: page.textStrong; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
+                                Text { text: (modelData.object_name || "-") + " / " + (modelData.cmd_name || "-") + " / 槽位 " + page.slotText(modelData) + " / " + page.matchModeText(modelData.match_mode); color: page.textMuted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
                             }
                             Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.green : page.textMuted; font.pixelSize: 13 }
                             MbSwitch {

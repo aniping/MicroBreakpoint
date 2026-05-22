@@ -22,6 +22,25 @@ Item {
         return parts.join(", ")
     }
 
+    function slotText(item) {
+        if (!item) return "-"
+        if (item.slot_id === null || item.slot_id === undefined) return "无槽位"
+        return String(item.slot_id)
+    }
+
+    function matchModeText(mode) {
+        if (mode === "params_snapshot") return "参数快照"
+        if (mode === "params_condition") return "参数条件"
+        return "命令"
+    }
+
+    function matchSummary(item) {
+        if (!item) return "-"
+        if (item.match_mode === "params_snapshot") return "参数快照: " + JSON.stringify(item.params_snapshot || {})
+        if (item.match_mode === "params_condition") return "参数条件: " + page.conditionSummary(item.condition)
+        return "命令匹配: " + (item.object_name || "-") + " / " + (item.cmd_name || "-") + " / 槽位 " + page.slotText(item)
+    }
+
     function sourceText(item) {
         if (!item) return "-"
         if (item.source_call_id) return "调用记录"
@@ -116,7 +135,7 @@ Item {
                                         spacing: 8
                                         MbTag { appTheme: page.appTheme; text: modelData.enabled ? "启用" : "禁用"; type: modelData.enabled ? "success" : "neutral"; Layout.preferredWidth: 60 }
                                         Text {
-                                            text: modelData.name || modelData.method_name || "-"
+                                            text: modelData.name || ((modelData.object_name || "-") + " / " + (modelData.cmd_name || "-"))
                                             color: appTheme.textStrong
                                             font.pixelSize: 16
                                             font.weight: Font.DemiBold
@@ -126,7 +145,7 @@ Item {
                                     }
 
                                     Text {
-                                        text: (modelData.service_name || "-") + " / " + (modelData.class_name || "-") + " / " + (modelData.method_name || "-")
+                                        text: (modelData.object_name || "-") + " / " + (modelData.cmd_name || "-") + " / 槽位 " + page.slotText(modelData) + " / Session " + (modelData.session_id || "-")
                                         color: appTheme.textNormal
                                         font.pixelSize: 13
                                         Layout.fillWidth: true
@@ -134,7 +153,7 @@ Item {
                                     }
 
                                     Text {
-                                        text: "条件: " + page.conditionSummary(modelData.condition)
+                                        text: page.matchSummary(modelData)
                                         color: appTheme.textMuted
                                         font.pixelSize: 12
                                         Layout.fillWidth: true
@@ -144,7 +163,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: 8
-                                        MbStatusChip { appTheme: page.appTheme; label: "模式"; value: modelData.hit_mode || "always"; type: "neutral"; Layout.preferredWidth: 118 }
+                                        MbStatusChip { appTheme: page.appTheme; label: "匹配"; value: page.matchModeText(modelData.match_mode); type: modelData.match_mode === "params_snapshot" ? "primary" : "neutral"; Layout.preferredWidth: 118 }
                                         MbStatusChip { appTheme: page.appTheme; label: "命中"; value: String(modelData.hit_count || 0); type: (modelData.hit_count || 0) > 0 ? "warning" : "neutral"; Layout.preferredWidth: 92 }
                                         MbStatusChip { appTheme: page.appTheme; label: "来源"; value: page.sourceText(modelData); type: "neutral"; Layout.preferredWidth: 126 }
                                         MbStatusChip { appTheme: page.appTheme; label: "创建"; value: String(modelData.created_at || "-").replace("T", " ").split("+")[0]; type: "neutral"; Layout.fillWidth: true }
