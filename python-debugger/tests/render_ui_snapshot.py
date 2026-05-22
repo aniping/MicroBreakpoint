@@ -3,9 +3,11 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 
 import requests
+import shiboken6
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -101,8 +103,10 @@ def main():
     print("qml loaded", flush=True)
 
     root = engine.rootObjects()[0]
-    root.setWidth(1448)
-    root.setHeight(1070)
+    width = int(sys.argv[2]) if len(sys.argv) > 2 else 1448
+    height = int(sys.argv[3]) if len(sys.argv) > 3 else 1070
+    root.setWidth(width)
+    root.setHeight(height)
     page_index = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     root.setProperty("currentPage", page_index)
 
@@ -111,8 +115,8 @@ def main():
 
         def grab():
             out = Path(__file__).resolve().parents[2] / "ui_current.png"
-            screen = app.primaryScreen()
-            screen.grabWindow(root.winId()).save(str(out))
+            window = shiboken6.wrapInstance(shiboken6.getCppPointer(root)[0], QQuickWindow)
+            window.grabWindow().save(str(out))
             print(out, flush=True)
             runtime.stop()
             temp_dir.cleanup()

@@ -193,6 +193,43 @@ Item {
         ]
     }
 
+    function identityRows(item) {
+        return [
+            ["objectName", objectName(item)],
+            ["cmdName", cmdName(item)],
+            ["slotId", slotText(item)],
+            ["serviceName", textOf(item ? (item.service_name || item.serviceName) : "")],
+            ["sessionId", textOf(item ? (item.session_id || item.sessionId) : "")]
+        ]
+    }
+
+    function callStatRows(item) {
+        return [
+            ["调用次数", textOf(item ? (item.call_count || item.callCount || 0) : 0)],
+            ["样本数", textOf(item ? (item.params_sample_count || item.paramsSampleCount || 0) : 0)],
+            ["异常数", textOf(item ? (item.exception_count || item.exceptionCount || 0) : 0)],
+            ["平均耗时", textOf(item ? (item.avg_cost_ms || item.avgCostMs || 0) : 0) + " ms"],
+            ["最大耗时", textOf(item ? (item.max_cost_ms || item.maxCostMs || 0) : 0) + " ms"],
+            ["首次发现", shortTime(item ? (item.first_seen_at || item.firstSeenAt) : "")],
+            ["最近调用", shortTime(item ? (item.last_seen_at || item.lastSeenAt) : "")]
+        ]
+    }
+
+    function breakpointRows(item) {
+        var bp = item ? interfaceBreakpoint(itemId(item)) : null
+        return [
+            ["断点状态", bp ? (bp.enabled ? "已启用断点" : "断点已禁用") : "未设置"],
+            ["已启用断点数量", bp && bp.enabled ? "1" : "0"]
+        ]
+    }
+
+    function uniqueRows(item) {
+        return [
+            ["唯一键", uniqueKey(item)],
+            ["paramsFingerprint", fingerprint(item)]
+        ]
+    }
+
     component FilterCombo: ComboBox {
         id: combo
         implicitHeight: 34
@@ -219,6 +256,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
+            Layout.minimumWidth: 620
             Layout.fillHeight: true
             color: appTheme.panelBg
             border.color: appTheme.border
@@ -330,7 +368,7 @@ Item {
                                                 property var bp: page.interfaceBreakpoint(idValue)
                                                 property bool editing: !!page.editingAliases[idValue]
                                                 Layout.fillWidth: true
-                                                implicitHeight: editing ? 150 : 128
+                                                implicitHeight: editing ? 190 : 176
                                                 radius: 4
                                                 color: page.selectedInterfaceId === idValue ? page.appTheme.panelActive : page.appTheme.panelBgAlt
                                                 border.color: page.selectedInterfaceId === idValue ? page.appTheme.primary : page.appTheme.border
@@ -349,31 +387,28 @@ Item {
                                                         Layout.minimumWidth: 0
                                                         Layout.fillHeight: true
                                                         spacing: 6
-                                                        RowLayout {
-                                                            Layout.fillWidth: true
-                                                            spacing: 8
-                                                            Text { text: page.cmdName(modelData); color: page.appTheme.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                                            MbTag { appTheme: page.appTheme; text: bp && bp.enabled ? "已启用断点" : "未设断点"; type: bp && bp.enabled ? "success" : "neutral"; Layout.preferredWidth: 96 }
-                                                        }
+                                                        Text { text: page.cmdName(modelData); color: page.appTheme.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                         Text { text: page.objectName(modelData) + " / 槽位 " + page.slotText(modelData) + " / 命令"; color: page.appTheme.textNormal; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                         Text { text: "参数摘要: " + page.paramsSummary(modelData); color: page.appTheme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                                        RowLayout {
-                                                            Layout.fillWidth: true
-                                                            spacing: 8
-                                                            MbTag { appTheme: page.appTheme; text: "调用 " + (modelData.call_count || 0); type: "neutral"; Layout.preferredWidth: 74 }
-                                                            MbTag { appTheme: page.appTheme; text: "样本 " + (modelData.params_sample_count || 0); type: "neutral"; Layout.preferredWidth: 74 }
-                                                            MbTag { appTheme: page.appTheme; text: "异常 " + (modelData.exception_count || 0); type: (modelData.exception_count || 0) > 0 ? "danger" : "neutral"; Layout.preferredWidth: 74 }
-                                                            MbTag { appTheme: page.appTheme; text: "均 " + (modelData.avg_cost_ms || 0) + "ms"; type: "neutral"; Layout.preferredWidth: 78 }
-                                                            MbTag { appTheme: page.appTheme; text: "峰 " + (modelData.max_cost_ms || 0) + "ms"; type: "neutral"; Layout.preferredWidth: 78 }
-                                                        }
                                                         Text { text: "唯一键: " + page.uniqueKey(modelData); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                     }
 
                                                     ColumnLayout {
-                                                        Layout.preferredWidth: 220
-                                                        Layout.minimumWidth: 0
+                                                        Layout.preferredWidth: 260
+                                                        Layout.minimumWidth: 260
                                                         Layout.fillHeight: true
-                                                        spacing: 8
+                                                        spacing: 7
+                                                        MbTag { appTheme: page.appTheme; text: bp && bp.enabled ? "已启用断点" : "未设断点"; type: bp && bp.enabled ? "success" : "neutral"; Layout.preferredWidth: 112 }
+                                                        GridLayout {
+                                                            Layout.fillWidth: true
+                                                            columns: 2
+                                                            rowSpacing: 6
+                                                            columnSpacing: 8
+                                                            MbTag { appTheme: page.appTheme; text: "调用 " + (modelData.call_count || 0); type: "neutral"; Layout.preferredWidth: 112 }
+                                                            MbTag { appTheme: page.appTheme; text: "样本 " + (modelData.params_sample_count || 0); type: "neutral"; Layout.preferredWidth: 112 }
+                                                            MbTag { appTheme: page.appTheme; text: "异常 " + (modelData.exception_count || 0); type: (modelData.exception_count || 0) > 0 ? "danger" : "neutral"; Layout.preferredWidth: 112 }
+                                                            MbTag { appTheme: page.appTheme; text: "平均 " + (modelData.avg_cost_ms || 0) + "ms"; type: "neutral"; Layout.preferredWidth: 112 }
+                                                        }
                                                         RowLayout {
                                                             Layout.fillWidth: true
                                                             visible: !editing
@@ -393,15 +428,17 @@ Item {
                                                             } }
                                                             MbButton { appTheme: page.appTheme; text: "取消"; variant: "neutral"; implicitWidth: 58; onClicked: page.editingAliases = page.setStoreValue(page.editingAliases, idValue, false) }
                                                         }
-                                                        GridLayout {
-                                                            Layout.fillWidth: true
-                                                            columns: 2
-                                                            rowSpacing: 8
-                                                            columnSpacing: 8
-                                                            MbButton { appTheme: page.appTheme; text: "查看调用"; variant: "neutral"; Layout.fillWidth: true; onClicked: { page.selectedInterfaceId = idValue; page.detailTabIndex = 3 } }
-                                                            MbButton { appTheme: page.appTheme; text: bp && bp.enabled ? "已启用断点" : "创建断点"; variant: bp && bp.enabled ? "success" : "primary"; enabled: !(bp && bp.enabled); Layout.fillWidth: true; onClicked: bridge.createBreakpointFromInterface(idValue) }
-                                                            MbButton { appTheme: page.appTheme; text: "复制请求"; variant: "neutral"; Layout.columnSpan: 2; Layout.fillWidth: true; onClicked: bridge.copyText(page.jsonText({objectName: page.objectName(modelData), cmdName: page.cmdName(modelData), slotId: page.slotText(modelData), params: page.latestParams(modelData)})) }
-                                                        }
+                                                    }
+
+                                                    ColumnLayout {
+                                                        Layout.preferredWidth: 150
+                                                        Layout.minimumWidth: 150
+                                                        Layout.fillHeight: true
+                                                        spacing: 8
+                                                        MbButton { appTheme: page.appTheme; text: "查看调用"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 34; onClicked: { page.selectedInterfaceId = idValue; page.detailTabIndex = 3 } }
+                                                        MbButton { appTheme: page.appTheme; text: bp && bp.enabled ? "已启用断点" : "创建断点"; variant: bp && bp.enabled ? "success" : "primary"; enabled: !(bp && bp.enabled); Layout.fillWidth: true; Layout.preferredHeight: 34; onClicked: bridge.createBreakpointFromInterface(idValue) }
+                                                        MbButton { appTheme: page.appTheme; text: "复制请求"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 34; onClicked: bridge.copyText(page.jsonText({objectName: page.objectName(modelData), cmdName: page.cmdName(modelData), slotId: page.slotText(modelData), params: page.latestParams(modelData)})) }
+                                                        Item { Layout.fillHeight: true }
                                                     }
                                                 }
                                             }
@@ -436,7 +473,9 @@ Item {
         }
 
         Rectangle {
-            Layout.preferredWidth: 520
+            Layout.preferredWidth: 420
+            Layout.minimumWidth: 400
+            Layout.maximumWidth: 420
             Layout.fillHeight: true
             color: appTheme.panelBg
             border.color: appTheme.border
@@ -458,11 +497,11 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     spacing: 0
-                    TabButton { text: "接口概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 96; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "参数结构"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 96; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "样本参数"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 96; onClicked: page.detailTabIndex = 2 }
-                    TabButton { text: "相关调用"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 96; onClicked: page.detailTabIndex = 3 }
-                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 104; onClicked: page.detailTabIndex = 4 }
+                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 0 }
+                    TabButton { text: "参数结构"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 78; onClicked: page.detailTabIndex = 1 }
+                    TabButton { text: "样本参数"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 78; onClicked: page.detailTabIndex = 2 }
+                    TabButton { text: "相关调用"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 78; onClicked: page.detailTabIndex = 3 }
+                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 4; Layout.fillWidth: true; onClicked: page.detailTabIndex = 4 }
                 }
 
                 StackLayout {
@@ -473,18 +512,14 @@ Item {
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                         ColumnLayout {
-                            width: parent ? parent.width : 480
-                            spacing: 8
-                            Repeater {
-                                model: page.overviewRows(page.selectedItem)
-                                delegate: RowLayout {
-                                    required property var modelData
-                                    width: parent.width
-                                    height: 24
-                                    Text { text: modelData[0]; color: page.appTheme.textNormal; font.pixelSize: 13; Layout.preferredWidth: 130; elide: Text.ElideRight }
-                                    Text { text: modelData[1]; color: page.appTheme.textStrong; font.pixelSize: 13; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                }
-                            }
+                            x: 12
+                            y: 12
+                            width: Math.max(0, (parent ? parent.width : 400) - 24)
+                            spacing: 10
+                            MbDetailCard { appTheme: page.appTheme; title: "接口身份"; rows: page.identityRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "调用统计"; rows: page.callStatRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "断点信息"; rows: page.breakpointRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "唯一性"; rows: page.uniqueRows(page.selectedItem) }
                         }
                     }
                     MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem ? (page.selectedItem.parameter_schema || page.selectedItem.parameter_schema_json || page.selectedItem.params_schema || {}) : {}) }
@@ -495,7 +530,9 @@ Item {
                     ScrollView {
                         clip: true
                         ColumnLayout {
-                            width: parent ? parent.width : 480
+                            x: 10
+                            y: 10
+                            width: Math.max(0, (parent ? parent.width : 400) - 20)
                             spacing: 4
                             Repeater {
                                 model: page.relatedCalls(page.selectedItem)

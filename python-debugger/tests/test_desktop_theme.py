@@ -47,7 +47,7 @@ def test_call_record_page_keeps_filters_inside_groups():
     assert "HeaderCell { groupName: modelData.objectName" in qml
     assert "function setColumnWidth" in qml
     assert "function setSort" in qml
-    assert "function pagedRows" in qml
+    assert "function pagedRows" not in qml
     assert "当前分组显示" in qml
 
 
@@ -60,7 +60,8 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "全部展开" in qml
     assert "只看断点" in qml
     assert "编辑" in qml and "保存" in qml and "取消" in qml
-    assert "接口概览" in qml
+    assert "MbDetailCard" in qml
+    assert "接口身份" in qml
     assert "参数结构" in qml
     assert "样本参数" in qml
     assert "相关调用" in qml
@@ -73,13 +74,14 @@ def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
 
     assert "BreakpointPage" in main
     assert "objectOptions" in qml
-    assert "搜索断点名称 / 命令 / 槽位" in qml
+    assert "搜索断点 / 命令 / 槽位" in qml
     assert "function groups" in qml
     assert "命中范围" in qml
     assert "无附加参数条件，命中该命令即暂停。" in qml
     assert "requestCallFilter" in qml
     assert "root.callBreakpointFilter = breakpointId" in main
-    assert "断点概览" in qml
+    assert "MbDetailCard" in qml
+    assert "断点身份" in qml
     assert "匹配条件" in qml
     assert "命中记录" in qml
     assert "原始 JSON" in qml

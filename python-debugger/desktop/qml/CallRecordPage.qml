@@ -19,9 +19,7 @@ Item {
     property var groupHitFilters: ({})
     property var groupSortKeys: ({})
     property var groupSortOrders: ({})
-    property var groupPages: ({})
-    property var groupPageSizes: ({})
-    property var columnWidths: [60, 88, 132, 68, 210, 84, 92, 150, 148, 98]
+    property var columnWidths: [72, 70, 150, 70, 220, 80, 94, 160, 160, 100]
     property var selectedItem: selectedItemForId(selectedCallId)
     signal clearBreakpointFilterRequested()
 
@@ -171,17 +169,6 @@ Item {
     function hitFilter(name) { return groupHitFilters[name] || "全部" }
     function sortKey(name) { return groupSortKeys[name] || "call_index" }
     function sortOrder(name) { return groupSortOrders[name] || "desc" }
-    function pageIndex(name) { return Math.max(0, groupPages[name] || 0) }
-    function pageSize(name) { return groupPageSizes[name] || 20 }
-    function setPage(name, value) {
-        var next = cloneObject(groupPages)
-        next[name] = Math.max(0, value)
-        groupPages = next
-    }
-    function setPageSize(name, value) {
-        groupPageSizes = setGroupValue(groupPageSizes, name, value)
-        setPage(name, 0)
-    }
     function setSort(name, key) {
         var nextKeys = cloneObject(groupSortKeys)
         var nextOrders = cloneObject(groupSortOrders)
@@ -274,17 +261,6 @@ Item {
         return ""
     }
 
-    function pageCount(group) {
-        return Math.max(1, Math.ceil(filteredRows(group).length / pageSize(group.objectName)))
-    }
-    function pagedRows(group) {
-        var rows = filteredRows(group)
-        var count = pageCount(group)
-        var current = Math.min(pageIndex(group.objectName), count - 1)
-        var start = current * pageSize(group.objectName)
-        return rows.slice(start, start + pageSize(group.objectName))
-    }
-
     function colWidth(index) { return columnWidths[index] || 80 }
     function setColumnWidth(index, width) {
         var next = columnWidths.slice()
@@ -310,6 +286,32 @@ Item {
             ["costMs", costValue(item)],
             ["命中断点", breakpointId(item) ? "是" : "否"],
             ["breakpointId", breakpointId(item) || "-"]
+        ]
+    }
+
+    function overviewBasicRows(item) {
+        return [
+            ["callId", callId(item)],
+            ["sessionId", textOf(item ? (item.session_id || item.sessionId) : "")],
+            ["objectName", objectName(item)],
+            ["cmdName", cmdName(item)],
+            ["slotId", slotValue(item)]
+        ]
+    }
+
+    function overviewStateRows(item) {
+        return [
+            ["状态", statusText(statusValue(item))],
+            ["耗时", costValue(item) + " ms"],
+            ["命中断点", breakpointId(item) ? "是" : "否"],
+            ["breakpointId", breakpointId(item) || "-"]
+        ]
+    }
+
+    function overviewTimeRows(item) {
+        return [
+            ["线程名", textOf(item ? (item.thread_name || item.threadName) : "")],
+            ["调用时间", shortTime(item ? (item.created_at || item.createdAt) : "")]
         ]
     }
 
@@ -458,25 +460,6 @@ Item {
         }
     }
 
-    component PagerButton: Button {
-        id: pager
-        implicitWidth: 34
-        implicitHeight: 30
-        padding: 0
-        background: Rectangle {
-            radius: 4
-            color: pager.enabled ? (pager.hovered ? page.appTheme.panelHover : page.appTheme.inputBg) : page.appTheme.panelBgAlt
-            border.color: pager.enabled ? page.appTheme.border : page.appTheme.borderSoft
-        }
-        contentItem: Text {
-            text: pager.text
-            color: pager.enabled ? page.appTheme.textStrong : page.appTheme.textDisabled
-            font.pixelSize: 15
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-        }
-    }
-
     RowLayout {
         anchors.fill: parent
         anchors.margins: 12
@@ -484,6 +467,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
+            Layout.minimumWidth: 620
             Layout.fillHeight: true
             color: appTheme.panelBg
             border.color: appTheme.border
@@ -609,47 +593,40 @@ Item {
                                             spacing: 10
                                             MbTextField {
                                                 appTheme: page.appTheme
-                                                Layout.preferredWidth: 360
+                                                Layout.preferredWidth: 330
+                                                Layout.maximumWidth: 360
                                                 Layout.preferredHeight: 34
                                                 placeholderText: "搜索 " + modelData.objectName + " 内调用（命令 / 参数 / 线程名）"
                                                 text: page.groupSearch(modelData.objectName)
                                                 onTextChanged: {
                                                     page.groupSearches = page.setGroupValue(page.groupSearches, modelData.objectName, text)
-                                                    page.setPage(modelData.objectName, 0)
                                                 }
                                             }
                                             FilterCombo {
-                                                Layout.preferredWidth: 126
+                                                Layout.preferredWidth: 120
                                                 model: ["全部", "成功", "暂停", "异常", "运行中"]
                                                 currentIndex: Math.max(0, model.indexOf(page.statusFilter(modelData.objectName)))
                                                 prefix: "状态: "
-                                                onActivated: {
-                                                    page.groupStatusFilters = page.setGroupValue(page.groupStatusFilters, modelData.objectName, currentText)
-                                                    page.setPage(modelData.objectName, 0)
-                                                }
+                                                onActivated: page.groupStatusFilters = page.setGroupValue(page.groupStatusFilters, modelData.objectName, currentText)
                                             }
                                             FilterCombo {
-                                                Layout.preferredWidth: 150
+                                                Layout.preferredWidth: 140
                                                 model: ["全部", "命中", "未命中"]
                                                 currentIndex: Math.max(0, model.indexOf(page.hitFilter(modelData.objectName)))
                                                 prefix: "命中断点: "
-                                                onActivated: {
-                                                    page.groupHitFilters = page.setGroupValue(page.groupHitFilters, modelData.objectName, currentText)
-                                                    page.setPage(modelData.objectName, 0)
-                                                }
+                                                onActivated: page.groupHitFilters = page.setGroupValue(page.groupHitFilters, modelData.objectName, currentText)
                                             }
                                             Item { Layout.fillWidth: true }
                                             MbButton { appTheme: page.appTheme; text: "重置"; variant: "neutral"; implicitWidth: 74; onClicked: {
                                                 page.groupSearches = page.setGroupValue(page.groupSearches, modelData.objectName, "")
                                                 page.groupStatusFilters = page.setGroupValue(page.groupStatusFilters, modelData.objectName, "全部")
                                                 page.groupHitFilters = page.setGroupValue(page.groupHitFilters, modelData.objectName, "全部")
-                                                page.setPage(modelData.objectName, 0)
                                             } }
                                         }
 
                                         ScrollView {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: Math.min(500, 42 + (page.pagedRows(modelData).length * 40))
+                                            Layout.preferredHeight: 54 + (page.filteredRows(modelData).length * 40)
                                             clip: true
                                             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
                                             ScrollBar.vertical.policy: ScrollBar.AlwaysOff
@@ -669,7 +646,7 @@ Item {
                                                     HeaderCell { groupName: modelData.objectName; column: 9; label: "命中断点"; sortField: "hit" }
                                                 }
                                                 Repeater {
-                                                    model: page.pagedRows(modelData)
+                                                    model: page.filteredRows(modelData)
                                                     delegate: Rectangle {
                                                         required property var modelData
                                                         width: page.totalColumnWidth()
@@ -707,49 +684,19 @@ Item {
 
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 42
+                                            Layout.preferredHeight: 34
                                             color: page.appTheme.panelBgAlt
                                             border.color: page.appTheme.borderSoft
-                                            RowLayout {
-                                                anchors.fill: parent
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
                                                 anchors.leftMargin: 12
                                                 anchors.rightMargin: 12
-                                                spacing: 10
-                                                property var rows: page.filteredRows(modelData)
-                                                Text {
-                                                    text: "当前分组显示 " + page.pagedRows(modelData).length + " / 总数 " + rows.length + " 条"
-                                                    color: page.appTheme.textNormal
-                                                    font.pixelSize: 13
-                                                    Layout.fillWidth: true
-                                                    elide: Text.ElideRight
-                                                }
-                                                PagerButton {
-                                                    text: "‹"
-                                                    enabled: page.pageIndex(modelData.objectName) > 0
-                                                    Layout.preferredWidth: 34
-                                                    Layout.preferredHeight: 30
-                                                    onClicked: page.setPage(modelData.objectName, page.pageIndex(modelData.objectName) - 1)
-                                                }
-                                                Text {
-                                                    text: String(page.pageIndex(modelData.objectName) + 1) + " / " + page.pageCount(modelData)
-                                                    color: page.appTheme.textStrong
-                                                    font.pixelSize: 13
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    Layout.preferredWidth: 70
-                                                }
-                                                PagerButton {
-                                                    text: "›"
-                                                    enabled: page.pageIndex(modelData.objectName) + 1 < page.pageCount(modelData)
-                                                    Layout.preferredWidth: 34
-                                                    Layout.preferredHeight: 30
-                                                    onClicked: page.setPage(modelData.objectName, page.pageIndex(modelData.objectName) + 1)
-                                                }
-                                                FilterCombo {
-                                                    Layout.preferredWidth: 104
-                                                    model: ["10", "20", "50"]
-                                                    currentIndex: model.indexOf(String(page.pageSize(modelData.objectName)))
-                                                    onActivated: page.setPageSize(modelData.objectName, Number(currentText))
-                                                }
+                                                text: "当前分组显示 " + page.filteredRows(modelData).length + " / 总数 " + modelData.rows.length + " 条"
+                                                color: page.appTheme.textNormal
+                                                font.pixelSize: 13
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
@@ -789,7 +736,9 @@ Item {
         }
 
         Rectangle {
-            Layout.preferredWidth: 520
+            Layout.preferredWidth: 420
+            Layout.minimumWidth: 400
+            Layout.maximumWidth: 420
             Layout.fillHeight: true
             color: appTheme.panelBg
             border.color: appTheme.border
@@ -804,19 +753,40 @@ Item {
                     Layout.preferredHeight: 46
                     color: appTheme.panelBg
                     border.color: appTheme.border
-                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 14; text: "调用详情"; color: appTheme.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 10
+                        spacing: 8
+                        Text {
+                            text: "调用详情"
+                            color: appTheme.textStrong
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        MbButton {
+                            appTheme: page.appTheme
+                            text: "刷新"
+                            variant: "neutral"
+                            implicitWidth: 72
+                            Layout.preferredHeight: 34
+                            onClicked: bridge.refreshAll()
+                        }
+                    }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     spacing: 0
-                    TabButton { text: "调用概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 86; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "业务参数"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 86; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "原始入参"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 86; onClicked: page.detailTabIndex = 2 }
-                    TabButton { text: "返回值"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 76; onClicked: page.detailTabIndex = 3 }
-                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 86; onClicked: page.detailTabIndex = 4 }
-                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.preferredWidth: 96; onClicked: page.detailTabIndex = 5 }
+                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 64; onClicked: page.detailTabIndex = 0 }
+                    TabButton { text: "业务参数"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 1 }
+                    TabButton { text: "原始入参"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 2 }
+                    TabButton { text: "返回值"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 62; onClicked: page.detailTabIndex = 3 }
+                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 4 }
+                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.fillWidth: true; onClicked: page.detailTabIndex = 5 }
                 }
 
                 StackLayout {
@@ -826,19 +796,15 @@ Item {
 
                     ScrollView {
                         clip: true
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                         ColumnLayout {
-                            width: parent ? parent.width : 480
-                            spacing: 8
-                            Repeater {
-                                model: page.overviewRows(page.selectedItem)
-                                delegate: RowLayout {
-                                    required property var modelData
-                                    width: parent.width
-                                    height: 24
-                                    Text { text: modelData[0]; color: page.appTheme.textNormal; font.pixelSize: 13; Layout.preferredWidth: 118; elide: Text.ElideRight }
-                                    Text { text: modelData[1]; color: modelData[0] === "status" ? page.statusColor(page.statusValue(page.selectedItem)) : page.appTheme.textStrong; font.pixelSize: 13; Layout.fillWidth: true; elide: Text.ElideRight }
-                                }
-                            }
+                            x: 12
+                            y: 12
+                            width: Math.max(0, (parent ? parent.width : 380) - 24)
+                            spacing: 10
+                            MbDetailCard { appTheme: page.appTheme; title: "基础信息"; rows: page.overviewBasicRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "执行状态"; rows: page.overviewStateRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "线程与时间"; rows: page.overviewTimeRows(page.selectedItem) }
                         }
                     }
                     MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.paramsValue(page.selectedItem)) }
@@ -858,22 +824,21 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 112
+                    Layout.preferredHeight: 148
                     color: appTheme.panelBg
                     border.color: appTheme.border
                     GridLayout {
                         anchors.fill: parent
                         anchors.margins: 10
-                        columns: 3
+                        columns: 2
                         rowSpacing: 8
                         columnSpacing: 10
-                        MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.fillWidth: true; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: page.selectedPausedCount() > 0 ? "success" : "primary"; Layout.fillWidth: true; onClicked: bridge.continueAll() }
-                        MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "参数快照"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "复制参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; onClicked: bridge.copyText(page.jsonText(page.paramsValue(page.selectedItem))) }
-                        MbButton { appTheme: page.appTheme; text: "复制返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; onClicked: bridge.copyText(page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {})) }
-                        MbButton { appTheme: page.appTheme; text: "刷新详情"; variant: "neutral"; Layout.columnSpan: 3; Layout.fillWidth: true; onClicked: bridge.refreshAll() }
+                        MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
+                        MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: page.selectedPausedCount() > 0 ? "success" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueAll() }
+                        MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
+                        MbButton { appTheme: page.appTheme; text: "参数快照"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
+                        MbButton { appTheme: page.appTheme; text: "复制参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.paramsValue(page.selectedItem))) }
+                        MbButton { appTheme: page.appTheme; text: "复制返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {})) }
                     }
                 }
             }
