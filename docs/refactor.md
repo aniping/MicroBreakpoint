@@ -28,7 +28,8 @@ MicroBreakpoint 是一个面向 Java 微服务的 Session 化接口断点调试�
 
 用户新建 Session 后，点击开始调试。
 从开始调试那一刻起，Java 上报的接口调用会被记录、被发现、被用于断点判断。
-停止调试后，系统不再记录调用、不再发现接口、不再判断断点，并释放所有暂停中的 Java 调用。
+停止调试后，系统不再接收新的 before-call 数据用于记录、发现接口和断点判断，并释放所有暂停中的 Java 调用。
+同一个 Session 可以再次点击开始调试，后续调用继续追加到该 Session。
 ```
 
 ---
@@ -41,17 +42,18 @@ MicroBreakpoint 是一个面向 Java 微服务的 Session 化接口断点调试�
 1. 删除“开始记录 / 停止记录”按钮及相关记录模式逻辑。
 2. 使用“Session + 调试状态”作为新的核心工作模型。
 3. 点击“开始调试”后，才开始记录调用、发现接口、判断断点。
-4. 停止调试后，不记录、不发现、不判断断点，并释放全部暂停调用。
+4. 停止调试后，新的 before-call 不记录、不发现、不判断断点，并释放全部暂停调用。
 5. Java 调用页面从主 UI 删除，改为开发脚本辅助测试。
 6. DebugMethodInfo 中 params 提升为顶层一等字段。
 7. args / parameterMeta 保留为可选技术信息，不参与主业务流程。
-8. 已发现接口按 Session 隔离。
+8. Session 隔离调用记录、已发现接口、接口统计和断点。
 9. 已发现接口唯一键为：sessionId + objectName + cmdName + slotId。
 10. params 不参与接口唯一键，但用于参数展示、参数样例、参数快照断点和未来参数条件断点。
 11. 调用记录和已发现接口都按 objectName 折叠分组。
 12. objectName 外层不做搜索排序；搜索、过滤、排序只在每个 objectName 分组内部进行。
 13. 顶部按钮按 Session 管理、调试控制、执行控制、界面设置分区。
 14. UI 反馈必须明显：大按钮、大图标、高亮暂停行、自动打开详情、状态栏强提示。
+15. 不兼容旧 API 路径，按新项目直接替换接口契约。
 ```
 
 ---
@@ -100,10 +102,12 @@ before-call：
   - 直接返回 continue。
 
 after-call：
+  - 总是尝试按 callId 更新已存在的调用记录；
   - 如果找不到 callId 对应记录，直接忽略并返回 success。
 ```
 
 这样可以避免非调试期间的业务调用污染调试数据。
+如果某个调用在调试中创建，但停止调试后 after-call 才回来，仍然需要更新已有调用记录，避免遗留 running 状态。
 
 ---
 
@@ -183,7 +187,8 @@ Session 区：
 
 ```text
 新建 Session 不删除历史 Session。
-新建 Session 不删除断点。
+新建 Session 不删除历史 Session 中的断点。
+新 Session 默认没有断点，除非用户在该 Session 内新建。
 新建 Session 后，当前页面切换到新 Session。
 ```
 
@@ -200,10 +205,12 @@ Session 区：
 不清空：
 
 ```text
-不删除断点。
+不删除当前 Session 的断点。
 不删除其他历史 Session。
 不清空全局设置。
 ```
+
+保留断点的前提是断点本身必须保存完整匹配字段：session_id、object_name、cmd_name、slot_key、match_mode、params_fingerprint/conditions_json。`source_*` 字段只用于追溯来源，即使来源调用或接口被清空，断点仍不能变成悬空不可用状态。
 
 建议限制：
 
@@ -236,7 +243,7 @@ Session 区：
   自动创建一个新 Session，然后进入调试状态。
 
 如果当前已有 Session 且未调试：
-  当前 Session 进入调试状态。
+  当前 Session 进入调试状态；如果该 Session 之前已经调试过，新调用继续追加到该 Session。
 
 如果当前已经调试中：
   按钮不可用。
@@ -250,9 +257,9 @@ Session 区：
 
 ```text
 退出调试状态。
-停止记录调用。
-停止发现接口。
-停止断点判断。
+停止将新的 before-call 写入调用记录。
+停止基于新的 before-call 发现接口。
+停止基于新的 before-call 判断断点。
 释放所有 paused 调用。
 ```
 
@@ -499,14 +506,16 @@ Session 需要隔离：
 调用记录隔离。
 已发现接口隔离。
 接口统计隔离。
+断点隔离。
 ```
 
-断点是否隔离：
+断点隔离规则：
 
 ```text
-断点默认跨 Session 生效。
-断点来源记录 sourceSessionId。
-未来可扩展断点作用范围：当前 Session / 所有 Session。
+断点默认只在当前 Session 内生效。
+断点创建时必须写入 sessionId。
+sourceSessionId / sourceInterfaceId / sourceCallId 只表示来源，不参与跨 Session 匹配。
+第一版不支持跨 Session 断点。
 ```
 
 ### 8.2 Session 生命周期
@@ -519,7 +528,8 @@ Session 需要隔离：
   Session 状态进入 DEBUGGING。
 
 停止调试：
-  Session 状态退出 DEBUGGING，进入 SESSION_IDLE 或 FINISHED。
+  Session 状态退出 DEBUGGING，进入 SESSION_IDLE。
+  Session 数据保留；同一个 Session 可再次开始调试，后续调用继续追加。
 
 清空当前 Session：
   删除该 Session 下的调用记录和已发现接口，Session 本身可保留。
@@ -532,8 +542,8 @@ Session 需要隔离：
 
 ```text
 created
+idle
 debugging
-stopped
 cleared
 ```
 
@@ -748,6 +758,15 @@ sessionId + objectName + cmdName + slotId
 interfaceUniqueKey = sessionId + objectName + cmdName + slotId
 ```
 
+实现时需要注意 SQLite 的 `NULL` 唯一约束语义：
+
+```text
+slotId 可为 null，但 SQLite 的 UNIQUE 允许多个 NULL。
+数据库中建议增加 slot_key 字段，将 null 统一归一化为 "__NULL__"。
+唯一约束使用 unique(session_id, object_name, cmd_name, slot_key)。
+页面和 API 仍暴露 slotId，slot_key 只作为数据库实现细节。
+```
+
 ### 12.2 params 不参与唯一键
 
 原因：
@@ -783,12 +802,15 @@ params 应用于：
 ```text
 保存最新样例。
 保存历史样例数量。
+保存历史样例 fingerprint 集合。
 生成参数摘要。
 生成 paramsFingerprint。
 创建参数快照断点。
 未来创建参数条件断点。
 调用记录详情展示。
 ```
+
+`paramsSampleCount` 不能只比较最新 fingerprint。若调用参数顺序为 A、B、A，只保存 latest fingerprint 会把第三次 A 误判为新样例。第一版建议增加 `interface_param_sample` 表，按 `interface_id + params_fingerprint` 去重；如果暂时不建表，至少保存 `params_fingerprints_json` 作为过渡。
 
 ---
 
@@ -921,6 +943,7 @@ session_id
 object_name
 cmd_name
 slot_id
+slot_key
 description
 
 latest_params_json
@@ -944,7 +967,30 @@ updated_at
 唯一约束：
 
 ```text
-unique(session_id, object_name, cmd_name, slot_id)
+unique(session_id, object_name, cmd_name, slot_key)
+```
+
+其中 `slot_key` 是数据库内部字段：
+
+```text
+slotId 有值：slot_key = String(slotId)
+slotId 为 null：slot_key = "__NULL__"
+```
+
+建议新增参数样例表：
+
+```text
+interface_param_sample
+
+id
+interface_id
+params_fingerprint
+params_json
+first_seen_at
+last_seen_at
+seen_count
+
+unique(interface_id, params_fingerprint)
 ```
 
 ### 15.1 发现或更新逻辑
@@ -952,20 +998,24 @@ unique(session_id, object_name, cmd_name, slot_id)
 收到 before-call 且 debugging=true：
 
 ```text
-1. 从上报中读取 sessionId、objectName、cmdName、slotId。
-2. 生成 interfaceUniqueKey。
-3. 如果接口不存在：
+1. 从当前 Python 调试状态读取 currentSessionId。
+2. 从 Java 上报中读取 objectName、cmdName、slotId、params。
+3. 生成 slot_key 和 interfaceUniqueKey。
+4. 如果接口不存在：
    - 创建 discovered_interface；
    - call_count = 1；
    - 保存 latest_params_json；
    - 保存 latest_params_fingerprint；
+   - 写入 interface_param_sample；
+   - params_sample_count = 1；
    - first_seen_at = 当前时间；
    - last_seen_at = 当前时间。
-4. 如果接口已存在：
+5. 如果接口已存在：
    - call_count + 1；
    - 更新 latest_params_json；
    - 更新 latest_params_fingerprint；
-   - 如果 fingerprint 是新的，params_sample_count + 1；
+   - upsert interface_param_sample；
+   - 只有 fingerprint 首次出现时，params_sample_count + 1；
    - 更新 last_seen_at。
 ```
 
@@ -990,9 +1040,11 @@ name
 enabled
 
 scope
+session_id
 object_name
 cmd_name
 slot_id
+slot_key
 
 match_mode
 params_fingerprint
@@ -1012,27 +1064,30 @@ created_at
 updated_at
 ```
 
-### 16.1 scope
+### 16.1 Session 归属与 scope
 
-第一版可以默认：
+第一版固定为：
 
 ```text
-all_sessions
+session
 ```
 
-未来可扩展：
+含义：
 
 ```text
-current_session
-all_sessions
+断点属于某一个 Session。
+断点只匹配同一 Session 内的调用。
+断点管理页只展示当前打开 Session 的断点。
+打开历史 Session 时，断点管理页展示该历史 Session 的断点。
 ```
 
 说明：
 
 ```text
-已发现接口按 Session 隔离。
-断点默认跨 Session 生效。
-断点来源通过 source_session_id 记录。
+Session 隔离调用记录、已发现接口、接口统计和断点。
+source_session_id / source_interface_id / source_call_id 只记录断点创建来源。
+断点匹配不得依赖 source_* 字段判断作用域。
+第一版不支持 all_sessions。
 ```
 
 ### 16.2 match_mode
@@ -1089,18 +1144,20 @@ hit_count：
 
 ```text
 1. 取当前调用：
+   sessionId
    objectName
    cmdName
    slotId
+   slotKey
    paramsFingerprint
    params
 
-2. 查询 enabled=true 的断点。
+2. 查询 enabled=true 且 session_id=currentSessionId 的断点。
 
 3. 初步匹配：
    breakpoint.objectName == call.objectName
    breakpoint.cmdName == call.cmdName
-   breakpoint.slotId == call.slotId
+   breakpoint.slotKey == call.slotKey
 
 4. 根据 match_mode 判断：
    command_only：
@@ -1178,14 +1235,18 @@ exists
 
 ## 19. 后端 API 重构
 
-### 19.1 删除或废弃
+### 19.1 删除
 
 ```text
 POST /api/session/start-record
 POST /api/session/stop-record
+POST /api/session/start-debug
+POST /api/session/stop-debug
+POST /api/session/create
+GET /api/session
 ```
 
-如担心旧前端未完全清理，可以先保留但返回 deprecated 提示。
+本项目按新项目处理，不保留旧路径兼容层。前端、测试、README 必须同步切换到新 API。
 
 ---
 
@@ -1194,7 +1255,7 @@ POST /api/session/stop-record
 #### 新建 Session
 
 ```text
-POST /api/session/new
+POST /api/sessions
 ```
 
 响应：
@@ -1210,15 +1271,16 @@ POST /api/session/new
 #### 清空当前 Session
 
 ```text
-POST /api/session/current/clear
+POST /api/sessions/current/clear
 ```
 
 行为：
 
 ```text
 调试中禁止清空。
-删除当前 Session 下的 call_record 和 discovered_interface。
-不删除 breakpoint。
+删除当前 Session 下的 call_record、discovered_interface 和 interface_param_sample。
+不删除当前 Session 的 breakpoint。
+breakpoint 必须自包含完整匹配字段，不能依赖已删除的来源调用或接口。
 ```
 
 #### 获取 Session 列表
@@ -1230,7 +1292,21 @@ GET /api/sessions
 #### 切换当前 Session
 
 ```text
-POST /api/session/{sessionId}/select
+POST /api/sessions/{sessionId}/select
+```
+
+#### 删除 Session
+
+```text
+DELETE /api/sessions/{sessionId}
+```
+
+行为：
+
+```text
+调试中禁止删除。
+删除目标 Session 下的调用记录、已发现接口、参数样例和断点。
+如果删除的是当前 Session，删除后进入 NO_SESSION。
 ```
 
 ---
@@ -1240,7 +1316,7 @@ POST /api/session/{sessionId}/select
 #### 开始调试
 
 ```text
-POST /api/session/start-debug
+POST /api/debug/start
 ```
 
 行为：
@@ -1249,12 +1325,13 @@ POST /api/session/start-debug
 如果没有当前 Session，自动创建。
 设置 debugging=true。
 当前 Session 状态改为 debugging。
+如果当前 Session 已经调试过，继续向同一 Session 追加新的调用记录和已发现接口更新。
 ```
 
 #### 停止调试
 
 ```text
-POST /api/session/stop-debug
+POST /api/debug/stop
 ```
 
 行为：
@@ -1262,7 +1339,8 @@ POST /api/session/stop-debug
 ```text
 设置 debugging=false。
 释放所有 paused 调用。
-当前 Session 状态改为 stopped 或 idle。
+当前 Session 状态改为 idle。
+保留当前 Session 数据，允许后续再次开始调试并继续追加。
 ```
 
 #### 重置调试状态
@@ -1321,6 +1399,8 @@ POST /api/calls/before
 }
 ```
 
+请求体不包含 `sessionId`。后端使用当前调试状态中的 `currentSessionId` 归属调用记录、接口发现和断点匹配。
+
 响应：
 
 ```json
@@ -1359,6 +1439,13 @@ POST /api/calls/after
   "exceptionType": null,
   "exceptionMessage": null
 }
+```
+
+处理规则：
+
+```text
+无论当前 debugging 是否为 true，after-call 都按 callId 尝试更新已有调用记录。
+如果 callId 不存在，说明对应 before-call 没有在调试状态下入库，直接返回 success 并忽略。
 ```
 
 ---
@@ -1901,7 +1988,7 @@ Session ID
 ```text
 调用记录页面展示该 Session 的调用。
 已发现接口页面展示该 Session 的接口。
-断点管理仍展示全局断点。
+断点管理展示该 Session 的断点。
 ```
 
 如果历史 Session 不处于 debugging，页面应明确提示：
@@ -2139,6 +2226,8 @@ rawArgs
 parameterMeta
 ```
 
+Java 不上传 sessionId。调用归属由 Python 后端当前选中的 Session 决定，避免业务服务感知调试器的 Session 状态。
+
 ### 29.3 Java 不再依赖记录模式
 
 Java 侧无需知道“记录模式”。
@@ -2204,20 +2293,24 @@ Java 服务地址输入框。
 
 ### 30.2 后端清理
 
-删除或废弃：
+删除：
 
 ```text
 start-record API。
 stop-record API。
+旧的 start-debug API。
+旧的 stop-debug API。
+旧的 /api/session 单数路径。
 recording 模式。
 record session 类型。
 ```
 
-保留并调整：
+新增并使用：
 
 ```text
-start-debug。
-stop-debug。
+POST /api/debug/start。
+POST /api/debug/stop。
+POST /api/debug/reset。
 before-call。
 after-call。
 continue。
@@ -2244,14 +2337,16 @@ state。
 
 ## 31. 推荐实施顺序
 
-### 第 1 阶段：状态机和按钮重构
+### 第 1 阶段：状态机、API 和按钮重构
 
 ```text
 1. 删除开始记录 / 停止记录。
-2. 新增新建 Session / 清空当前 Session / 重置调试状态。
-3. 开始调试时创建或使用当前 Session。
-4. 非 debugging 状态 before-call 直接 continue，不入库。
-5. 停止调试释放所有 paused 调用。
+2. 切换到新 API：/api/sessions、/api/debug/start、/api/debug/stop、/api/debug/reset。
+3. 新增新建 Session / 清空当前 Session / 重置调试状态。
+4. 开始调试时创建或使用当前 Session。
+5. 非 debugging 状态 before-call 直接 continue，不入库。
+6. 停止调试释放所有 paused 调用。
+7. 停止调试后同一 Session 可再次开始，并继续追加数据。
 ```
 
 验收：
@@ -2260,6 +2355,7 @@ state。
 未开始调试时，调用 Java 接口不会产生调用记录和已发现接口。
 开始调试后，调用 Java 接口会产生记录和接口。
 停止调试后，再调用 Java 接口不会新增数据。
+同一 Session 再次开始调试后，调用记录继续追加到该 Session。
 ```
 
 ---
@@ -2287,10 +2383,11 @@ Python 后端能直接读取 params 字段。
 
 ```text
 1. call_record 增加 objectName/cmdName/slotId/params 字段。
-2. discovered_interface 唯一键改为 sessionId + objectName + cmdName + slotId。
+2. discovered_interface 唯一键改为 sessionId + objectName + cmdName + slot_key。
 3. 实现 paramsFingerprint。
 4. 实现 paramsSummary。
-5. 接口发现按 Session 隔离。
+5. 实现 interface_param_sample 或等价的 fingerprint 去重存储。
+6. 接口发现按 Session 隔离。
 ```
 
 验收：
@@ -2303,7 +2400,31 @@ params 不同只更新参数样例，不新增接口。
 
 ---
 
-### 第 4 阶段：分组 API
+### 第 4 阶段：断点模型重构
+
+```text
+1. 断点从 methodName 维度改为 sessionId + objectName/cmdName/slot_key 维度。
+2. 支持 command_only 断点。
+3. 支持 params_snapshot 断点。
+4. 预留 params_condition。
+5. 断点默认只在当前 Session 内生效。
+6. source_* 字段只表示创建来源，不参与匹配作用域判断。
+```
+
+验收：
+
+```text
+从已发现接口创建命令断点。
+从调用记录创建命令断点。
+从调用记录创建参数快照断点。
+命中断点后 Java 请求暂停。
+继续执行后 Java 请求恢复。
+不同 Session 中相同 objectName/cmdName/slotId 不互相命中断点。
+```
+
+---
+
+### 第 5 阶段：分组 API
 
 ```text
 1. 实现 /api/calls/grouped。
@@ -2322,7 +2443,7 @@ objectName 为空时归入“未分类”。
 
 ---
 
-### 第 5 阶段：桌面端页面重构
+### 第 6 阶段：桌面端页面重构
 
 ```text
 1. 顶部按钮按新区分布局。
@@ -2340,28 +2461,6 @@ objectName 为空时归入“未分类”。
 paused 行明显高亮。
 点击 paused 行后，继续执行可用。
 继续全部能释放所有 paused。
-```
-
----
-
-### 第 6 阶段：断点模型重构
-
-```text
-1. 断点从 methodName 维度改为 objectName/cmdName/slotId 维度。
-2. 支持 command_only 断点。
-3. 支持 params_snapshot 断点。
-4. 预留 params_condition。
-5. 断点默认跨 Session 生效。
-```
-
-验收：
-
-```text
-从已发现接口创建命令断点。
-从调用记录创建命令断点。
-从调用记录创建参数快照断点。
-命中断点后 Java 请求暂停。
-继续执行后 Java 请求恢复。
 ```
 
 ---
@@ -2385,6 +2484,29 @@ paused 行明显高亮。
 用户一眼能看出是否有请求暂停。
 用户一眼能找到继续执行按钮。
 ```
+
+### 每阶段验证要求
+
+每个阶段完成后至少执行：
+
+```powershell
+conda activate micro-breakpoint
+cd python-debugger
+pytest
+
+cd ..\java-demo
+mvn test
+```
+
+涉及 QML、窗口状态、按钮可用性或主题变更时，还需要完成一次桌面端启动 smoke：
+
+```powershell
+conda activate micro-breakpoint
+cd python-debugger
+python run_desktop.py
+```
+
+如果阶段改动了用户工作流、API 路径、启动方式或数据模型，必须同步更新项目根目录 `README.md`。
 
 ---
 
@@ -2432,9 +2554,21 @@ paused 行明显高亮。
 2. 新建 Session B。
 3. Session B 调用 SA/start/slot=1。
 4. Session A 和 Session B 各自有独立的已发现接口记录。
+5. Session A 的断点不会命中 Session B 的调用。
 ```
 
-### 32.5 命令断点
+### 32.5 同一 Session 停止后继续追加
+
+```text
+1. Session A 点击开始调试。
+2. 调用 SA/start/slot=1，生成调用记录 #1。
+3. 点击停止调试。
+4. 再次点击开始调试。
+5. 调用 SA/stop/slot=1，生成调用记录 #2。
+6. 两条调用记录都属于 Session A，接口发现和统计继续累加。
+```
+
+### 32.6 命令断点
 
 ```text
 1. 从已发现接口 SA/start/slot=1 创建 command_only 断点。
@@ -2446,7 +2580,7 @@ paused 行明显高亮。
 7. Java 请求恢复并返回。
 ```
 
-### 32.6 参数快照断点
+### 32.7 参数快照断点
 
 ```text
 1. 从某条调用记录创建 params_snapshot 断点。
@@ -2456,7 +2590,7 @@ paused 行明显高亮。
 5. 请求不暂停。
 ```
 
-### 32.7 停止调试释放暂停
+### 32.8 停止调试释放暂停
 
 ```text
 1. 命中断点后 Java 请求 paused。
@@ -2466,7 +2600,7 @@ paused 行明显高亮。
 5. debugging=false。
 ```
 
-### 32.8 重置调试状态
+### 32.9 重置调试状态
 
 ```text
 1. 调试中命中多个断点。
@@ -2494,9 +2628,13 @@ Codex 重构时必须遵守：
 8. params 必须成为顶层字段。
 9. args / parameterMeta 可以保留，但不得作为主流程依赖。
 10. 已发现接口必须按 Session 隔离。
-11. 已发现接口唯一键必须是 sessionId + objectName + cmdName + slotId。
-12. params 不得参与接口唯一键。
-13. UI 必须保证 paused 状态强反馈。
+11. 断点必须按 Session 隔离，不得默认跨 Session 生效。
+12. 已发现接口唯一键必须是 sessionId + objectName + cmdName + slot_key。
+13. params 不得参与接口唯一键。
+14. source_* 字段只记录来源，不参与断点作用域判断。
+15. 停止调试后同一 Session 必须允许再次开始并继续追加数据。
+16. UI 必须保证 paused 状态强反馈。
+17. 改动用户工作流、API、启动方式或数据模型时必须同步更新 README.md。
 ```
 
 ---
@@ -2510,13 +2648,13 @@ feat: 新增 Session 管理与调试控制按钮
 
 refactor: 调整 DebugMethodInfo 上报结构并提升 params 为顶层字段
 
-refactor: 按 Session 隔离已发现接口并调整唯一键
+refactor: 按 Session 隔离接口和断点并调整唯一键
 
 feat: 新增调用记录和已发现接口 objectName 分组查询
 
 refactor: 重构调用记录与已发现接口页面布局
 
-feat: 基于 objectName/cmdName/slotId 重构断点匹配模型
+feat: 基于 sessionId/objectName/cmdName/slotKey 重构断点匹配模型
 
 feat: 增强断点命中与暂停状态 UI 反馈
 
@@ -2538,6 +2676,7 @@ chore: 移除 Java 调用页面并补充开发测试脚本
 命中断点时，页面强提示并高亮 paused 调用。
 用户点击继续执行或继续全部，Java 请求恢复。
 停止调试后，本次 Session 数据保留，可作为历史调试现场查看。
+再次开始同一个 Session 时，新调用继续追加到该 Session，断点仍只在该 Session 内生效。
 ```
 
 一句话总结：
