@@ -51,6 +51,22 @@ def test_call_record_page_keeps_filters_inside_groups():
     assert "当前分组显示" in qml
 
 
+def test_interface_page_uses_grouped_cards_and_detail_tabs():
+    qml = (QML_ROOT / "InterfacePage.qml").read_text(encoding="utf-8")
+    main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+
+    assert "InterfacePage" in main
+    assert "搜索 \" + modelData.objectName + \" 内接口" in qml
+    assert "全部展开" in qml
+    assert "只看断点" in qml
+    assert "编辑" in qml and "保存" in qml and "取消" in qml
+    assert "接口概览" in qml
+    assert "参数结构" in qml
+    assert "样本参数" in qml
+    assert "相关调用" in qml
+    assert "原始 JSON" in qml
+
+
 def test_main_has_paused_request_banner():
     qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
 

@@ -283,7 +283,7 @@ ApplicationWindow {
                     breakpointFilter: root.callBreakpointFilter
                     onClearBreakpointFilterRequested: root.callBreakpointFilter = ""
                 }
-                InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
+                InterfacePage { appTheme: theme; items: interfaceItems; calls: callItems; breakpoints: breakpointItems }
                 BreakpointTab { appTheme: theme; items: breakpointItems }
                 SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: !stateData.debugging }
                 SettingsTab {

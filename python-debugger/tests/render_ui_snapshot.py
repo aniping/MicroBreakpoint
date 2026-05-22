@@ -103,7 +103,8 @@ def main():
     root = engine.rootObjects()[0]
     root.setWidth(1448)
     root.setHeight(1070)
-    root.setProperty("currentPage", 0)
+    page_index = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    root.setProperty("currentPage", page_index)
 
     def capture():
         bridge.refreshAll()
