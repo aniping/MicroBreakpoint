@@ -44,10 +44,17 @@ def test_call_record_page_keeps_filters_inside_groups():
 
     assert "CallRecordPage" in main
     assert "搜索 \" + modelData.objectName + \" 内调用" in qml
-    assert "HeaderCell { groupName: modelData.objectName" in qml
+    assert "HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName" in qml
     assert "function setColumnWidth" in qml
+    assert "function isResizableColumn" in qml
+    assert "index === 2 || index === 4 || index === 6 || index === 7 || index === 8" in qml
     assert "function setSort" in qml
     assert "function pagedRows" not in qml
+    assert "Flickable {" in qml
+    assert "flickableDirection: Flickable.HorizontalFlick" in qml
+    assert "interactive: false" in qml
+    assert "ScrollBar.vertical.policy" not in qml
+    assert "onSelectedCallIdChanged: detailTabIndex = 0" in qml
     assert "当前分组显示" in qml
 
 

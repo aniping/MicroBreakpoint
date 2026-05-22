@@ -19,7 +19,8 @@ Item {
     property var groupHitFilters: ({})
     property var groupSortKeys: ({})
     property var groupSortOrders: ({})
-    property var columnWidths: [72, 70, 150, 70, 220, 80, 94, 160, 160, 100]
+    property var columnWidths: [64, 72, 160, 72, 220, 84, 96, 170, 170, 96]
+    property var columnMinWidths: [64, 72, 120, 72, 220, 84, 80, 120, 140, 96]
     property var selectedItem: selectedItemForId(selectedCallId)
     signal clearBreakpointFilterRequested()
 
@@ -146,6 +147,7 @@ Item {
     }
 
     onItemsChanged: Qt.callLater(ensureSelection)
+    onSelectedCallIdChanged: detailTabIndex = 0
 
     function isExpanded(name) { return expandedGroups[name] !== false }
     function setExpanded(name, value) {
@@ -261,15 +263,36 @@ Item {
         return ""
     }
 
-    function colWidth(index) { return columnWidths[index] || 80 }
+    function isResizableColumn(index) {
+        return index === 2 || index === 4 || index === 6 || index === 7 || index === 8
+    }
+
+    function storedColumnWidth(index) {
+        return columnWidths[index] || columnMinWidths[index] || 80
+    }
+
+    function colWidth(index, tableWidth) {
+        if (index === 4) {
+            var available = Math.max(0, Number(tableWidth) || 0)
+            var otherTotal = 0
+            for (var i = 0; i < columnWidths.length; i++) {
+                if (i !== 4) otherTotal += storedColumnWidth(i)
+            }
+            return Math.max(columnMinWidths[4], storedColumnWidth(4), available - otherTotal)
+        }
+        return storedColumnWidth(index)
+    }
+
     function setColumnWidth(index, width) {
+        if (!isResizableColumn(index)) return
         var next = columnWidths.slice()
-        next[index] = Math.max(56, Math.min(360, width))
+        next[index] = Math.max(columnMinWidths[index] || 80, Math.min(520, width))
         columnWidths = next
     }
-    function totalColumnWidth() {
+
+    function totalColumnWidth(tableWidth) {
         var total = 0
-        for (var i = 0; i < columnWidths.length; i++) total += columnWidths[i]
+        for (var i = 0; i < columnWidths.length; i++) total += colWidth(i, tableWidth)
         return total
     }
 
@@ -348,12 +371,14 @@ Item {
     component HeaderCell: Rectangle {
         id: header
         property int column: 0
+        property real tableWidth: 0
         property string groupName: ""
         property string label: ""
         property string sortField: ""
         property bool sortable: true
-        width: page.colWidth(column)
-        height: 38
+        property bool resizable: page.isResizableColumn(column)
+        width: page.colWidth(column, tableWidth)
+        height: 36
         color: page.appTheme.panelBgAlt
         border.color: page.appTheme.border
 
@@ -362,7 +387,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.leftMargin: 10
-            anchors.rightMargin: 14
+            anchors.rightMargin: header.resizable ? 18 : 10
             text: header.label + (header.sortable ? " " + page.sortIndicator(header.groupName, header.sortField) : "")
             color: page.appTheme.textStrong
             font.pixelSize: 13
@@ -372,21 +397,23 @@ Item {
 
         MouseArea {
             anchors.fill: parent
-            anchors.rightMargin: 8
+            anchors.rightMargin: header.resizable ? 10 : 0
             enabled: header.sortable
             cursorShape: header.sortable ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: page.setSort(header.groupName, header.sortField)
         }
 
         Rectangle {
+            visible: header.resizable
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: 8
-            color: resizeArea.pressed ? page.appTheme.primarySoft : "transparent"
+            width: 10
+            color: resizeArea.pressed || resizeArea.containsMouse ? page.appTheme.primarySoft : "transparent"
             MouseArea {
                 id: resizeArea
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.SizeHorCursor
                 property real startX: 0
                 property real startWidth: 0
@@ -403,8 +430,9 @@ Item {
         property string label: ""
         property color labelColor: page.appTheme.textNormal
         property int column: 0
-        width: page.colWidth(column)
-        height: 40
+        property real tableWidth: 0
+        width: page.colWidth(column, tableWidth)
+        height: 38
         color: "transparent"
         border.color: page.appTheme.borderSoft
         Text {
@@ -624,58 +652,69 @@ Item {
                                             } }
                                         }
 
-                                        ScrollView {
+                                        Flickable {
+                                            id: tableFlick
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 54 + (page.filteredRows(modelData).length * 40)
+                                            Layout.preferredHeight: tableContent.implicitHeight + (tableFlick.contentWidth > tableFlick.width ? 14 : 0)
                                             clip: true
-                                            ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-                                            ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+                                            contentWidth: tableContent.width
+                                            contentHeight: tableContent.implicitHeight
+                                            flickableDirection: Flickable.HorizontalFlick
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            interactive: false
+                                            ScrollBar.horizontal: ScrollBar {
+                                                policy: tableFlick.contentWidth > tableFlick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                            }
 
                                             Column {
-                                                width: Math.max(parent ? parent.width : 900, page.totalColumnWidth())
+                                                id: tableContent
+                                                width: Math.max(tableFlick.width, page.totalColumnWidth(tableFlick.width))
                                                 Row {
-                                                    HeaderCell { groupName: modelData.objectName; column: 0; label: "序号"; sortField: "call_index" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 1; label: "对象"; sortField: "object_name"; sortable: false }
-                                                    HeaderCell { groupName: modelData.objectName; column: 2; label: "命令"; sortField: "cmd_name" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 3; label: "槽位"; sortField: "slot_id" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 4; label: "参数摘要"; sortField: "params"; sortable: false }
-                                                    HeaderCell { groupName: modelData.objectName; column: 5; label: "状态"; sortField: "status" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 6; label: "耗时(ms)"; sortField: "cost_ms" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 7; label: "线程名"; sortField: "thread_name" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 8; label: "调用时间"; sortField: "created_at" }
-                                                    HeaderCell { groupName: modelData.objectName; column: 9; label: "命中断点"; sortField: "hit" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 0; label: "序号"; sortField: "call_index" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 1; label: "对象"; sortField: "object_name"; sortable: false }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 2; label: "命令"; sortField: "cmd_name" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 3; label: "槽位"; sortField: "slot_id" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 4; label: "参数摘要"; sortField: "params"; sortable: false }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 5; label: "状态"; sortField: "status" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "耗时(ms)"; sortField: "cost_ms" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 7; label: "线程名"; sortField: "thread_name" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 8; label: "调用时间"; sortField: "created_at" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 9; label: "命中断点"; sortField: "hit" }
                                                 }
                                                 Repeater {
                                                     model: page.filteredRows(modelData)
                                                     delegate: Rectangle {
                                                         required property var modelData
-                                                        width: page.totalColumnWidth()
-                                                        height: 40
+                                                        width: tableContent.width
+                                                        height: 38
                                                         color: page.selectedCallId === page.callId(modelData)
                                                                ? page.appTheme.panelActive
                                                                : (page.statusValue(modelData) === "paused" ? page.appTheme.warningSoft : "transparent")
                                                         Row {
                                                             anchors.fill: parent
-                                                            DataCell { column: 0; label: String(modelData.call_index || modelData.callIndex || "") }
-                                                            DataCell { column: 1; label: page.objectName(modelData); labelColor: page.appTheme.textStrong }
-                                                            DataCell { column: 2; label: page.cmdName(modelData); labelColor: page.appTheme.textStrong }
-                                                            DataCell { column: 3; label: page.slotValue(modelData) }
-                                                            DataCell { column: 4; label: page.paramsSummary(modelData) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 0; label: String(modelData.call_index || modelData.callIndex || "") }
+                                                            DataCell { tableWidth: tableFlick.width; column: 1; label: page.objectName(modelData); labelColor: page.appTheme.textStrong }
+                                                            DataCell { tableWidth: tableFlick.width; column: 2; label: page.cmdName(modelData); labelColor: page.appTheme.textStrong }
+                                                            DataCell { tableWidth: tableFlick.width; column: 3; label: page.slotValue(modelData) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 4; label: page.paramsSummary(modelData) }
                                                             Rectangle {
-                                                                width: page.colWidth(5)
-                                                                height: 40
+                                                                width: page.colWidth(5, tableFlick.width)
+                                                                height: 38
                                                                 color: "transparent"
                                                                 border.color: page.appTheme.borderSoft
                                                                 StatusBadge { value: page.statusValue(modelData); anchors.centerIn: parent }
                                                             }
-                                                            DataCell { column: 6; label: page.costValue(modelData) }
-                                                            DataCell { column: 7; label: page.textOf(modelData.thread_name || modelData.threadName) }
-                                                            DataCell { column: 8; label: page.shortTime(modelData.created_at || modelData.createdAt) }
-                                                            DataCell { column: 9; label: page.breakpointId(modelData) ? "命中" : "未命中"; labelColor: page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted }
+                                                            DataCell { tableWidth: tableFlick.width; column: 6; label: page.costValue(modelData) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 7; label: page.textOf(modelData.thread_name || modelData.threadName) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 8; label: page.shortTime(modelData.created_at || modelData.createdAt) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 9; label: page.breakpointId(modelData) ? "命中" : "未命中"; labelColor: page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted }
                                                         }
                                                         MouseArea {
                                                             anchors.fill: parent
-                                                            onClicked: page.selectedCallId = page.callId(modelData)
+                                                            onClicked: {
+                                                                page.selectedCallId = page.callId(modelData)
+                                                                page.detailTabIndex = 0
+                                                            }
                                                         }
                                                     }
                                                 }
