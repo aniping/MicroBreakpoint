@@ -34,6 +34,7 @@ ApplicationWindow {
     property var breakpointItems: []
     property var sessionItems: []
     property string resultText: ""
+    property string callBreakpointFilter: ""
 
     AppTheme {
         id: theme
@@ -274,7 +275,14 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 currentIndex: currentPage
 
-                CallRecordTab { appTheme: theme; items: callItems; breakpoints: breakpointItems; canClearRecords: stateData.mode === "idle" && stateData.hasSession }
+                CallRecordPage {
+                    appTheme: theme
+                    items: callItems
+                    breakpoints: breakpointItems
+                    canClearRecords: stateData.mode === "idle" && stateData.hasSession
+                    breakpointFilter: root.callBreakpointFilter
+                    onClearBreakpointFilterRequested: root.callBreakpointFilter = ""
+                }
                 InterfaceTab { appTheme: theme; items: interfaceItems; breakpoints: breakpointItems }
                 BreakpointTab { appTheme: theme; items: breakpointItems }
                 SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: !stateData.debugging }

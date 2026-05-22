@@ -29,13 +29,26 @@ def test_call_record_filter_includes_interface_alias():
 
 
 def test_call_record_uses_business_debug_fields():
-    qml = (QML_ROOT / "CallRecordTab.qml").read_text(encoding="utf-8")
+    qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
 
-    assert "item.object_name" in qml
-    assert "item.cmd_name" in qml
-    assert "item.params_summary" in qml
-    assert "modelData.object_name" in qml
-    assert "modelData.cmd_name" in qml
+    assert "object_name" in qml
+    assert "cmd_name" in qml
+    assert "params_summary" in qml
+    assert "objectName(item)" in qml
+    assert "cmdName(item)" in qml
+
+
+def test_call_record_page_keeps_filters_inside_groups():
+    qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
+    main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+
+    assert "CallRecordPage" in main
+    assert "搜索 \" + modelData.objectName + \" 内调用" in qml
+    assert "HeaderCell { groupName: modelData.objectName" in qml
+    assert "function setColumnWidth" in qml
+    assert "function setSort" in qml
+    assert "function pagedRows" in qml
+    assert "当前分组显示" in qml
 
 
 def test_main_has_paused_request_banner():

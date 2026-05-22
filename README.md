@@ -63,7 +63,7 @@ mvn spring-boot:run
 1. 桌面端进入“历史会话”，点击“新建 Session”或选择已有 Session。
 2. 点击“开始调试”。
 3. 手动调用 Java Demo 的 `POST /api/demo/control` 或真实业务接口。
-4. “调用记录”页应出现当前 Session 的调用记录，并按 `objectName` 分组展示 `cmdName`、`slotId` 和 `params` 摘要。
+4. “调用记录”页应出现当前 Session 的调用记录，并按 `objectName` 可折叠分组展示 `cmdName`、`slotId` 和 `params` 摘要；每个分组内支持搜索、状态过滤、断点命中过滤、表头排序、列宽拖拽和分页。
 5. “已发现接口”页应按 `objectName` 分组展示接口、参数样本数和业务别名。
 6. 从已发现接口创建命令断点，或从调用记录创建命令断点 / 参数快照断点。
 7. 再次触发同一业务接口，命中断点后调用状态应变为 `paused`，顶部会出现暂停提示条。
