@@ -76,7 +76,7 @@ public class DebugClient {
             String responseBody = postJson(url, request, DebuggerSettings.readTimeoutMs);
 
             if (responseBody.isEmpty()) {
-                return new BeforeCallResponse(true, null, "continue", "empty response", null, null, null);
+                return new BeforeCallResponse(true, null, "continue", "empty response", null, null, null, null);
             }
 
             return OBJECT_MAPPER.readValue(responseBody, BeforeCallResponse.class);
@@ -86,7 +86,7 @@ public class DebugClient {
                     + ", error="
                     + e.getMessage());
 
-            return new BeforeCallResponse(false, null, "continue", "http failed", null, null, null);
+            return new BeforeCallResponse(false, null, "continue", "http failed", null, null, null, null);
         }
     }
 

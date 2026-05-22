@@ -9,6 +9,7 @@ public class BeforeCallResponse {
     private Long waitTimeoutMs;
     private String breakpointId;
     private String interfaceId;
+    private String breakpointName;
 
     public BeforeCallResponse() {
     }
@@ -20,7 +21,8 @@ public class BeforeCallResponse {
             String reason,
             Long waitTimeoutMs,
             String breakpointId,
-            String interfaceId
+            String interfaceId,
+            String breakpointName
     ) {
         this.success = success;
         this.callIndex = callIndex;
@@ -29,6 +31,7 @@ public class BeforeCallResponse {
         this.waitTimeoutMs = waitTimeoutMs;
         this.breakpointId = breakpointId;
         this.interfaceId = interfaceId;
+        this.breakpointName = breakpointName;
     }
 
     public boolean isSuccess() {
@@ -85,5 +88,13 @@ public class BeforeCallResponse {
 
     public void setInterfaceId(String interfaceId) {
         this.interfaceId = interfaceId;
+    }
+
+    public String getBreakpointName() {
+        return breakpointName;
+    }
+
+    public void setBreakpointName(String breakpointName) {
+        this.breakpointName = breakpointName;
     }
 }
