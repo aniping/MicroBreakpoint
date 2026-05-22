@@ -67,6 +67,24 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "原始 JSON" in qml
 
 
+def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
+    qml = (QML_ROOT / "BreakpointPage.qml").read_text(encoding="utf-8")
+    main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+
+    assert "BreakpointPage" in main
+    assert "objectOptions" in qml
+    assert "搜索断点名称 / 命令 / 槽位" in qml
+    assert "function groups" in qml
+    assert "命中范围" in qml
+    assert "无附加参数条件，命中该命令即暂停。" in qml
+    assert "requestCallFilter" in qml
+    assert "root.callBreakpointFilter = breakpointId" in main
+    assert "断点概览" in qml
+    assert "匹配条件" in qml
+    assert "命中记录" in qml
+    assert "原始 JSON" in qml
+
+
 def test_main_has_paused_request_banner():
     qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
 

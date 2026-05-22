@@ -284,7 +284,15 @@ ApplicationWindow {
                     onClearBreakpointFilterRequested: root.callBreakpointFilter = ""
                 }
                 InterfacePage { appTheme: theme; items: interfaceItems; calls: callItems; breakpoints: breakpointItems }
-                BreakpointTab { appTheme: theme; items: breakpointItems }
+                BreakpointPage {
+                    appTheme: theme
+                    items: breakpointItems
+                    calls: callItems
+                    onRequestCallFilter: function(breakpointId) {
+                        root.callBreakpointFilter = breakpointId
+                        root.currentPage = 0
+                    }
+                }
                 SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: !stateData.debugging }
                 SettingsTab {
                     appTheme: theme
