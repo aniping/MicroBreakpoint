@@ -509,3 +509,36 @@ def create_breakpoint(data):
     )
     get_db().commit()
     return {"success": True, "breakpointId": bp_id}
+
+
+# Legacy compatibility facade. New code must import app.services.debug_service
+# directly; these assignments keep stale imports on the new Session-only model.
+from app.services import debug_service as _debug_service  # noqa: E402
+
+STATE = _debug_service.STATE
+create_session = _debug_service.create_session
+select_session = _debug_service.select_session
+stop_activity = _debug_service.stop_debug
+clear_call_records = _debug_service.clear_current_session
+delete_session = _debug_service.delete_session
+state_response = _debug_service.state_response
+breakpoint_count = _debug_service.breakpoint_count
+before_call = _debug_service.before_call
+after_call = _debug_service.after_call
+list_sessions = _debug_service.list_sessions
+list_calls = _debug_service.list_calls
+list_interfaces = _debug_service.list_interfaces
+list_breakpoints = _debug_service.list_breakpoints
+update_interface_alias = _debug_service.update_interface_alias
+normalize = _debug_service.normalize
+create_breakpoint = _debug_service.create_breakpoint
+
+
+def start_session(mode="debug", payload=None):
+    if mode != "debug":
+        return {"success": False, "message": "记录模式已移除，请使用开始调试"}
+    return _debug_service.start_debug(payload or {})
+
+
+def clear_sessions():
+    return {"success": False, "message": "请逐个删除 Session"}

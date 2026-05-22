@@ -2700,6 +2700,7 @@ MicroBreakpoint 从“记录按钮驱动的接口采集工具”，重构为“S
 6. command_only 与 params_snapshot 断点已可从 UI 创建。
 7. 调用记录和已发现接口页面已按 objectName 分段展示，并以 objectName / cmdName / slotId / params 摘要为主字段。
 8. paused 行高亮、顶部暂停提示条、继续全部高亮和自动选中 paused 调用已实现。
+9. 旧 `app.services.core` 模块已降级为 `debug_service` 兼容门面，避免旧导入继续运行记录模式逻辑。
 ```
 
 与原文档的落地调整：

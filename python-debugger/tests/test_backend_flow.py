@@ -211,3 +211,19 @@ def test_grouped_endpoints_return_object_groups(tmp_path):
     interface_groups = client.get("/api/interfaces/grouped").get_json()["groups"]
     assert {group["objectName"] for group in call_groups} == {"SA", "SG"}
     assert {group["objectName"] for group in interface_groups} == {"SA", "SG"}
+
+
+def test_legacy_core_module_delegates_to_session_debug_service(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+
+    with app.app_context():
+        from app.services import core, debug_service
+
+        assert core.STATE is debug_service.STATE
+        assert core.create_session({})["success"] is True
+        assert core.start_session("record", {})["success"] is False
+
+        started = core.start_session("debug", {})
+        assert started["debugging"] is True
+        assert isinstance(core.stop_activity(), int)
+        assert core.STATE["debugging"] is False
