@@ -21,6 +21,5 @@ target/
 
 logs/
 *.log
-ui_current.png
 
 python-debugger/data/
