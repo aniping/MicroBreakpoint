@@ -8,10 +8,10 @@ Button {
     property string variant: "neutral"
     property string iconText: ""
 
-    implicitWidth: Math.max(96, contentRow.implicitWidth + 30)
-    implicitHeight: 40
+    implicitWidth: Math.max(92, contentRow.implicitWidth + 26)
+    implicitHeight: 36
     padding: 0
-    font.pixelSize: 14
+    font.pixelSize: 13
     font.weight: Font.DemiBold
 
     function accentColor() {
@@ -25,10 +25,30 @@ Button {
 
     function backgroundColor() {
         if (!enabled) return appTheme.panelBgAlt
-        if (pressed) return variant === "ghost" ? appTheme.panelHover : accentColor()
-        if (hovered) return variant === "ghost" ? appTheme.panelHover : appTheme.primarySoft
+        if (variant === "ghost") return hovered ? appTheme.panelHover : "transparent"
+        if (pressed) return appTheme.panelActive
+        if (hovered) return appTheme.panelHover
+        if (variant === "primary") return appTheme.primarySoft
+        if (variant === "success") return appTheme.successSoft
+        if (variant === "warning") return appTheme.warningSoft
+        if (variant === "danger") return appTheme.dangerSoft
+        return appTheme.inputBg
+    }
+
+    function foregroundColor() {
+        if (!enabled) return appTheme.textDisabled
+        if (variant === "primary") return appTheme.primary
+        if (variant === "success") return appTheme.success
+        if (variant === "warning") return appTheme.warning
+        if (variant === "danger") return appTheme.danger
+        return appTheme.textStrong
+    }
+
+    function borderColor() {
+        if (!enabled) return appTheme.borderSoft
         if (variant === "ghost") return "transparent"
-        return appTheme.panelBgAlt
+        if (variant === "primary" || variant === "success" || variant === "warning" || variant === "danger") return accentColor()
+        return appTheme.border
     }
 
     contentItem: Row {
@@ -39,8 +59,8 @@ Button {
         Text {
             visible: control.iconText.length > 0
             text: control.iconText
-            color: control.enabled ? control.accentColor() : control.appTheme.textDisabled
-            font.pixelSize: 15
+            color: control.foregroundColor()
+            font.pixelSize: 14
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             anchors.verticalCenter: parent.verticalCenter
@@ -48,7 +68,7 @@ Button {
 
         Text {
             text: control.text
-            color: control.enabled ? control.appTheme.textStrong : control.appTheme.textDisabled
+            color: control.foregroundColor()
             font: control.font
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
@@ -58,8 +78,9 @@ Button {
     }
 
     background: Rectangle {
-        radius: 5
+        radius: 4
         color: control.backgroundColor()
-        border.color: control.enabled ? (control.variant === "ghost" ? "transparent" : control.appTheme.border) : control.appTheme.borderSoft
+        border.color: control.borderColor()
+        border.width: control.variant === "neutral" ? 1 : 1
     }
 }

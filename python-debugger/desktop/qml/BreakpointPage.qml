@@ -64,6 +64,22 @@ Item {
         if (mode === "params_condition") return "参数条件"
         return "命令"
     }
+    function statusText(status) {
+        if (status === "running") return "运行中"
+        if (status === "finished") return "成功"
+        if (status === "paused") return "暂停"
+        if (status === "exception") return "异常"
+        if (status === "continued") return "继续"
+        if (status === "timeout") return "超时"
+        return status || "-"
+    }
+    function statusType(status) {
+        if (status === "finished") return "success"
+        if (status === "paused" || status === "timeout") return "warning"
+        if (status === "exception") return "danger"
+        if (status === "running" || status === "continued") return "primary"
+        return "neutral"
+    }
     function rangeText(item) {
         return objectName(item) + " / " + cmdName(item) + " / 槽位 " + slotText(item) + " / " + matchModeText(item ? item.match_mode : "")
     }
@@ -485,35 +501,75 @@ Item {
                         }
                     }
                     ScrollView {
+                        id: hitRecordScroll
                         clip: true
-                        ColumnLayout {
-                            x: 10
-                            y: 10
-                            width: Math.max(0, (parent ? parent.width : 400) - 20)
-                            spacing: 4
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        contentWidth: availableWidth
+                        contentHeight: hitRecordColumn.implicitHeight + 24
+                        Column {
+                            id: hitRecordColumn
+                            x: 12
+                            y: 12
+                            width: Math.max(0, hitRecordScroll.availableWidth - 24)
+                            spacing: 8
                             Repeater {
                                 model: page.hitRecords(page.selectedItem)
                                 delegate: Rectangle {
                                     required property var modelData
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 34
+                                    width: hitRecordColumn.width
+                                    height: 82
+                                    radius: 4
                                     color: page.appTheme.panelBgAlt
                                     border.color: page.appTheme.borderSoft
-                                    RowLayout {
+                                    ColumnLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        Text { text: String(modelData.call_index || "-"); color: page.appTheme.textStrong; Layout.preferredWidth: 46 }
-                                        Text { text: page.objectName(modelData); color: page.appTheme.textNormal; Layout.preferredWidth: 74; elide: Text.ElideRight }
-                                        Text { text: page.cmdName(modelData); color: page.appTheme.textNormal; Layout.preferredWidth: 112; elide: Text.ElideRight }
-                                        Text { text: page.slotText(modelData); color: page.appTheme.textNormal; Layout.preferredWidth: 58; elide: Text.ElideRight }
-                                        Text { text: page.textOf(modelData.status); color: page.appTheme.textNormal; Layout.preferredWidth: 72; elide: Text.ElideRight }
-                                        Text { text: page.textOf(modelData.cost_ms) + " ms"; color: page.appTheme.textMuted; Layout.preferredWidth: 78; elide: Text.ElideRight }
-                                        Text { text: page.shortTime(modelData.created_at); color: page.appTheme.textMuted; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                        anchors.margins: 10
+                                        spacing: 6
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+                                            Text {
+                                                text: "调用 #" + String(modelData.call_index || "-")
+                                                color: page.appTheme.textStrong
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+                                            MbTag { appTheme: page.appTheme; text: page.statusText(modelData.status); type: page.statusType(modelData.status); Layout.preferredWidth: 64 }
+                                            Text {
+                                                text: page.textOf(modelData.cost_ms) + " ms"
+                                                color: page.appTheme.textStrong
+                                                font.pixelSize: 12
+                                                font.weight: Font.DemiBold
+                                            }
+                                        }
+                                        Text {
+                                            text: page.objectName(modelData) + " / " + page.cmdName(modelData) + " / 槽位 " + page.slotText(modelData)
+                                            color: page.appTheme.textNormal
+                                            font.pixelSize: 12
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            text: page.shortTime(modelData.created_at)
+                                            color: page.appTheme.textMuted
+                                            font.pixelSize: 11
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
                                     }
                                 }
                             }
-                            Text { visible: page.hitRecords(page.selectedItem).length === 0; text: "暂无命中记录"; color: page.appTheme.textMuted; font.pixelSize: 13; Layout.margins: 12 }
+                            Text {
+                                visible: page.hitRecords(page.selectedItem).length === 0
+                                width: hitRecordColumn.width
+                                leftPadding: 12
+                                topPadding: 12
+                                text: "暂无命中记录"
+                                color: page.appTheme.textMuted
+                                font.pixelSize: 13
+                            }
                         }
                     }
                     MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem || {}) }

@@ -275,6 +275,14 @@ Item {
         return status || "-"
     }
 
+    function statusType(status) {
+        if (status === "finished") return "success"
+        if (status === "paused" || status === "timeout") return "warning"
+        if (status === "exception") return "danger"
+        if (status === "running" || status === "continued") return "primary"
+        return "neutral"
+    }
+
     function overviewRows(item) {
         return [
             ["objectName", objectName(item)],
@@ -324,17 +332,6 @@ Item {
         padding: 0
         background: Rectangle { color: tab.selected ? page.appTheme.primary : (tab.hovered ? page.appTheme.panelHover : page.appTheme.panelBgAlt); border.color: tab.selected ? page.appTheme.primary : page.appTheme.border }
         contentItem: Text { text: tab.text; color: tab.selected ? page.appTheme.onAccent : page.appTheme.textNormal; font.pixelSize: 13; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
-    }
-
-    component RelatedCell: Text {
-        property int cellWidth: 64
-        Layout.preferredWidth: cellWidth
-        Layout.minimumWidth: cellWidth
-        color: page.appTheme.textNormal
-        font.pixelSize: 12
-        verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
-        maximumLineCount: 1
     }
 
     component MetricCell: Rectangle {
@@ -711,51 +708,69 @@ Item {
                     }
 
                     ScrollView {
+                        id: relatedCallScroll
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ColumnLayout {
+                        contentWidth: availableWidth
+                        contentHeight: relatedCallColumn.implicitHeight + 24
+                        Column {
+                            id: relatedCallColumn
                             x: 12
                             y: 12
-                            width: Math.max(0, (parent ? parent.width : 430) - 24)
-                            spacing: 6
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 34
-                                color: page.appTheme.panelBgAlt
-                                border.color: page.appTheme.border
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    spacing: 8
-                                    RelatedCell { text: "#"; cellWidth: 42; color: page.appTheme.textStrong; font.weight: Font.DemiBold }
-                                    RelatedCell { text: "状态"; cellWidth: 62; color: page.appTheme.textStrong; font.weight: Font.DemiBold }
-                                    RelatedCell { text: "耗时"; cellWidth: 62; color: page.appTheme.textStrong; font.weight: Font.DemiBold }
-                                    RelatedCell { text: "时间"; cellWidth: 142; color: page.appTheme.textStrong; font.weight: Font.DemiBold }
-                                    RelatedCell { text: "断点"; cellWidth: 58; color: page.appTheme.textStrong; font.weight: Font.DemiBold }
-                                }
-                            }
+                            width: Math.max(0, relatedCallScroll.availableWidth - 24)
+                            spacing: 8
 
                             Repeater {
                                 model: page.relatedCalls(page.selectedItem).slice(0, 12)
                                 delegate: Rectangle {
                                     required property var modelData
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 44
+                                    width: relatedCallColumn.width
+                                    height: 82
                                     radius: 4
                                     color: page.appTheme.panelBgAlt
                                     border.color: page.appTheme.borderSoft
-                                    RowLayout {
+                                    ColumnLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 10
-                                        anchors.rightMargin: 10
-                                        spacing: 8
-                                        RelatedCell { text: String(modelData.call_index || modelData.callIndex || "-"); cellWidth: 42; color: page.appTheme.textStrong }
-                                        RelatedCell { text: page.statusText(modelData.status); cellWidth: 62; color: page.appTheme.textNormal }
-                                        RelatedCell { text: page.textOf(modelData.cost_ms !== undefined ? modelData.cost_ms : modelData.costMs) + " ms"; cellWidth: 62 }
-                                        RelatedCell { text: page.shortTime(modelData.created_at || modelData.createdAt); cellWidth: 142; color: page.appTheme.textMuted }
-                                        RelatedCell { text: modelData.breakpoint_id || modelData.breakpointId ? "命中" : "未命中"; cellWidth: 58; color: modelData.breakpoint_id || modelData.breakpointId ? page.appTheme.warning : page.appTheme.textMuted }
+                                        anchors.margins: 10
+                                        spacing: 6
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+                                            Text {
+                                                text: "调用 #" + String(modelData.call_index || modelData.callIndex || "-")
+                                                color: page.appTheme.textStrong
+                                                font.pixelSize: 13
+                                                font.weight: Font.DemiBold
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+                                            MbTag { appTheme: page.appTheme; text: page.statusText(modelData.status); type: page.statusType(modelData.status); Layout.preferredWidth: 64 }
+                                            MbTag { appTheme: page.appTheme; text: modelData.breakpoint_id || modelData.breakpointId ? "命中" : "未命中"; type: modelData.breakpoint_id || modelData.breakpointId ? "warning" : "neutral"; Layout.preferredWidth: 72 }
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+                                            Text {
+                                                text: page.objectName(modelData) + " / " + page.cmdName(modelData) + " / 槽位 " + page.slotText(modelData)
+                                                color: page.appTheme.textNormal
+                                                font.pixelSize: 12
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                text: page.textOf(modelData.cost_ms !== undefined ? modelData.cost_ms : modelData.costMs) + " ms"
+                                                color: page.appTheme.textStrong
+                                                font.pixelSize: 12
+                                                font.weight: Font.DemiBold
+                                            }
+                                        }
+                                        Text {
+                                            text: page.shortTime(modelData.created_at || modelData.createdAt)
+                                            color: page.appTheme.textMuted
+                                            font.pixelSize: 11
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
                                     }
                                 }
                             }

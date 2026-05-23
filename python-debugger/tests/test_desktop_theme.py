@@ -78,6 +78,11 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "接口身份" in qml
     assert "参数样本" in qml
     assert "相关调用" in qml
+    assert '"调用 #"' in qml
+    assert "id: relatedCallScroll" in qml
+    assert "contentHeight: relatedCallColumn.implicitHeight + 24" in qml
+    assert "width: relatedCallColumn.width" in qml
+    assert "RelatedCell" not in qml
     assert "原始 JSON" in qml
 
 
@@ -106,7 +111,24 @@ def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
     assert "断点身份" in qml
     assert "匹配条件" in qml
     assert "命中记录" in qml
+    assert '"调用 #"' in qml
+    assert "id: hitRecordScroll" in qml
+    assert "contentHeight: hitRecordColumn.implicitHeight + 24" in qml
+    assert "width: hitRecordColumn.width" in qml
+    assert "statusText" in qml
     assert "原始 JSON" in qml
+
+
+def test_shared_controls_are_flat_and_json_viewer_is_wrapped():
+    button = (QML_ROOT / "components" / "MbButton.qml").read_text(encoding="utf-8")
+    viewer = (QML_ROOT / "components" / "MbJsonViewer.qml").read_text(encoding="utf-8")
+
+    assert "function foregroundColor" in button
+    assert "variant === \"primary\") return appTheme.primarySoft" in button
+    assert "implicitHeight: 36" in button
+    assert 'text: "JSON"' in viewer
+    assert "wrapMode: TextEdit.Wrap" in viewer
+    assert "font.pixelSize: 12" in viewer
 
 
 def test_main_has_paused_request_banner():
