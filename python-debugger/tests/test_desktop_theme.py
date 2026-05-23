@@ -66,13 +66,23 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "搜索 \" + modelData.objectName + \" 内接口" in qml
     assert "全部展开" in qml
     assert "只看断点" in qml
-    assert "编辑" in qml and "保存" in qml and "取消" in qml
+    assert "查看样本" in qml
+    assert "从该样本创建断点" in qml
+    assert "别名" not in qml
     assert "MbDetailCard" in qml
     assert "接口身份" in qml
-    assert "参数结构" in qml
-    assert "样本参数" in qml
+    assert "参数样本" in qml
     assert "相关调用" in qml
     assert "原始 JSON" in qml
+
+
+def test_call_record_page_shows_breakpoint_list_in_detail_panel():
+    qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
+
+    assert "断点列表 (\" + breakpoints.length + \")" in qml
+    assert "当前 Session" in qml
+    assert "page.breakpointTitle(modelData)" in qml
+    assert "bridge.setBreakpointEnabled(modelData.id, value)" in qml
 
 
 def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():

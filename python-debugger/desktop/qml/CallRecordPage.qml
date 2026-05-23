@@ -115,6 +115,29 @@ Item {
         return String(value)
     }
 
+    function breakpointSlotText(item) {
+        if (!item) return "-"
+        var value = item.slot_id !== undefined ? item.slot_id : item.slotId
+        if (value === undefined || value === null || value === "") return "无槽位"
+        return String(value)
+    }
+
+    function matchModeText(mode) {
+        if (mode === "params_snapshot") return "参数快照"
+        if (mode === "params_condition") return "参数条件"
+        return "命令"
+    }
+
+    function breakpointTitle(item) {
+        if (!item) return "-"
+        return item.name || ((item.object_name || item.objectName || "-") + " / " + (item.cmd_name || item.cmdName || "-"))
+    }
+
+    function breakpointSubtitle(item) {
+        if (!item) return "-"
+        return (item.object_name || item.objectName || "-") + " / " + (item.cmd_name || item.cmdName || "-") + " / 槽位 " + breakpointSlotText(item) + " / " + matchModeText(item.match_mode || item.matchMode)
+    }
+
     function selectedItemForId(id) {
         if (items.length === 0) return null
         if (id) {
@@ -664,6 +687,8 @@ Item {
                                             interactive: false
                                             ScrollBar.horizontal: ScrollBar {
                                                 policy: tableFlick.contentWidth > tableFlick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                                contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? page.appTheme.primary : page.appTheme.textDisabled }
+                                                background: Rectangle { color: page.appTheme.panelBgAlt; radius: 4 }
                                             }
 
                                             Column {
@@ -836,6 +861,11 @@ Item {
                     ScrollView {
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? page.appTheme.primary : page.appTheme.textDisabled }
+                            background: Rectangle { color: "transparent" }
+                        }
                         ColumnLayout {
                             x: 12
                             y: 12
@@ -878,6 +908,84 @@ Item {
                         MbButton { appTheme: page.appTheme; text: "参数快照"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: "复制参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.paramsValue(page.selectedItem))) }
                         MbButton { appTheme: page.appTheme; text: "复制返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {})) }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 42
+                    color: appTheme.panelBgAlt
+                    border.color: appTheme.border
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 12
+                        spacing: 8
+                        Text {
+                            text: "断点列表 (" + breakpoints.length + ")"
+                            color: appTheme.textStrong
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: "当前 Session"
+                            color: appTheme.textMuted
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+
+                ListView {
+                    id: breakpointList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 174
+                    visible: true
+                    model: breakpoints
+                    clip: true
+                    delegate: Rectangle {
+                        required property var modelData
+                        required property int index
+                        width: breakpointList.width
+                        height: 58
+                        color: index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg
+                        border.color: page.appTheme.borderSoft
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 10
+                            spacing: 10
+                            Rectangle { Layout.preferredWidth: 9; Layout.preferredHeight: 9; radius: 5; color: modelData.enabled ? page.appTheme.success : page.appTheme.textDisabled }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                spacing: 2
+                                Text { text: page.breakpointTitle(modelData); color: page.appTheme.textStrong; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                Text { text: page.breakpointSubtitle(modelData) + " / 命中 " + page.textOf(modelData.hit_count || modelData.hitCount || 0); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                            }
+                            Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.appTheme.success : page.appTheme.textMuted; font.pixelSize: 12; Layout.preferredWidth: 18 }
+                            MbSwitch {
+                                appTheme: page.appTheme
+                                checked: !!modelData.enabled
+                                onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
+                            }
+                            MbButton {
+                                appTheme: page.appTheme
+                                text: "×"
+                                variant: "danger"
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 28
+                                onClicked: bridge.deleteBreakpoint(modelData.id)
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: breakpoints.length === 0
+                        text: "暂无断点"
+                        color: page.appTheme.textMuted
+                        font.pixelSize: 13
                     }
                 }
             }
