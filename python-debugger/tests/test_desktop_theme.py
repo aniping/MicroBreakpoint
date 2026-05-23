@@ -69,6 +69,11 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "查看样本" in qml
     assert "从该样本创建断点" in qml
     assert "别名" not in qml
+    assert "component MetricCell" in qml
+    assert "Layout.preferredWidth: 338" in qml
+    assert "columns: 3" in qml
+    assert "Layout.preferredWidth: 128" in qml
+    assert qml.count('Layout.preferredHeight: 26') >= 4
     assert "MbDetailCard" in qml
     assert "接口身份" in qml
     assert "参数样本" in qml
