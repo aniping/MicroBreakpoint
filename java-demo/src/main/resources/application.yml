@@ -3,7 +3,7 @@ server:
 
 debugger:
   enabled: true
-  server-url: http://127.0.0.1:5050
+  server-url: http://127.0.0.1:18601
   service-name: instrument-service-demo
   connect-timeout-ms: 300
   read-timeout-ms: 1000

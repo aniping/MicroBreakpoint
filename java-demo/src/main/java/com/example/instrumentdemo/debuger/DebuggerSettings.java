@@ -4,7 +4,7 @@ public class DebuggerSettings {
 
     public static boolean enabled = true;
 
-    public static String serverUrl = "http://127.0.0.1:5050";
+    public static String serverUrl = "http://127.0.0.1:18601";
 
     public static String serviceName = "instrument-service";
 

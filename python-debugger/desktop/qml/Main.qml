@@ -297,6 +297,7 @@ ApplicationWindow {
                 SettingsTab {
                     appTheme: theme
                     themeMode: root.themeMode
+                    backendUrl: backendApiUrl
                     onThemeModeRequested: function(mode) {
                         root.themeMode = mode
                         bridge.setThemeMode(mode)

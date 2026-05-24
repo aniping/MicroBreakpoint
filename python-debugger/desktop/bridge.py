@@ -4,6 +4,8 @@ import requests
 from PySide6.QtCore import QObject, QSettings, Signal, Slot
 from PySide6.QtWidgets import QApplication
 
+from desktop.config import BACKEND_URL
+
 
 class Bridge(QObject):
     stateChanged = Signal(str)
@@ -16,7 +18,7 @@ class Bridge(QObject):
 
     def __init__(self):
         super().__init__()
-        self.backend = "http://127.0.0.1:5050"
+        self.backend = BACKEND_URL
         self.settings = QSettings("MicroBreakpoint", "Desktop")
 
     def _request(self, method, url, **kwargs):

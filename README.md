@@ -34,7 +34,7 @@ cd python-debugger
 python run_desktop.py
 ```
 
-桌面端启动时会自动拉起 Python 后端；如果 `5050` 端口已经有后端在运行，桌面端会直接复用现有后端。
+桌面端启动时会自动拉起 Python 后端；如果 `18601` 端口已经有后端在运行，桌面端会直接复用现有后端。
 
 启动 Java Demo：
 

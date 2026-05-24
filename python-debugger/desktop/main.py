@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from desktop.backend_runtime import DesktopBackendRuntime
 from desktop.bridge import Bridge
+from desktop.config import BACKEND_URL
 
 
 def main():
@@ -19,6 +20,7 @@ def main():
     engine = QQmlApplicationEngine()
     bridge = Bridge()
     engine.rootContext().setContextProperty("bridge", bridge)
+    engine.rootContext().setContextProperty("backendApiUrl", BACKEND_URL)
     qml = Path(__file__).resolve().parent / "qml" / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml)))
     if not engine.rootObjects():

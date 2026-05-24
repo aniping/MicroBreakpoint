@@ -2,6 +2,8 @@
 
 Spring Boot 微服务示例，端口 `8080`。Service 方法通过 `DebugInvoker` 包装真实业务调用，并向 Python Debugger 上报 before-call / after-call。
 
+Python Debugger 上报地址在 `src/main/resources/application.yml` 的 `debugger.server-url` 中配置，默认是 `http://127.0.0.1:18601`。
+
 ## 启动
 
 ```powershell

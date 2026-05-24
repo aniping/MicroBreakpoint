@@ -8,6 +8,7 @@ Item {
 
     property var appTheme
     property string themeMode: "dark"
+    property string backendUrl: ""
 
     signal themeModeRequested(string mode)
 
@@ -196,7 +197,7 @@ Item {
                         anchors.fill: parent
                         spacing: 8
                         Text { text: "后端地址"; color: appTheme.textStrong; font.pixelSize: 14; font.weight: Font.DemiBold }
-                        Text { text: "http://127.0.0.1:5050"; color: appTheme.textMuted; font.pixelSize: 13 }
+                        Text { text: page.backendUrl; color: appTheme.textMuted; font.pixelSize: 13 }
                     }
                 }
 

@@ -1,6 +1,6 @@
 # Python Debugger
 
-Flask 后端端口 `5050`，桌面端使用 PySide6/QML。
+Flask 后端端口 `18601`，桌面端使用 PySide6/QML。
 
 ## Conda 环境
 
@@ -21,7 +21,7 @@ python run_backend.py
 python run_desktop.py
 ```
 
-桌面端会自动拉起 Flask 后端；`run_backend.py` 仍保留给后端单独启动和调试使用。若 `http://127.0.0.1:5050` 已经可用，桌面端会复用该后端。
+桌面端会自动拉起 Flask 后端；`run_backend.py` 仍保留给后端单独启动和调试使用。若 `http://127.0.0.1:18601` 已经可用，桌面端会复用该后端。
 
 ## 主题与外观
 

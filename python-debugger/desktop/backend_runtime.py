@@ -5,10 +5,11 @@ import requests
 from werkzeug.serving import make_server
 
 from app import create_app
+from desktop.config import BACKEND_HOST, BACKEND_PORT
 
 
 class DesktopBackendRuntime:
-    def __init__(self, host="127.0.0.1", port=5050, app_config=None):
+    def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None):
         self.host = host
         self.port = port
         self.app_config = app_config
