@@ -49,6 +49,19 @@ Item {
         return "手动"
     }
 
+    function confirmDeleteBreakpoint(item) {
+        var breakpointId = item ? item.id : ""
+        var breakpointName = item ? (item.name || item.object_name || breakpointId) : breakpointId
+        confirmDialog.ask("删除断点", "将删除断点 " + breakpointName + "。此操作不可撤销。", "删除", function() {
+            bridge.deleteBreakpoint(breakpointId)
+        })
+    }
+
+    ConfirmDialog {
+        id: confirmDialog
+        appTheme: page.appTheme
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.margins: 12
@@ -193,7 +206,7 @@ Item {
                                         variant: "danger"
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 32
-                                        onClicked: bridge.deleteBreakpoint(modelData.id)
+                                        onClicked: page.confirmDeleteBreakpoint(modelData)
                                     }
                                 }
                             }

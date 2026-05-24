@@ -92,6 +92,23 @@ Item {
         return bp ? !!bp.enabled : false
     }
 
+    function confirmClearRecords() {
+        confirmDialog.ask("清空调用记录", "将删除当前 Session 的调用记录和已发现接口数据，断点会保留。此操作不可撤销。", "清空", function() {
+            bridge.clearCalls()
+        })
+    }
+
+    function confirmDeleteBreakpoint(breakpointId) {
+        confirmDialog.ask("删除断点", "将删除断点 " + breakpointId + "。此操作不可撤销。", "删除", function() {
+            bridge.deleteBreakpoint(breakpointId)
+        })
+    }
+
+    ConfirmDialog {
+        id: confirmDialog
+        appTheme: page.appTheme
+    }
+
     function statusFilterValue() {
         var values = ["", "running", "paused", "continued", "finished", "exception", "timeout", "ignored"]
         return values[statusFilterIndex] || ""
@@ -360,7 +377,7 @@ Item {
                             text: "清空记录"
                             variant: "danger"
                             enabled: page.canClearRecords && items.length > 0
-                            onClicked: bridge.clearCalls()
+                            onClicked: page.confirmClearRecords()
                         }
                     }
                 }
@@ -733,7 +750,7 @@ Item {
                                 variant: "danger"
                                 Layout.preferredWidth: 34
                                 Layout.preferredHeight: 28
-                                onClicked: bridge.deleteBreakpoint(modelData.id)
+                                onClicked: page.confirmDeleteBreakpoint(modelData.id)
                             }
                         }
                     }

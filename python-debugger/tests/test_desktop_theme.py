@@ -129,6 +129,7 @@ def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
 def test_shared_controls_are_flat_and_json_viewer_is_wrapped():
     button = (QML_ROOT / "components" / "MbButton.qml").read_text(encoding="utf-8")
     viewer = (QML_ROOT / "components" / "MbJsonViewer.qml").read_text(encoding="utf-8")
+    dialog = (QML_ROOT / "components" / "ConfirmDialog.qml").read_text(encoding="utf-8")
 
     assert "function foregroundColor" in button
     assert "function iconBackgroundColor" in button
@@ -141,6 +142,28 @@ def test_shared_controls_are_flat_and_json_viewer_is_wrapped():
     assert 'text: "JSON"' in viewer
     assert "wrapMode: TextEdit.Wrap" in viewer
     assert "font.pixelSize: 12" in viewer
+    assert "function ask" in dialog
+    assert "confirmAction" in dialog
+
+
+def test_destructive_actions_use_confirmation_dialog():
+    checked_files = [
+        "Main.qml",
+        "CallRecordPage.qml",
+        "BreakpointPage.qml",
+        "SessionTab.qml",
+        "CallRecordTab.qml",
+        "BreakpointTab.qml",
+        "InterfaceTab.qml",
+    ]
+    qml_text = "\n".join((QML_ROOT / name).read_text(encoding="utf-8") for name in checked_files)
+
+    assert qml_text.count("ConfirmDialog") >= len(checked_files)
+    assert "confirmDialog.ask" in qml_text
+    assert "onClicked: bridge.clearCalls()" not in qml_text
+    assert "onClicked: bridge.clearSessions()" not in qml_text
+    assert "onClicked: bridge.deleteSession(" not in qml_text
+    assert "onClicked: bridge.deleteBreakpoint(" not in qml_text
 
 
 def test_right_detail_scrollbars_are_hidden():
@@ -197,3 +220,12 @@ def test_breakpoint_creation_uses_explicit_match_modes():
     assert bridge.requests[2][2]["json"]["matchMode"] == "params_snapshot"
     assert all("selectedArgs" not in call[2]["json"] for call in bridge.requests)
     assert bridge.refreshed == 3
+
+
+def test_clear_sessions_calls_backend_endpoint():
+    bridge = CaptureBridge()
+
+    bridge.clearSessions()
+
+    assert bridge.requests == [("DELETE", f"{bridge.backend}/api/sessions", {})]
+    assert bridge.refreshed == 1

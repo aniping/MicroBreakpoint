@@ -372,6 +372,23 @@ Item {
         ]
     }
 
+    function confirmClearRecords() {
+        confirmDialog.ask("清空调用记录", "将删除当前 Session 的调用记录和已发现接口数据，断点会保留。此操作不可撤销。", "清空", function() {
+            bridge.clearCalls()
+        })
+    }
+
+    function confirmDeleteBreakpoint(breakpointId, breakpointName) {
+        confirmDialog.ask("删除断点", "将删除断点 " + breakpointName + "。此操作不可撤销。", "删除", function() {
+            bridge.deleteBreakpoint(breakpointId)
+        })
+    }
+
+    ConfirmDialog {
+        id: confirmDialog
+        appTheme: page.appTheme
+    }
+
     component FilterCombo: ComboBox {
         id: combo
         property string prefix: ""
@@ -573,7 +590,7 @@ Item {
                         MbButton { appTheme: page.appTheme; text: "全部展开"; iconText: "⌄"; variant: "neutral"; implicitWidth: 104; onClicked: page.setAllExpanded(true) }
                         MbButton { appTheme: page.appTheme; text: "全部收起"; iconText: "⌃"; variant: "neutral"; implicitWidth: 104; onClicked: page.setAllExpanded(false) }
                         MbButton { appTheme: page.appTheme; text: "刷新"; iconText: "↻"; variant: "neutral"; implicitWidth: 88; onClicked: bridge.refreshAll() }
-                        MbButton { appTheme: page.appTheme; text: "清空记录"; iconText: "×"; variant: "danger"; implicitWidth: 104; enabled: page.canClearRecords && items.length > 0; onClicked: bridge.clearCalls() }
+                        MbButton { appTheme: page.appTheme; text: "清空记录"; iconText: "×"; variant: "danger"; implicitWidth: 104; enabled: page.canClearRecords && items.length > 0; onClicked: page.confirmClearRecords() }
                     }
                 }
 
@@ -987,7 +1004,7 @@ Item {
                                 variant: "danger"
                                 Layout.preferredWidth: 32
                                 Layout.preferredHeight: 28
-                                onClicked: bridge.deleteBreakpoint(modelData.id)
+                                onClicked: page.confirmDeleteBreakpoint(modelData.id, page.breakpointTitle(modelData))
                             }
                         }
                     }

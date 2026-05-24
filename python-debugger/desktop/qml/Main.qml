@@ -42,6 +42,12 @@ ApplicationWindow {
         return selectedCallId.length > 0 && selectedCallStatus === "paused"
     }
 
+    function confirmClearCurrentSession() {
+        confirmDialog.ask("清空当前会话", "将删除当前 Session 的调用记录和已发现接口数据，断点会保留。此操作不可撤销。", "清空", function() {
+            bridge.clearCalls()
+        })
+    }
+
     AppTheme {
         id: theme
         mode: root.themeMode
@@ -80,6 +86,11 @@ ApplicationWindow {
         repeat: true
         interval: 1500
         onTriggered: bridge.refreshAll()
+    }
+
+    ConfirmDialog {
+        id: confirmDialog
+        appTheme: theme
     }
 
     component ToolbarGroup: ColumnLayout {
@@ -175,7 +186,7 @@ ApplicationWindow {
                 ToolbarGroup {
                     title: "会话"
                     MbButton { appTheme: theme; text: "新建 Session"; iconText: "+"; variant: "primary"; implicitWidth: 134; enabled: !stateData.debugging; onClicked: { bridge.createSession(); currentPage = 3 } }
-                    MbButton { appTheme: theme; text: "清空当前"; iconText: "×"; variant: "danger"; implicitWidth: 118; enabled: !stateData.debugging && stateData.hasSession; onClicked: bridge.clearCalls() }
+                    MbButton { appTheme: theme; text: "清空当前"; iconText: "×"; variant: "danger"; implicitWidth: 118; enabled: !stateData.debugging && stateData.hasSession; onClicked: root.confirmClearCurrentSession() }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 ToolbarGroup {

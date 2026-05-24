@@ -150,6 +150,27 @@ def delete_session(session_id):
     return state_response(success=True, deletedSessionId=session_id, deletedCount=counts)
 
 
+def clear_sessions():
+    if STATE["debugging"]:
+        return {"success": False, "message": "请先停止调试"}
+    db = get_db()
+    counts = {
+        "sessions": db.execute("SELECT COUNT(*) FROM debug_session").fetchone()[0],
+        "calls": db.execute("SELECT COUNT(*) FROM call_record").fetchone()[0],
+        "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface").fetchone()[0],
+        "breakpoints": db.execute("SELECT COUNT(*) FROM breakpoint").fetchone()[0],
+        "samples": db.execute("SELECT COUNT(*) FROM interface_param_sample").fetchone()[0],
+    }
+    db.execute("DELETE FROM interface_param_sample")
+    db.execute("DELETE FROM breakpoint")
+    db.execute("DELETE FROM call_record")
+    db.execute("DELETE FROM discovered_interface")
+    db.execute("DELETE FROM debug_session")
+    db.commit()
+    STATE.update(debugging=False, mode="idle", sessionId=None)
+    return state_response(success=True, deletedCount=counts)
+
+
 def state_response(**extra):
     db = get_db()
     session_id = STATE["sessionId"]

@@ -227,6 +227,17 @@ Item {
         for (var i = 0; i < filteredItems().length; i++) bridge.setBreakpointEnabled(itemId(filteredItems()[i]), enabled)
     }
 
+    function confirmDeleteBreakpoint(breakpointId, breakpointName) {
+        confirmDialog.ask("删除断点", "将删除断点 " + breakpointName + "。此操作不可撤销。", "删除", function() {
+            bridge.deleteBreakpoint(breakpointId)
+        })
+    }
+
+    ConfirmDialog {
+        id: confirmDialog
+        appTheme: page.appTheme
+    }
+
     component FilterCombo: ComboBox {
         id: combo
         implicitHeight: 34
@@ -404,7 +415,7 @@ Item {
                                                         MbButton { appTheme: page.appTheme; text: "编辑条件"; enabled: false; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 30 }
                                                         MbButton { appTheme: page.appTheme; text: "命中记录"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: page.requestCallFilter(idValue) }
                                                         MbButton { appTheme: page.appTheme; text: "复制规则"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: bridge.copyText(page.jsonText(modelData)) }
-                                                        MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: bridge.deleteBreakpoint(idValue) }
+                                                        MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: page.confirmDeleteBreakpoint(idValue, modelData.name || page.rangeText(modelData)) }
                                                     }
                                                 }
                                             }

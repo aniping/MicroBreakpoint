@@ -198,6 +198,49 @@ def test_clear_and_delete_session_respect_session_boundaries(tmp_path):
     assert client.get("/api/breakpoints", query_string={"sessionId": first_session}).get_json()["items"] == []
 
 
+def test_clear_sessions_deletes_history_and_resets_state(tmp_path):
+    client = make_client(tmp_path)
+
+    first_session, _ = create_and_start(client)
+    client.post("/api/calls/before", json=make_before("history-first"))
+    finish(client, "history-first")
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    client.post(f"/api/interfaces/{interface_id}/breakpoint", json={})
+    client.post("/api/debug/stop")
+
+    second_session = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    assert second_session != first_session
+    client.post("/api/debug/start", json={})
+    client.post("/api/calls/before", json=make_before("history-second", object_name="VNA"))
+    finish(client, "history-second")
+    client.post("/api/debug/stop")
+
+    cleared = client.delete("/api/sessions")
+    assert cleared.status_code == 200
+    payload = cleared.get_json()
+    assert payload["sessionId"] is None
+    assert payload["state"] == "NO_SESSION"
+    assert payload["deletedCount"]["sessions"] == 2
+    assert payload["deletedCount"]["calls"] == 2
+    assert payload["deletedCount"]["breakpoints"] == 1
+
+    assert client.get("/api/sessions").get_json()["items"] == []
+    assert client.get("/api/calls").get_json()["items"] == []
+    assert client.get("/api/interfaces").get_json()["items"] == []
+    assert client.get("/api/breakpoints").get_json()["items"] == []
+
+
+def test_clear_sessions_requires_stopped_debugging(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+
+    blocked = client.delete("/api/sessions")
+    assert blocked.status_code == 400
+    assert blocked.get_json()["success"] is False
+    assert len(client.get("/api/sessions").get_json()["items"]) == 1
+
+
 def test_grouped_endpoints_return_object_groups(tmp_path):
     client = make_client(tmp_path)
 

@@ -82,7 +82,7 @@ class Bridge(QObject):
 
     @Slot()
     def clearSessions(self):
-        self._emit_result({"success": False, "message": "请逐个删除 Session"})
+        self._emit_result(self._request("DELETE", f"{self.backend}/api/sessions"))
         self.refreshAll()
 
     @Slot(str)
