@@ -43,6 +43,13 @@ cd java-demo
 mvn spring-boot:run
 ```
 
+批量调用 Java Demo 的全部 REST 接口：
+
+```powershell
+cd java-demo
+.\scripts\call-all-demo-apis.ps1
+```
+
 推荐开发验证顺序：
 
 1. 启动或打开桌面端，确认 Python 后端可用。

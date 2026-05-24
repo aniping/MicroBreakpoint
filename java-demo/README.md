@@ -15,6 +15,19 @@ mvn spring-boot:run
 - `POST /api/demo/initialize`
 - `POST /api/demo/control`
 
+可以使用脚本批量调用 Java Demo 的全部 REST 接口，并生成几条典型调试流量：
+
+```powershell
+cd java-demo
+.\scripts\call-all-demo-apis.ps1
+```
+
+如果 Java Demo 不在默认端口，可以指定地址：
+
+```powershell
+.\scripts\call-all-demo-apis.ps1 -BaseUrl http://127.0.0.1:8080
+```
+
 `POST /api/demo/control` 请求示例：
 
 ```json
