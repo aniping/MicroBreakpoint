@@ -34,6 +34,7 @@ class DesktopBackendRuntime:
         return True
 
     def stop(self):
+        self._stop_debug_session()
         if not self._owned or self._server is None:
             return
         self._server.shutdown()
@@ -42,6 +43,12 @@ class DesktopBackendRuntime:
         self._server = None
         self._thread = None
         self._owned = False
+
+    def _stop_debug_session(self):
+        try:
+            requests.post(f"{self.url}/api/debug/stop", timeout=1.0)
+        except requests.RequestException:
+            pass
 
     def is_ready(self):
         try:
