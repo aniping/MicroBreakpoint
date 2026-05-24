@@ -862,7 +862,7 @@ Item {
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                         ScrollBar.vertical: ScrollBar {
-                            policy: ScrollBar.AsNeeded
+                            policy: ScrollBar.AlwaysOff
                             contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? page.appTheme.primary : page.appTheme.textDisabled }
                             background: Rectangle { color: "transparent" }
                         }

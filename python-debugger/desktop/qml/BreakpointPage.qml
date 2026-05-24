@@ -469,6 +469,7 @@ Item {
                     ScrollView {
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
                         ColumnLayout {
                             x: 12
                             y: 12
@@ -481,6 +482,7 @@ Item {
                     }
                     ScrollView {
                         clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
                         ColumnLayout {
                             x: 12
                             y: 12
@@ -504,6 +506,7 @@ Item {
                         id: hitRecordScroll
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
                         contentWidth: availableWidth
                         contentHeight: hitRecordColumn.implicitHeight + 24
                         Column {

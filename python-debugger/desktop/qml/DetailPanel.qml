@@ -26,12 +26,12 @@ Rectangle {
             Layout.fillHeight: true
             clip: true
             ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
+                policy: ScrollBar.AlwaysOff
                 contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? detailPanel.appTheme.primary : detailPanel.appTheme.textDisabled }
                 background: Rectangle { color: detailPanel.appTheme.panelBgAlt; radius: 4 }
             }
             ScrollBar.horizontal: ScrollBar {
-                policy: ScrollBar.AsNeeded
+                policy: ScrollBar.AlwaysOff
                 contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? detailPanel.appTheme.primary : detailPanel.appTheme.textDisabled }
                 background: Rectangle { color: detailPanel.appTheme.panelBgAlt; radius: 4 }
             }

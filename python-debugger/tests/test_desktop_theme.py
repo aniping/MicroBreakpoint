@@ -131,6 +131,20 @@ def test_shared_controls_are_flat_and_json_viewer_is_wrapped():
     assert "font.pixelSize: 12" in viewer
 
 
+def test_right_detail_scrollbars_are_hidden():
+    call_page = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
+    interface_page = (QML_ROOT / "InterfacePage.qml").read_text(encoding="utf-8")
+    breakpoint_page = (QML_ROOT / "BreakpointPage.qml").read_text(encoding="utf-8")
+    detail_panel = (QML_ROOT / "DetailPanel.qml").read_text(encoding="utf-8")
+    viewer = (QML_ROOT / "components" / "MbJsonViewer.qml").read_text(encoding="utf-8")
+
+    assert "ScrollBar.vertical: ScrollBar {\n                            policy: ScrollBar.AlwaysOff" in call_page
+    assert interface_page.count("ScrollBar.vertical.policy: ScrollBar.AlwaysOff") >= 2
+    assert breakpoint_page.count("ScrollBar.vertical.policy: ScrollBar.AlwaysOff") >= 3
+    assert detail_panel.count("policy: ScrollBar.AlwaysOff") >= 2
+    assert viewer.count("policy: ScrollBar.AlwaysOff") >= 2
+
+
 def test_main_has_paused_request_banner():
     qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
 
