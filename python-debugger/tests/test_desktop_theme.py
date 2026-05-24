@@ -191,6 +191,18 @@ def test_main_has_paused_request_banner():
     assert "bridge.continueAll()" in qml
 
 
+def test_main_restores_operation_log_panel():
+    qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+
+    assert "property bool logExpanded" in qml
+    assert "function logSummary" in qml
+    assert "root.logSummary()" in qml
+    assert 'text: root.logExpanded ? "收起" : "展开"' in qml
+    assert "TextArea {" in qml
+    assert "text: root.resultText" in qml
+    assert "selectByMouse: true" in qml
+
+
 class CaptureBridge(Bridge):
     def __init__(self):
         super().__init__()

@@ -37,9 +37,16 @@ ApplicationWindow {
     property string callBreakpointFilter: ""
     property string selectedCallId: ""
     property string selectedCallStatus: ""
+    property bool logExpanded: false
 
     function selectedCallIsPaused() {
         return selectedCallId.length > 0 && selectedCallStatus === "paused"
+    }
+
+    function logSummary() {
+        if (!resultText || resultText.length === 0) return "暂无操作日志"
+        var compact = resultText.replace(/\s+/g, " ")
+        return compact.length > 180 ? compact.substring(0, 180) + "..." : compact
     }
 
     function confirmClearCurrentSession() {
@@ -339,30 +346,79 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 36
+            Layout.preferredHeight: root.logExpanded ? 174 : 42
             color: theme.panelBgAlt
             border.color: root.border
-            RowLayout {
+
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                spacing: 18
-                Row {
-                    spacing: 8
-                    Rectangle { width: 8; height: 8; radius: 4; color: root.green; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "连接: 本地调试后端"; color: root.textNormal; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter }
+                spacing: 0
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 42
+                    Layout.leftMargin: 16
+                    Layout.rightMargin: 16
+                    spacing: 14
+
+                    Row {
+                        spacing: 8
+                        Rectangle { width: 8; height: 8; radius: 4; color: root.green; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: "连接: 本地调试后端"; color: root.textNormal; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
+                    Text { text: "应用: instrument-service-demo"; color: root.textMuted; font.pixelSize: 13; elide: Text.ElideRight }
+                    Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
+                    Text { text: "环境: dev"; color: root.textMuted; font.pixelSize: 13 }
+                    Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
+                    Text { text: "日志"; color: root.textStrong; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    Text {
+                        text: root.logSummary()
+                        color: resultText.length > 0 ? root.textNormal : root.textMuted
+                        font.pixelSize: 13
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    MbButton {
+                        appTheme: theme
+                        text: root.logExpanded ? "收起" : "展开"
+                        variant: "neutral"
+                        enabled: resultText.length > 0
+                        implicitWidth: 72
+                        Layout.preferredHeight: 30
+                        onClicked: root.logExpanded = !root.logExpanded
+                    }
+                    Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
+                    Row {
+                        spacing: 8
+                        Rectangle { width: 8; height: 8; radius: 4; color: root.green; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: "内存: 256M / 1024M"; color: root.textMuted; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter }
+                    }
                 }
-                Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
-                Text { text: "应用: instrument-service-demo"; color: root.textMuted; font.pixelSize: 13 }
-                Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
-                Text { text: "环境: dev"; color: root.textMuted; font.pixelSize: 13 }
-                Item { Layout.fillWidth: true }
-                Text { text: "日志"; color: root.textMuted; font.pixelSize: 13 }
-                Rectangle { width: 1; Layout.preferredHeight: 22; color: root.border }
-                Row {
-                    spacing: 8
-                    Rectangle { width: 8; height: 8; radius: 4; color: root.green; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "内存: 256M / 1024M"; color: root.textMuted; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter }
+
+                ScrollView {
+                    visible: root.logExpanded
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                    TextArea {
+                        width: parent ? parent.width - 32 : 800
+                        x: 16
+                        y: 8
+                        readOnly: true
+                        selectByMouse: true
+                        text: root.resultText
+                        color: theme.codeText
+                        selectedTextColor: theme.onAccent
+                        selectionColor: theme.primary
+                        font.family: "Consolas"
+                        font.pixelSize: 12
+                        wrapMode: TextEdit.Wrap
+                        background: Rectangle { color: "transparent" }
+                    }
                 }
             }
         }
