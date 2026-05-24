@@ -491,13 +491,51 @@ Item {
                             Repeater {
                                 model: page.conditionLines(page.selectedItem)
                                 delegate: Rectangle {
+                                    id: conditionItem
                                     required property string modelData
+                                    property bool expanded: false
+
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 34
+                                    Layout.preferredHeight: conditionContent.implicitHeight + 20
                                     radius: 4
                                     color: page.appTheme.successSoft
                                     border.color: page.appTheme.border
-                                    Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 10; anchors.rightMargin: 10; text: modelData; color: page.appTheme.textStrong; font.pixelSize: 13; elide: Text.ElideRight }
+
+                                    ColumnLayout {
+                                        id: conditionContent
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.top: parent.top
+                                        anchors.margins: 10
+                                        spacing: 6
+
+                                        Text {
+                                            id: conditionText
+                                            text: conditionItem.modelData
+                                            color: page.appTheme.textStrong
+                                            font.pixelSize: 13
+                                            Layout.fillWidth: true
+                                            Layout.minimumWidth: 0
+                                            wrapMode: conditionItem.expanded ? Text.Wrap : Text.NoWrap
+                                            maximumLineCount: conditionItem.expanded ? 0 : 1
+                                            elide: conditionItem.expanded ? Text.ElideNone : Text.ElideRight
+                                        }
+
+                                        Text {
+                                            visible: conditionText.truncated || conditionItem.expanded
+                                            text: conditionItem.expanded ? "收起" : "展开"
+                                            color: page.appTheme.primary
+                                            font.pixelSize: 12
+                                            Layout.alignment: Qt.AlignRight
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: conditionText.truncated || conditionItem.expanded
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: conditionItem.expanded = !conditionItem.expanded
+                                    }
                                 }
                             }
                         }

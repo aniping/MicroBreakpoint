@@ -110,6 +110,9 @@ def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
     assert "MbDetailCard" in qml
     assert "断点身份" in qml
     assert "匹配条件" in qml
+    assert "property bool expanded: false" in qml
+    assert "maximumLineCount: conditionItem.expanded ? 0 : 1" in qml
+    assert "conditionItem.expanded ? \"收起\" : \"展开\"" in qml
     assert "命中记录" in qml
     assert '"调用 #"' in qml
     assert "id: hitRecordScroll" in qml
