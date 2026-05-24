@@ -69,16 +69,100 @@ Invoke-DemoCurl `
     -JsonBody '{"instType":"SA","slotId":2}'
 
 Invoke-DemoCurl `
-    -Title "POST /api/demo/control - VNA start" `
+    -Title "POST /api/demo/initialize - DMM slot 3" `
+    -Method "POST" `
+    -Path "/api/demo/initialize" `
+    -JsonBody '{"instType":"DMM","slotId":3}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/initialize - PSU slot 4" `
+    -Method "POST" `
+    -Path "/api/demo/initialize" `
+    -JsonBody '{"instType":"PSU","slotId":4}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/initialize - OSC slot 5" `
+    -Method "POST" `
+    -Path "/api/demo/initialize" `
+    -JsonBody '{"instType":"OSC","slotId":5}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - VNA start sample 1" `
     -Method "POST" `
     -Path "/api/demo/control" `
     -JsonBody '{"instType":"VNA","cmdName":"start","slotId":1,"params":{"mode":"AUTO","durationMs":1000,"operator":"curl-demo"}}'
 
 Invoke-DemoCurl `
-    -Title "POST /api/demo/control - SA measure" `
+    -Title "POST /api/demo/control - VNA start sample 2" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"VNA","cmdName":"start","slotId":1,"params":{"mode":"MANUAL","durationMs":1500,"operator":"curl-demo","trace":"S11"}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - VNA start sample 3" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"VNA","cmdName":"start","slotId":1,"params":{"mode":"AUTO","durationMs":2000,"operator":"curl-demo","trace":"S21","powerDbm":-10}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - VNA calibrate" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"VNA","cmdName":"calibrate","slotId":1,"params":{"kit":"SOLT","ports":[1,2],"temperatureC":25.4}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - SA measure sample 1" `
     -Method "POST" `
     -Path "/api/demo/control" `
     -JsonBody '{"instType":"SA","cmdName":"measure","slotId":2,"params":{"frequencyHz":1000000000,"spanHz":10000000,"points":201}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - SA measure sample 2" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"SA","cmdName":"measure","slotId":2,"params":{"frequencyHz":2400000000,"spanHz":20000000,"points":401,"detector":"PEAK"}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - SA measure sample 3" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"SA","cmdName":"measure","slotId":2,"params":{"frequencyHz":5800000000,"spanHz":40000000,"points":801,"detector":"RMS"}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - DMM readVoltage sample 1" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"DMM","cmdName":"readVoltage","slotId":3,"params":{"range":"10V","samples":5,"nplc":1}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - DMM readVoltage sample 2" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"DMM","cmdName":"readVoltage","slotId":3,"params":{"range":"1V","samples":20,"nplc":10}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - PSU setOutput sample 1" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"PSU","cmdName":"setOutput","slotId":4,"params":{"channel":1,"voltage":3.3,"currentLimit":0.5,"enabled":true}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - PSU setOutput sample 2" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"PSU","cmdName":"setOutput","slotId":4,"params":{"channel":2,"voltage":5.0,"currentLimit":1.2,"enabled":true}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - OSC capture sample 1" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"OSC","cmdName":"capture","slotId":5,"params":{"channel":1,"timebaseUs":20,"trigger":"rising","sampleRateHz":1000000000}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - OSC capture sample 2" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"OSC","cmdName":"capture","slotId":5,"params":{"channel":2,"timebaseUs":50,"trigger":"falling","sampleRateHz":500000000}}'
 
 Invoke-DemoCurl `
     -Title "POST /api/demo/control - VNA stop" `

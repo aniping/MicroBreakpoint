@@ -43,7 +43,7 @@ cd java-demo
 mvn spring-boot:run
 ```
 
-批量调用 Java Demo 的全部 REST 接口：
+批量调用 Java Demo 的全部 REST 接口，生成多仪表对象和多样本值的调试流量：
 
 ```powershell
 cd java-demo
