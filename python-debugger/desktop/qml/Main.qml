@@ -7,8 +7,8 @@ import "theme"
 ApplicationWindow {
     id: root
     visible: true
-    width: 1448
-    height: 1070
+    width: 1620
+    height: 980
     minimumWidth: 1100
     minimumHeight: 760
     title: "MicroBreakpoint - Java 微服务接口断点调试器"
