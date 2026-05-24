@@ -35,6 +35,7 @@ python run_desktop.py
 ```
 
 桌面端启动时会自动拉起 Python 后端；如果 `18601` 端口已经有后端在运行，桌面端会直接复用现有后端。
+通过控制台运行 `python run_desktop.py` 时，会输出内置 Python 后端的启动、复用、停止日志，并保留 Flask 访问日志，便于排查接口请求。
 退出桌面端时会先调用 `/api/debug/stop`，释放暂停中的断点请求并把当前 Session 写回空闲状态；如果复用了外部后端，只停止调试状态，不关闭外部后端进程。
 
 启动 Java Demo：

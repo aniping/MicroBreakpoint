@@ -31,3 +31,16 @@ def test_desktop_backend_runtime_stops_active_debug_session(tmp_path):
     assert row[1] == "idle"
     assert row[2] == 0
     assert row[3]
+
+
+def test_desktop_backend_runtime_prints_console_lifecycle_logs(tmp_path, capsys):
+    runtime = DesktopBackendRuntime(port=5054, app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+
+    assert runtime.start(timeout=3.0) is True
+    runtime.stop()
+
+    output = capsys.readouterr().out
+    assert "[MicroBreakpoint] start Python backend at" in output
+    assert "[MicroBreakpoint] Python backend ready at" in output
+    assert "[MicroBreakpoint] stop Python backend at" in output
+    assert "[MicroBreakpoint] Python backend stopped" in output
