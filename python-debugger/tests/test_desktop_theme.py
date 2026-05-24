@@ -54,7 +54,9 @@ def test_call_record_page_keeps_filters_inside_groups():
     assert "flickableDirection: Flickable.HorizontalFlick" in qml
     assert "interactive: false" in qml
     assert "ScrollBar.vertical.policy" not in qml
-    assert "onSelectedCallIdChanged: detailTabIndex = 0" in qml
+    assert "onSelectedCallIdChanged" in qml
+    assert "detailTabIndex = 0" in qml
+    assert "selectedCallChanged" in qml
     assert "当前分组显示" in qml
 
 
@@ -93,6 +95,8 @@ def test_call_record_page_shows_breakpoint_list_in_detail_panel():
     assert "当前 Session" in qml
     assert "page.breakpointTitle(modelData)" in qml
     assert "bridge.setBreakpointEnabled(modelData.id, value)" in qml
+    assert "signal selectedCallChanged" in qml
+    assert "notifySelectedCallChanged()" in qml
 
 
 def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
@@ -127,8 +131,13 @@ def test_shared_controls_are_flat_and_json_viewer_is_wrapped():
     viewer = (QML_ROOT / "components" / "MbJsonViewer.qml").read_text(encoding="utf-8")
 
     assert "function foregroundColor" in button
+    assert "function iconBackgroundColor" in button
     assert "variant === \"primary\") return appTheme.primarySoft" in button
     assert "implicitHeight: 36" in button
+    assert "width: 20" in button
+    assert "anchors.centerIn: parent" in button
+    assert "Canvas {" in button
+    assert "ctx.arc" in button
     assert 'text: "JSON"' in viewer
     assert "wrapMode: TextEdit.Wrap" in viewer
     assert "font.pixelSize: 12" in viewer
@@ -153,6 +162,9 @@ def test_main_has_paused_request_banner():
 
     assert 'stateData.state === "DEBUGGING_PAUSED"' in qml
     assert "个请求命中断点并暂停" in qml
+    assert "selectedCallIsPaused" in qml
+    assert "继续单个" in qml
+    assert "bridge.continueCall(root.selectedCallId)" in qml
     assert "bridge.continueAll()" in qml
 
 

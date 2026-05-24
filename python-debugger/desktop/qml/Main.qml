@@ -35,6 +35,12 @@ ApplicationWindow {
     property var sessionItems: []
     property string resultText: ""
     property string callBreakpointFilter: ""
+    property string selectedCallId: ""
+    property string selectedCallStatus: ""
+
+    function selectedCallIsPaused() {
+        return selectedCallId.length > 0 && selectedCallStatus === "paused"
+    }
 
     AppTheme {
         id: theme
@@ -181,6 +187,7 @@ ApplicationWindow {
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
                 ToolbarGroup {
                     title: "执行"
+                    MbButton { appTheme: theme; text: "继续单个"; iconText: "▶"; variant: root.selectedCallIsPaused() ? "success" : "primary"; implicitWidth: 122; enabled: root.selectedCallIsPaused(); onClicked: bridge.continueCall(root.selectedCallId) }
                     MbButton { appTheme: theme; text: "继续全部"; iconText: "▶"; variant: stateData.pausedCount > 0 ? "success" : "primary"; implicitWidth: 118; enabled: stateData.pausedCount > 0; onClicked: bridge.continueAll() }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
@@ -236,6 +243,15 @@ ApplicationWindow {
                 }
                 MbButton {
                     appTheme: theme
+                    text: "继续单个"
+                    iconText: "▶"
+                    enabled: root.selectedCallIsPaused()
+                    variant: root.selectedCallIsPaused() ? "success" : "primary"
+                    implicitWidth: 110
+                    onClicked: bridge.continueCall(root.selectedCallId)
+                }
+                MbButton {
+                    appTheme: theme
                     text: "继续全部"
                     iconText: "▶"
                     variant: "success"
@@ -282,6 +298,10 @@ ApplicationWindow {
                     canClearRecords: stateData.mode === "idle" && stateData.hasSession
                     breakpointFilter: root.callBreakpointFilter
                     onClearBreakpointFilterRequested: root.callBreakpointFilter = ""
+                    onSelectedCallChanged: function(callId, status) {
+                        root.selectedCallId = callId
+                        root.selectedCallStatus = status
+                    }
                 }
                 InterfacePage { appTheme: theme; items: interfaceItems; calls: callItems; breakpoints: breakpointItems }
                 BreakpointPage {

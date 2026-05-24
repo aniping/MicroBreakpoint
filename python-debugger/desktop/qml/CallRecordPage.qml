@@ -23,6 +23,7 @@ Item {
     property var columnMinWidths: [64, 72, 120, 72, 220, 84, 80, 120, 140, 96]
     property var selectedItem: selectedItemForId(selectedCallId)
     signal clearBreakpointFilterRequested()
+    signal selectedCallChanged(string callId, string status)
 
     function cloneObject(value) {
         var next = {}
@@ -169,8 +170,18 @@ Item {
         selectedCallId = callId(items[0])
     }
 
-    onItemsChanged: Qt.callLater(ensureSelection)
-    onSelectedCallIdChanged: detailTabIndex = 0
+    function notifySelectedCallChanged() {
+        selectedCallChanged(selectedCallId, statusValue(selectedItem))
+    }
+
+    onItemsChanged: Qt.callLater(function() {
+        ensureSelection()
+        notifySelectedCallChanged()
+    })
+    onSelectedCallIdChanged: {
+        detailTabIndex = 0
+        notifySelectedCallChanged()
+    }
 
     function isExpanded(name) { return expandedGroups[name] !== false }
     function setExpanded(name, value) {
