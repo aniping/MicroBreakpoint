@@ -28,7 +28,7 @@ ApplicationWindow {
     property color amber: theme.warning
 
     property int currentPage: 3
-    property var stateData: ({state: "NO_SESSION", mode: "idle", debugging: false, callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0})
+    property var stateData: ({state: "NO_SESSION", mode: "idle", debugging: false, callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0, interfaceLocked: false})
     property var callItems: []
     property var interfaceItems: []
     property var breakpointItems: []
@@ -235,6 +235,23 @@ ApplicationWindow {
                 MbStatusChip { appTheme: theme; label: "接口"; value: String(stateData.discoveredInterfaceCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "断点"; value: String(stateData.breakpointCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "暂停"; value: String(stateData.pausedCount || 0); type: stateData.pausedCount > 0 ? "warning" : "neutral"; Layout.preferredWidth: 104 }
+                RowLayout {
+                    Layout.preferredWidth: 150
+                    spacing: 8
+                    Text {
+                        text: "锁定接口"
+                        color: stateData.interfaceLocked ? theme.warning : theme.textNormal
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    MbSwitch {
+                        appTheme: theme
+                        checked: !!stateData.interfaceLocked
+                        onToggled: function(value) { bridge.setInterfaceLocked(value) }
+                    }
+                }
                 Item { Layout.fillWidth: true }
             }
         }

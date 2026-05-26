@@ -1,8 +1,9 @@
 import json
+from pathlib import Path
 
 import requests
 from PySide6.QtCore import QObject, QSettings, Signal, Slot
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFileDialog
 
 from desktop.config import BACKEND_URL
 
@@ -100,6 +101,49 @@ class Bridge(QObject):
         self._emit_result(self._request("POST", f"{self.backend}/api/sessions/{sessionId}/select"))
         self.refreshAll()
 
+    @Slot(str)
+    def openExistingSession(self, sessionId):
+        self.selectSession(sessionId)
+
+    @Slot(str, str, str)
+    def exportSession(self, sessionId, archiveName, remark):
+        result = self._request(
+            "POST",
+            f"{self.backend}/api/sessions/{sessionId}/export",
+            json={"archiveName": archiveName, "remark": remark},
+        )
+        if not result.get("success"):
+            self._emit_result(result)
+            return
+        archive = result.get("archive") or {}
+        suggested = self._archive_filename(archive.get("archiveName") or archiveName or sessionId)
+        path, _ = QFileDialog.getSaveFileName(None, "Export MicroBreakpoint Session", suggested, "MicroBreakpoint Archive (*.mbrec)")
+        if not path:
+            self._emit_result({"success": False, "message": "export cancelled"})
+            return
+        if not path.lower().endswith(".mbrec"):
+            path += ".mbrec"
+        Path(path).write_text(json.dumps(archive, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._emit_result({"success": True, "message": "exported", "path": path, "archiveId": archive.get("archiveId")})
+
+    @Slot(bool)
+    def importSession(self, lockInterfaces):
+        path, _ = QFileDialog.getOpenFileName(None, "Import MicroBreakpoint Session", "", "MicroBreakpoint Archive (*.mbrec)")
+        if not path:
+            self._emit_result({"success": False, "message": "import cancelled"})
+            return
+        try:
+            archive = json.loads(Path(path).read_text(encoding="utf-8"))
+        except Exception as exc:
+            self._emit_result({"success": False, "message": f"invalid archive: {exc}"})
+            return
+        self._emit_result(self._request("POST", f"{self.backend}/api/sessions/import", json={"archive": archive, "lockInterfaces": lockInterfaces}))
+        self.refreshAll()
+
+    def _archive_filename(self, name):
+        cleaned = "".join(char if char not in '<>:"/\\|?*' else "_" for char in str(name or "session")).strip()
+        return f"{cleaned or 'session'}.mbrec"
+
     @Slot()
     def refreshAll(self):
         self.loadState()
@@ -144,6 +188,11 @@ class Bridge(QObject):
         self.refreshAll()
 
     @Slot(str)
+    def addInterfaceFromCall(self, callId):
+        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/interface"))
+        self.refreshAll()
+
+    @Slot(str)
     def createMethodBreakpointFromCall(self, callId):
         self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
         self.refreshAll()
@@ -158,6 +207,11 @@ class Bridge(QObject):
     @Slot(str, str)
     def setInterfaceAlias(self, interfaceId, alias):
         self._emit_result(self._request("PATCH", f"{self.backend}/api/interfaces/{interfaceId}/alias", json={"alias": alias}))
+        self.refreshAll()
+
+    @Slot(bool)
+    def setInterfaceLocked(self, locked):
+        self._emit_result(self._request("POST", f"{self.backend}/api/interfaces/lock", json={"locked": bool(locked)}))
         self.refreshAll()
 
     @Slot(str, bool)

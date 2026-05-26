@@ -9,6 +9,10 @@ Item {
     property var items: []
     property string activeSessionId: ""
     property bool canClearSessions: false
+    property string exportSessionId: ""
+    property string exportArchiveName: ""
+    property string exportRemark: ""
+    property bool importLockInterfaces: false
 
     function modeText(mode) {
         if (mode === "record") return "记录"
@@ -43,9 +47,95 @@ Item {
         })
     }
 
+    function openExportDialog(item) {
+        exportSessionId = item.id || ""
+        exportArchiveName = item.archive_name || item.id || "session"
+        exportRemark = item.archive_remark || item.remark || ""
+        exportDialog.open()
+    }
+
     ConfirmDialog {
         id: confirmDialog
         appTheme: page.appTheme
+    }
+
+    Popup {
+        id: exportDialog
+        modal: true
+        focus: true
+        width: 420
+        height: 230
+        anchors.centerIn: parent
+        background: Rectangle { radius: 6; color: page.appTheme.panelBg; border.color: page.appTheme.border }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 10
+            Text { text: "导出 .mbrec"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+            MbTextField { appTheme: page.appTheme; text: page.exportArchiveName; placeholderText: "归档名称"; Layout.fillWidth: true; onTextChanged: page.exportArchiveName = text }
+            MbTextField { appTheme: page.appTheme; text: page.exportRemark; placeholderText: "备注"; Layout.fillWidth: true; onTextChanged: page.exportRemark = text }
+            Item { Layout.fillHeight: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                MbButton { appTheme: page.appTheme; text: "取消"; variant: "neutral"; Layout.preferredWidth: 86; Layout.preferredHeight: 36; onClicked: exportDialog.close() }
+                MbButton {
+                    appTheme: page.appTheme
+                    text: "导出"
+                    variant: "primary"
+                    Layout.preferredWidth: 86
+                    Layout.preferredHeight: 36
+                    enabled: page.exportSessionId.length > 0
+                    onClicked: {
+                        bridge.exportSession(page.exportSessionId, page.exportArchiveName, page.exportRemark)
+                        exportDialog.close()
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: importDialog
+        modal: true
+        focus: true
+        width: 380
+        height: 178
+        anchors.centerIn: parent
+        background: Rectangle { radius: 6; color: page.appTheme.panelBg; border.color: page.appTheme.border }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            Text { text: "导入 .mbrec"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text { text: "导入后锁定接口"; color: page.appTheme.textNormal; font.pixelSize: 13; Layout.fillWidth: true }
+                MbSwitch { appTheme: page.appTheme; checked: page.importLockInterfaces; onToggled: function(value) { page.importLockInterfaces = value } }
+            }
+            Item { Layout.fillHeight: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                MbButton { appTheme: page.appTheme; text: "取消"; variant: "neutral"; Layout.preferredWidth: 86; Layout.preferredHeight: 36; onClicked: importDialog.close() }
+                MbButton {
+                    appTheme: page.appTheme
+                    text: "选择文件"
+                    variant: "primary"
+                    Layout.preferredWidth: 104
+                    Layout.preferredHeight: 36
+                    onClicked: {
+                        bridge.importSession(page.importLockInterfaces)
+                        importDialog.close()
+                    }
+                }
+            }
+        }
     }
 
     MbPanel {
@@ -102,6 +192,16 @@ Item {
 
                     MbButton {
                         appTheme: page.appTheme
+                        text: "导入 .mbrec"
+                        iconText: "↓"
+                        variant: "neutral"
+                        Layout.preferredWidth: 124
+                        Layout.preferredHeight: 38
+                        onClicked: importDialog.open()
+                    }
+
+                    MbButton {
+                        appTheme: page.appTheme
                         text: "清空历史"
                         iconText: "×"
                         variant: "danger"
@@ -129,7 +229,7 @@ Item {
                         required property int index
 
                         width: list.width
-                        height: 132
+                        height: 168
                         color: modelData.id === activeSessionId ? appTheme.panelActive : (index % 2 ? appTheme.panelBgAlt : appTheme.panelBg)
                         border.color: appTheme.borderSoft
 
@@ -179,7 +279,7 @@ Item {
                                 }
 
                                 Text {
-                                    text: "服务: " + (modelData.service_name || "-") + "    备注: " + (modelData.remark || "-")
+                                    text: "服务: " + (modelData.service_name || "-") + "    归档: " + (modelData.archive_name || "-") + "    备注: " + (modelData.remark || "-")
                                     color: appTheme.textMuted
                                     font.pixelSize: 12
                                     Layout.fillWidth: true
@@ -199,7 +299,7 @@ Item {
                             }
 
                             ColumnLayout {
-                                Layout.preferredWidth: 106
+                                Layout.preferredWidth: 116
                                 spacing: 8
 
                                 MbButton {
@@ -210,6 +310,15 @@ Item {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 34
                                     onClicked: bridge.selectSession(modelData.id)
+                                }
+
+                                MbButton {
+                                    appTheme: page.appTheme
+                                    text: "导出 .mbrec"
+                                    variant: "neutral"
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 34
+                                    onClicked: page.openExportDialog(modelData)
                                 }
 
                                 MbButton {

@@ -36,6 +36,9 @@ def test_call_record_uses_business_debug_fields():
     assert "params_summary" in qml
     assert "objectName(item)" in qml
     assert "cmdName(item)" in qml
+    assert "interfaceRegistered(item)" in qml
+    assert "加入已发现接口" in qml
+    assert "bridge.addInterfaceFromCall" in qml
 
 
 def test_call_record_page_keeps_filters_inside_groups():
@@ -191,6 +194,25 @@ def test_main_has_paused_request_banner():
     assert "bridge.continueAll()" in qml
 
 
+def test_main_has_persistent_interface_lock_switch():
+    qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+
+    assert "interfaceLocked" in qml
+    assert "锁定接口" in qml
+    assert "bridge.setInterfaceLocked(value)" in qml
+    assert "MbSwitch" in qml
+
+
+def test_session_tab_exposes_mbrec_import_export_controls():
+    qml = (QML_ROOT / "SessionTab.qml").read_text(encoding="utf-8")
+
+    assert "导入 .mbrec" in qml
+    assert "导出 .mbrec" in qml
+    assert "导入后锁定接口" in qml
+    assert "bridge.importSession(page.importLockInterfaces)" in qml
+    assert "bridge.exportSession(page.exportSessionId, page.exportArchiveName, page.exportRemark)" in qml
+
+
 def test_main_restores_operation_log_panel():
     qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
 
@@ -241,3 +263,14 @@ def test_clear_sessions_calls_backend_endpoint():
 
     assert bridge.requests == [("DELETE", f"{bridge.backend}/api/sessions", {})]
     assert bridge.refreshed == 1
+
+
+def test_bridge_wires_interface_lock_and_manual_registration():
+    bridge = CaptureBridge()
+
+    bridge.setInterfaceLocked(True)
+    bridge.addInterfaceFromCall("call-1")
+
+    assert bridge.requests[0] == ("POST", f"{bridge.backend}/api/interfaces/lock", {"json": {"locked": True}})
+    assert bridge.requests[1] == ("POST", f"{bridge.backend}/api/calls/call-1/interface", {})
+    assert bridge.refreshed == 2

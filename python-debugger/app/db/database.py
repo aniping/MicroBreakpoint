@@ -36,6 +36,10 @@ def row_to_dict(row):
 
 def migrate_db(db):
     ensure_column(db, "debug_session", "status", "TEXT")
+    ensure_column(db, "debug_session", "archive_id", "TEXT")
+    ensure_column(db, "debug_session", "archive_name", "TEXT")
+    ensure_column(db, "debug_session", "archive_remark", "TEXT")
+    ensure_column(db, "debug_session", "imported_at", "TEXT")
     ensure_column(db, "call_record", "object_name", "TEXT")
     ensure_column(db, "call_record", "cmd_name", "TEXT")
     ensure_column(db, "call_record", "slot_id", "INTEGER")
@@ -47,6 +51,7 @@ def migrate_db(db):
     ensure_column(db, "call_record", "breakpoint_name", "TEXT")
     ensure_column(db, "call_record", "interface_id", "TEXT")
     ensure_column(db, "call_record", "discovery_enabled", "INTEGER DEFAULT 1")
+    ensure_column(db, "call_record", "interface_registered", "INTEGER DEFAULT 1")
     ensure_column(db, "call_record", "continued_at", "TEXT")
     ensure_column(db, "call_record", "finished_at", "TEXT")
     ensure_column(db, "discovered_interface", "object_name", "TEXT")
@@ -87,6 +92,13 @@ def migrate_db(db):
           last_seen_at TEXT,
           seen_count INTEGER,
           UNIQUE(interface_id, params_fingerprint)
+        )"""
+    )
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS app_setting (
+          key TEXT PRIMARY KEY,
+          value TEXT,
+          updated_at TEXT
         )"""
     )
 

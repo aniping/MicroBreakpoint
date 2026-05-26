@@ -4,8 +4,10 @@ from app.db.database import get_db, row_to_dict
 from app.services.debug_service import (
     breakpoint_from_interface as create_breakpoint_from_interface,
     grouped_interfaces,
+    set_interface_locked,
     list_interfaces,
     normalize,
+    state_response,
     update_interface_alias,
 )
 
@@ -29,6 +31,18 @@ def interfaces():
 @interface_api.get("/grouped")
 def interfaces_grouped():
     return jsonify({"success": True, "groups": grouped_interfaces(request.args.get("sessionId"))})
+
+
+@interface_api.get("/lock")
+def interface_lock_state():
+    return jsonify(state_response())
+
+
+@interface_api.post("/lock")
+def update_interface_lock():
+    body = request.get_json(silent=True) or {}
+    result = set_interface_locked(bool(body.get("locked")))
+    return jsonify(result)
 
 
 @interface_api.get("/<interface_id>")

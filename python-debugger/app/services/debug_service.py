@@ -10,6 +10,9 @@ from app.utils.time_utils import now_iso
 UNCATEGORIZED_OBJECT = "未分类"
 UNKNOWN_COMMAND = "未知命令"
 NULL_SLOT_KEY = "__NULL__"
+MBREC_FORMAT = "MicroBreakpoint Session Archive"
+MBREC_VERSION = 1
+INTERFACE_LOCK_SETTING = "interface_locked"
 
 STATE = {"debugging": False, "mode": "idle", "sessionId": None}
 
@@ -214,6 +217,7 @@ def state_response(**extra):
         "runningCount": running_count,
         "exceptionCount": exception_count,
         "lastReportTime": last_report,
+        "interfaceLocked": interface_locked(),
     }
     data.update(extra)
     return data
@@ -235,6 +239,24 @@ def breakpoint_count(db, session_id):
     return db.execute("SELECT COUNT(*) FROM breakpoint WHERE session_id=?", (session_id,)).fetchone()[0]
 
 
+def interface_locked():
+    row = get_db().execute("SELECT value FROM app_setting WHERE key=?", (INTERFACE_LOCK_SETTING,)).fetchone()
+    return bool(row and row["value"] == "1")
+
+
+def set_interface_locked(locked):
+    now = now_iso()
+    value = "1" if locked else "0"
+    get_db().execute(
+        """INSERT INTO app_setting (key, value, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+        (INTERFACE_LOCK_SETTING, value, now),
+    )
+    get_db().commit()
+    return state_response(success=True, interfaceLocked=(value == "1"))
+
+
 def before_call(payload):
     if not STATE["debugging"] or not STATE["sessionId"]:
         return {"success": True, "callIndex": 0, "action": "continue"}
@@ -243,15 +265,15 @@ def before_call(payload):
     now = now_iso()
     session_id = STATE["sessionId"]
     call_data = call_business_data(payload)
-    interface_id = upsert_interface(call_data, session_id, now)
+    interface_id, interface_registered, discovery_enabled = resolve_interface_for_call(call_data, session_id, now)
     call_index = db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0] + 1
     db.execute(
         """INSERT OR REPLACE INTO call_record
         (call_id, session_id, call_index, object_name, cmd_name, slot_id, slot_key,
          service_name, class_name, method_name, display_name, description, thread_name,
          args_json, raw_args_json, parameter_meta_json, params_json, params_fingerprint, params_summary,
-         status, interface_id, discovery_enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, 1, ?, ?)""",
+         status, interface_id, discovery_enabled, interface_registered, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)""",
         (
             payload["callId"],
             session_id,
@@ -273,6 +295,8 @@ def before_call(payload):
             call_data["params_fingerprint"],
             call_data["params_summary"],
             interface_id,
+            discovery_enabled,
+            interface_registered,
             now,
             now,
         ),
@@ -408,6 +432,23 @@ def params_summary(params):
     if len(params) > 4:
         parts.append("...")
     return ", ".join(parts)
+
+
+def resolve_interface_for_call(call_data, session_id, now):
+    existing_id = find_interface_id(call_data, session_id)
+    if existing_id:
+        return upsert_interface(call_data, session_id, now), 1, 1
+    if interface_locked():
+        return None, 0, 0
+    return upsert_interface(call_data, session_id, now), 1, 1
+
+
+def find_interface_id(call_data, session_id):
+    row = get_db().execute(
+        "SELECT id FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=? AND slot_key=?",
+        (session_id, call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+    ).fetchone()
+    return row["id"] if row else None
 
 
 def upsert_interface(call_data, session_id, now):
@@ -632,6 +673,225 @@ def continue_all_calls():
     return {"success": True, "releasedCount": count}
 
 
+def export_session_archive(session_id, payload=None):
+    payload = payload or {}
+    db = get_db()
+    session = db.execute("SELECT * FROM debug_session WHERE id=?", (session_id,)).fetchone()
+    if not session:
+        return {"success": False, "message": "session not found"}
+    archive_name = str(payload.get("archiveName") or session_id).strip() or session_id
+    archive = {
+        "format": MBREC_FORMAT,
+        "extension": ".mbrec",
+        "version": MBREC_VERSION,
+        "archiveId": payload.get("archiveId") or f"mbrec-{uuid.uuid4().hex}",
+        "archiveName": archive_name,
+        "remark": payload.get("remark", ""),
+        "exportedAt": now_iso(),
+        "sourceSessionId": session_id,
+        "session": row_to_dict(session),
+        "calls": _archive_rows("SELECT * FROM call_record WHERE session_id=? ORDER BY call_index ASC, id ASC", (session_id,)),
+        "interfaces": _archive_rows("SELECT * FROM discovered_interface WHERE session_id=? ORDER BY first_seen_at ASC", (session_id,)),
+        "interfaceParamSamples": _archive_rows(
+            """SELECT s.* FROM interface_param_sample s
+               JOIN discovered_interface i ON s.interface_id=i.id
+               WHERE i.session_id=?
+               ORDER BY s.first_seen_at ASC""",
+            (session_id,),
+        ),
+        "breakpoints": _archive_rows("SELECT * FROM breakpoint WHERE session_id=? ORDER BY created_at ASC", (session_id,)),
+    }
+    return {"success": True, "archive": archive}
+
+
+def import_session_archive(archive, lock_interfaces=False):
+    if not isinstance(archive, dict):
+        return {"success": False, "message": "invalid archive"}
+    if archive.get("format") != MBREC_FORMAT or archive.get("version") != MBREC_VERSION:
+        return {"success": False, "message": "unsupported archive"}
+    archive_id = archive.get("archiveId")
+    if not archive_id:
+        return {"success": False, "message": "archiveId missing"}
+
+    released = stop_debug()
+    db = get_db()
+    existing = db.execute("SELECT id FROM debug_session WHERE archive_id=?", (archive_id,)).fetchone()
+    if existing:
+        return {
+            "success": False,
+            "message": "archive already imported",
+            "archiveId": archive_id,
+            "existingSessionId": existing["id"],
+            "openExisting": True,
+            "releasedCount": released,
+        }
+
+    now = now_iso()
+    source = archive.get("session") or {}
+    new_session_id = f"session-{uuid.uuid4().hex[:10]}"
+    archive_name = str(archive.get("archiveName") or source.get("id") or new_session_id).strip() or new_session_id
+    archive_remark = str(archive.get("remark") or "")
+    interface_ids = {}
+    call_ids = {}
+
+    try:
+        db.execute(
+            """INSERT INTO debug_session
+               (id, mode, status, service_name, operator, start_time, end_time, recording, debugging, remark,
+                archive_id, archive_name, archive_remark, imported_at, created_at, updated_at)
+               VALUES (?, 'idle', 'idle', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                new_session_id,
+                source.get("service_name", "instrument-service-demo"),
+                source.get("operator", "developer"),
+                source.get("start_time") or source.get("created_at") or now,
+                source.get("end_time"),
+                archive_remark or source.get("remark", ""),
+                archive_id,
+                archive_name,
+                archive_remark,
+                now,
+                source.get("created_at") or now,
+                now,
+            ),
+        )
+
+        for item in archive.get("interfaces") or []:
+            old_id = item.get("id")
+            new_id = _imported_interface_id(new_session_id, item)
+            interface_ids[old_id] = new_id
+            _insert_archive_row(
+                db,
+                "discovered_interface",
+                item,
+                {
+                    "id": new_id,
+                    "session_id": new_session_id,
+                    "created_at": item.get("created_at") or now,
+                    "updated_at": item.get("updated_at") or now,
+                },
+            )
+
+        for item in archive.get("interfaceParamSamples") or []:
+            old_interface_id = item.get("interface_id")
+            new_interface_id = interface_ids.get(old_interface_id)
+            if not new_interface_id:
+                continue
+            fingerprint = item.get("params_fingerprint") or uuid.uuid4().hex
+            _insert_archive_row(
+                db,
+                "interface_param_sample",
+                item,
+                {
+                    "id": uuid.uuid5(uuid.NAMESPACE_URL, "|".join([new_interface_id, fingerprint])).hex,
+                    "interface_id": new_interface_id,
+                },
+            )
+
+        for index, item in enumerate(archive.get("calls") or [], start=1):
+            old_call_id = item.get("call_id") or f"call-{index}"
+            new_call_id = _imported_call_id(new_session_id, old_call_id)
+            call_ids[old_call_id] = new_call_id
+            old_interface_id = item.get("interface_id")
+            new_interface_id = interface_ids.get(old_interface_id)
+            interface_registered = 1 if new_interface_id else int(item.get("interface_registered", 0) or 0)
+            _insert_archive_row(
+                db,
+                "call_record",
+                item,
+                {
+                    "call_id": new_call_id,
+                    "session_id": new_session_id,
+                    "interface_id": new_interface_id,
+                    "interface_registered": interface_registered,
+                    "discovery_enabled": int(item.get("discovery_enabled", interface_registered) or 0),
+                    "created_at": item.get("created_at") or now,
+                    "updated_at": item.get("updated_at") or now,
+                },
+                omit=("id",),
+            )
+
+        for item in archive.get("breakpoints") or []:
+            old_id = item.get("id") or uuid.uuid4().hex
+            _insert_archive_row(
+                db,
+                "breakpoint",
+                item,
+                {
+                    "id": _imported_breakpoint_id(new_session_id, old_id),
+                    "session_id": new_session_id,
+                    "source_session_id": new_session_id if item.get("source_session_id") else item.get("source_session_id"),
+                    "source_interface_id": interface_ids.get(item.get("source_interface_id")),
+                    "source_call_id": call_ids.get(item.get("source_call_id")),
+                    "created_at": item.get("created_at") or now,
+                    "updated_at": item.get("updated_at") or now,
+                },
+            )
+
+        if lock_interfaces:
+            db.execute(
+                """INSERT INTO app_setting (key, value, updated_at)
+                   VALUES (?, '1', ?)
+                   ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+                (INTERFACE_LOCK_SETTING, now),
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    STATE.update(debugging=False, mode="idle", sessionId=new_session_id)
+    return state_response(
+        success=True,
+        sessionId=new_session_id,
+        importedSessionId=new_session_id,
+        archiveId=archive_id,
+        archiveName=archive_name,
+        releasedCount=released,
+    )
+
+
+def _archive_rows(sql, args):
+    return [row_to_dict(row) for row in get_db().execute(sql, args).fetchall()]
+
+
+def _insert_archive_row(db, table, row, overrides=None, omit=()):
+    columns = [item["name"] for item in db.execute(f"PRAGMA table_info({table})").fetchall()]
+    values = {}
+    for column in columns:
+        if column in omit:
+            continue
+        if column in row:
+            values[column] = row.get(column)
+    for key, value in (overrides or {}).items():
+        if key in columns and key not in omit:
+            values[key] = value
+    names = list(values.keys())
+    placeholders = ", ".join("?" for _ in names)
+    db.execute(
+        f"INSERT INTO {table} ({', '.join(names)}) VALUES ({placeholders})",
+        [values[name] for name in names],
+    )
+
+
+def _imported_interface_id(session_id, item):
+    parts = [
+        session_id,
+        item.get("object_name") or UNCATEGORIZED_OBJECT,
+        item.get("cmd_name") or UNKNOWN_COMMAND,
+        item.get("slot_key") or slot_key(item.get("slot_id")),
+    ]
+    return uuid.uuid5(uuid.NAMESPACE_URL, "|".join(str(part) for part in parts)).hex
+
+
+def _imported_call_id(session_id, old_call_id):
+    return f"call-{uuid.uuid5(uuid.NAMESPACE_URL, '|'.join([session_id, str(old_call_id)])).hex[:16]}"
+
+
+def _imported_breakpoint_id(session_id, old_breakpoint_id):
+    return f"bp-{uuid.uuid5(uuid.NAMESPACE_URL, '|'.join([session_id, str(old_breakpoint_id)])).hex[:16]}"
+
+
 def list_sessions():
     rows = get_db().execute(
         """SELECT s.*,
@@ -670,6 +930,53 @@ def list_interfaces(session_id=None, object_name=None, keyword=None, status=None
     ).fetchall()
     items = [normalize(row_to_dict(row)) for row in rows]
     return filter_items(items, object_name, keyword, status, sort_by, sort_order)
+
+
+def register_interface_from_call(call_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM call_record WHERE call_id=?", (call_id,)).fetchone()
+    if not row:
+        return {"success": False, "message": "call not found"}
+    call = normalize(row_to_dict(row))
+    if call.get("interface_id") and call.get("interface_registered", 1):
+        return {"success": True, "interfaceId": call["interface_id"], "alreadyRegistered": True}
+    now = now_iso()
+    call_data = call_data_from_record(call)
+    interface_id = upsert_interface(call_data, call["session_id"], now)
+    db.execute(
+        "UPDATE call_record SET interface_id=?, interface_registered=1, discovery_enabled=1, updated_at=? WHERE call_id=?",
+        (interface_id, now, call_id),
+    )
+    if call.get("status") in ("finished", "exception"):
+        update_interface_stats(
+            {"interface_id": interface_id},
+            {"success": bool(call.get("success")), "costMs": call.get("cost_ms")},
+            now,
+        )
+    db.commit()
+    return {"success": True, "interfaceId": interface_id, "callId": call_id}
+
+
+def call_data_from_record(call):
+    params = call.get("params") or {}
+    raw_args = call.get("raw_args") or call.get("args") or {}
+    fingerprint = call.get("params_fingerprint") or params_fingerprint(params)
+    return {
+        "object_name": call.get("object_name") or UNCATEGORIZED_OBJECT,
+        "cmd_name": call.get("cmd_name") or UNKNOWN_COMMAND,
+        "slot_id": _normalize_slot_id(call.get("slot_id")),
+        "slot_key": call.get("slot_key") or slot_key(_normalize_slot_id(call.get("slot_id"))),
+        "description": call.get("description") or "",
+        "params": params,
+        "params_fingerprint": fingerprint,
+        "params_summary": call.get("params_summary") or params_summary(params),
+        "raw_args": raw_args,
+        "parameter_meta": call.get("parameter_meta") or [],
+        "service_name": call.get("service_name"),
+        "class_name": call.get("class_name"),
+        "method_name": call.get("method_name"),
+        "display_name": call.get("display_name"),
+    }
 
 
 def filter_items(items, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None):

@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS debug_session (
   recording INTEGER,
   debugging INTEGER,
   remark TEXT,
+  archive_id TEXT,
+  archive_name TEXT,
+  archive_remark TEXT,
+  imported_at TEXT,
   created_at TEXT,
   updated_at TEXT
 );
@@ -44,6 +48,7 @@ CREATE TABLE IF NOT EXISTS call_record (
   breakpoint_name TEXT,
   interface_id TEXT,
   discovery_enabled INTEGER DEFAULT 1,
+  interface_registered INTEGER DEFAULT 1,
   continued_at TEXT,
   finished_at TEXT,
   created_at TEXT,
@@ -127,5 +132,11 @@ CREATE TABLE IF NOT EXISTS breakpoint (
   source_interface_id TEXT,
   source_call_id TEXT,
   created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_setting (
+  key TEXT PRIMARY KEY,
+  value TEXT,
   updated_at TEXT
 );

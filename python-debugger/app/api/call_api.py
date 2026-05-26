@@ -10,6 +10,7 @@ from app.services.debug_service import (
     grouped_calls,
     list_calls,
     normalize,
+    register_interface_from_call,
 )
 from app.services.wait_manager import wait_manager
 
@@ -63,6 +64,12 @@ def wait_call(call_id):
 @call_api.post("/<call_id>/continue")
 def continue_call(call_id):
     return jsonify(continue_one_call(call_id))
+
+
+@call_api.post("/<call_id>/interface")
+def register_interface(call_id):
+    result = register_interface_from_call(call_id)
+    return jsonify(result), 200 if result.get("success") else 404
 
 
 @call_api.post("/continue-all")

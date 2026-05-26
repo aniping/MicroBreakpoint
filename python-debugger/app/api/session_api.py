@@ -5,6 +5,8 @@ from app.services.debug_service import (
     clear_current_session,
     create_session,
     delete_session,
+    export_session_archive,
+    import_session_archive,
     list_sessions,
     select_session,
 )
@@ -41,6 +43,23 @@ def create():
 def select(session_id):
     result = select_session(session_id)
     return jsonify(result), 200 if result.get("success") else 404
+
+
+@session_api.post("/<session_id>/export")
+def export_session(session_id):
+    result = export_session_archive(session_id, request.get_json(silent=True) or {})
+    return jsonify(result), 200 if result.get("success") else 404
+
+
+@session_api.post("/import")
+def import_session():
+    body = request.get_json(silent=True) or {}
+    archive = body.get("archive") or body
+    result = import_session_archive(archive, bool(body.get("lockInterfaces")))
+    if result.get("success"):
+        return jsonify(result)
+    status = 409 if result.get("existingSessionId") else 400
+    return jsonify(result), status
 
 
 @session_api.post("/current/clear")

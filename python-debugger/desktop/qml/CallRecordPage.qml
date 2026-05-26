@@ -80,6 +80,11 @@ Item {
         return "-"
     }
     function breakpointId(item) { return item ? String(item.breakpoint_id || item.breakpointId || "") : "" }
+    function interfaceRegistered(item) {
+        if (!item) return true
+        if (item.interface_registered === 0 || item.interfaceRegistered === false) return false
+        return true
+    }
     function shortTime(value) {
         if (!value) return "-"
         return String(value).replace("T", " ").split("+")[0]
@@ -360,6 +365,7 @@ Item {
         return [
             ["状态", statusText(statusValue(item))],
             ["耗时", costValue(item) + " ms"],
+            ["接口登记", interfaceRegistered(item) ? "已登记" : "未登记"],
             ["命中断点", breakpointId(item) ? "是" : "否"],
             ["breakpointId", breakpointId(item) || "-"]
         ]
@@ -732,7 +738,7 @@ Item {
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "耗时(ms)"; sortField: "cost_ms" }
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 7; label: "线程名"; sortField: "thread_name" }
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 8; label: "调用时间"; sortField: "created_at" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 9; label: "命中断点"; sortField: "hit" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 9; label: "接口 / 断点"; sortField: "hit" }
                                                 }
                                                 Repeater {
                                                     model: page.filteredRows(modelData)
@@ -760,7 +766,12 @@ Item {
                                                             DataCell { tableWidth: tableFlick.width; column: 6; label: page.costValue(modelData) }
                                                             DataCell { tableWidth: tableFlick.width; column: 7; label: page.textOf(modelData.thread_name || modelData.threadName) }
                                                             DataCell { tableWidth: tableFlick.width; column: 8; label: page.shortTime(modelData.created_at || modelData.createdAt) }
-                                                            DataCell { tableWidth: tableFlick.width; column: 9; label: page.breakpointId(modelData) ? "命中" : "未命中"; labelColor: page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted }
+                                                            DataCell {
+                                                                tableWidth: tableFlick.width
+                                                                column: 9
+                                                                label: !page.interfaceRegistered(modelData) ? "未登记" : (page.breakpointId(modelData) ? "命中" : "未命中")
+                                                                labelColor: !page.interfaceRegistered(modelData) ? page.appTheme.danger : (page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted)
+                                                            }
                                                         }
                                                         MouseArea {
                                                             anchors.fill: parent
@@ -921,7 +932,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 148
+                    Layout.preferredHeight: 190
                     color: appTheme.panelBg
                     border.color: appTheme.border
                     GridLayout {
@@ -934,6 +945,7 @@ Item {
                         MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: page.selectedPausedCount() > 0 ? "success" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueAll() }
                         MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: "参数快照"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
+                        MbButton { appTheme: page.appTheme; text: page.interfaceRegistered(page.selectedItem) ? "已登记接口" : "加入已发现接口"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: page.interfaceRegistered(page.selectedItem) ? "neutral" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: "复制参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.paramsValue(page.selectedItem))) }
                         MbButton { appTheme: page.appTheme; text: "复制返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {})) }
                     }
