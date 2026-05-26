@@ -1,4 +1,5 @@
 from app import create_app
+from app.db.database import get_db
 
 
 def make_before(call_id="call-1", object_name="SA", cmd="start", slot_id=1, params=None):
@@ -103,6 +104,8 @@ def test_interface_identity_ignores_slot_and_service_name(tmp_path):
     assert len(interfaces) == 1
     assert interfaces[0]["object_name"] == "VNA"
     assert interfaces[0]["cmd_name"] == "create"
+    assert interfaces[0]["slot_id"] is None
+    assert interfaces[0]["slot_key"] is None
     assert interfaces[0]["call_count"] == 3
     assert interfaces[0]["params_sample_count"] == 3
 
@@ -114,6 +117,54 @@ def test_interface_identity_ignores_slot_and_service_name(tmp_path):
     detail = client.get(f"/api/interfaces/{interfaces[0]['id']}").get_json()
     assert {item["slot_id"] for item in detail["samples"]} == {1, 2, 3}
     assert all(item["object_name"] == "VNA" and item["cmd_name"] == "create" for item in detail["samples"])
+
+
+def test_upsert_interface_uses_existing_interface_id_for_samples(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+    session_id, _ = create_and_start(client)
+
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            """INSERT INTO discovered_interface
+               (id, session_id, object_name, cmd_name, slot_id, slot_key, service_name, method_name,
+                call_count, success_count, exception_count, first_seen_at, last_seen_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?)""",
+            (
+                "legacy-interface-id",
+                session_id,
+                "VNA",
+                "create",
+                9,
+                "9",
+                "legacy-service",
+                "legacyMethod",
+                "2026-01-01T00:00:00",
+                "2026-01-01T00:00:00",
+                "2026-01-01T00:00:00",
+                "2026-01-01T00:00:00",
+            ),
+        )
+        db.commit()
+
+    client.post("/api/calls/before", json=make_before("legacy-sample", object_name="VNA", cmd="create", slot_id=2, params={"mode": "A"}))
+
+    with app.app_context():
+        db = get_db()
+        interfaces = db.execute(
+            "SELECT id, call_count FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=?",
+            (session_id, "VNA", "create"),
+        ).fetchall()
+        call = db.execute("SELECT interface_id FROM call_record WHERE call_id=?", ("legacy-sample",)).fetchone()
+        sample = db.execute("SELECT interface_id, slot_id FROM interface_param_sample WHERE call_id=?", ("legacy-sample",)).fetchone()
+
+    assert len(interfaces) == 1
+    assert interfaces[0]["id"] == "legacy-interface-id"
+    assert interfaces[0]["call_count"] == 1
+    assert call["interface_id"] == "legacy-interface-id"
+    assert sample["interface_id"] == "legacy-interface-id"
+    assert sample["slot_id"] == 2
 
 
 def test_stop_then_restart_same_session_appends_data(tmp_path):
@@ -163,7 +214,7 @@ def test_slot_null_uses_stable_unique_key(tmp_path):
     interfaces = client.get("/api/interfaces").get_json()["items"]
     assert len(interfaces) == 1
     assert interfaces[0]["slot_id"] is None
-    assert interfaces[0]["slot_key"] == "__NULL__"
+    assert interfaces[0]["slot_key"] is None
     assert interfaces[0]["call_count"] == 2
     assert interfaces[0]["params_sample_count"] == 2
 

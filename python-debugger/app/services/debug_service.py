@@ -471,15 +471,18 @@ def find_interface_id(call_data, session_id):
 
 def upsert_interface(call_data, session_id, now):
     db = get_db()
-    interface_id = uuid.uuid5(
-        uuid.NAMESPACE_URL,
-        "|".join([session_id, call_data["object_name"], call_data["cmd_name"]]),
-    ).hex
-    schema = params_schema(call_data["params"])
     existing = db.execute(
         "SELECT id FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=?",
         (session_id, call_data["object_name"], call_data["cmd_name"]),
     ).fetchone()
+    if existing:
+        interface_id = existing["id"]
+    else:
+        interface_id = uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "|".join([session_id, call_data["object_name"], call_data["cmd_name"]]),
+        ).hex
+    schema = params_schema(call_data["params"])
     is_new_sample = upsert_param_sample(interface_id, call_data, now)
     if existing:
         db.execute(
@@ -505,10 +508,10 @@ def upsert_interface(call_data, session_id, now):
                 now,
                 1 if is_new_sample else 0,
                 now,
-                existing["id"],
+                interface_id,
             ),
         )
-        return existing["id"]
+        return interface_id
     db.execute(
         """INSERT INTO discovered_interface
         (id, session_id, object_name, cmd_name, slot_id, slot_key, service_name, class_name, method_name,
@@ -522,8 +525,8 @@ def upsert_interface(call_data, session_id, now):
             session_id,
             call_data["object_name"],
             call_data["cmd_name"],
-            call_data["slot_id"],
-            call_data["slot_key"],
+            None,
+            None,
             call_data["service_name"],
             call_data["class_name"],
             call_data["method_name"],

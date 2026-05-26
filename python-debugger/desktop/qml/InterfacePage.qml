@@ -246,13 +246,14 @@ Item {
             }
         }
         if (result.length === 0 && item) {
+            var sampleArgs = safeObject(item.sample_args || item.sampleArgs || item.sample_args_json || {}, {})
             result.push({
                 fingerprint: fingerprint(item),
                 callId: "",
-                objectName: objectName(item),
-                cmdName: cmdName(item),
-                slotId: slotText(item),
-                params: latestParams(item),
+                objectName: sampleArgs.objectName || objectName(item),
+                cmdName: sampleArgs.cmdName || cmdName(item),
+                slotId: sampleArgs.slotId !== undefined && sampleArgs.slotId !== null && sampleArgs.slotId !== "" ? String(sampleArgs.slotId) : "无槽位",
+                params: sampleArgs.params || latestParams(item),
                 paramsSummary: paramsSummary(item),
                 firstSeenAt: item.first_seen_at || item.firstSeenAt || "",
                 lastSeenAt: item.last_seen_at || item.lastSeenAt || "",
