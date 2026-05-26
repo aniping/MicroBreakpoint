@@ -24,12 +24,12 @@ def seed_backend(base):
     for index in range(1, 11):
         method = "instrumentControl" if index % 2 == 0 else "instrumentInitialize"
         call_id = f"shot-{index}"
-        args = {"instType": "VNA", "cmdName": "create" if index % 4 == 0 else "start", "slotId": 1, "params": {"source": "screenshot"}}
+        args = {"objectName": "VNA", "cmdName": "create" if index % 4 == 0 else "start", "slotId": 1, "params": {"source": "screenshot"}}
         requests.post(
             base + "/api/calls/before",
             json={
                 "callId": call_id,
-                "objectName": args["instType"],
+                "objectName": args["objectName"],
                 "cmdName": args["cmdName"],
                 "slotId": args["slotId"],
                 "params": args["params"],
@@ -76,7 +76,7 @@ def seed_backend(base):
             "description": "通过槽位号转换 hid 号，操作对应仪器仪表实例",
             "threadName": "http-nio-8080-exec-1",
             "timestamp": 1,
-            "rawArgs": {"instType": "VNA", "cmdName": "create", "slotId": 1, "params": {"source": "screenshot"}},
+            "rawArgs": {"objectName": "VNA", "cmdName": "create", "slotId": 1, "params": {"source": "screenshot"}},
             "parameterMeta": [{"name": "cmdName", "displayName": "仪表操作", "description": "仪表操作", "javaType": "java.lang.String"}],
         },
         timeout=3,

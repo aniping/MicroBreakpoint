@@ -353,6 +353,7 @@ def after_call(payload):
         ),
     )
     if row["discovery_enabled"] and row["interface_id"]:
+        update_param_sample_result(row, payload, now)
         update_interface_stats(row, payload, now)
     db.commit()
     return {"success": True}
@@ -362,7 +363,9 @@ def call_business_data(payload):
     raw_args = payload.get("rawArgs")
     if raw_args is None:
         raw_args = payload.get("args", {}) or {}
-    object_name = _non_empty(payload.get("objectName")) or _non_empty(raw_args.get("instType")) or UNCATEGORIZED_OBJECT
+    if not isinstance(raw_args, dict):
+        raw_args = {}
+    object_name = _non_empty(payload.get("objectName")) or _non_empty(raw_args.get("objectName")) or _non_empty(payload.get("className")) or UNCATEGORIZED_OBJECT
     cmd_name = _non_empty(payload.get("cmdName")) or _non_empty(raw_args.get("cmdName")) or _non_empty(payload.get("methodName")) or UNKNOWN_COMMAND
     slot_id = payload.get("slotId")
     if slot_id is None:
@@ -374,7 +377,9 @@ def call_business_data(payload):
     if not isinstance(params, dict):
         params = {}
     fingerprint = params_fingerprint(params)
+    raw_args = normalized_business_args(raw_args, object_name, cmd_name, slot_id, params)
     return {
+        "call_id": payload.get("callId"),
         "object_name": object_name,
         "cmd_name": cmd_name,
         "slot_id": slot_id,
@@ -389,6 +394,15 @@ def call_business_data(payload):
         "class_name": payload.get("className"),
         "method_name": payload.get("methodName"),
         "display_name": payload.get("displayName"),
+    }
+
+
+def normalized_business_args(raw_args, object_name, cmd_name, slot_id, params):
+    return {
+        "objectName": object_name,
+        "cmdName": cmd_name,
+        "slotId": slot_id,
+        "params": params,
     }
 
 
@@ -449,8 +463,8 @@ def resolve_interface_for_call(call_data, session_id, now):
 
 def find_interface_id(call_data, session_id):
     row = get_db().execute(
-        "SELECT id FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=? AND slot_key=?",
-        (session_id, call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+        "SELECT id FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=?",
+        (session_id, call_data["object_name"], call_data["cmd_name"]),
     ).fetchone()
     return row["id"] if row else None
 
@@ -459,12 +473,12 @@ def upsert_interface(call_data, session_id, now):
     db = get_db()
     interface_id = uuid.uuid5(
         uuid.NAMESPACE_URL,
-        "|".join([session_id, call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]]),
+        "|".join([session_id, call_data["object_name"], call_data["cmd_name"]]),
     ).hex
     schema = params_schema(call_data["params"])
     existing = db.execute(
-        "SELECT id FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=? AND slot_key=?",
-        (session_id, call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+        "SELECT id FROM discovered_interface WHERE session_id=? AND object_name=? AND cmd_name=?",
+        (session_id, call_data["object_name"], call_data["cmd_name"]),
     ).fetchone()
     is_new_sample = upsert_param_sample(interface_id, call_data, now)
     if existing:
@@ -482,7 +496,7 @@ def upsert_interface(call_data, session_id, now):
                 call_data["params_fingerprint"],
                 dumps(schema),
                 dumps(schema),
-                dumps(call_data["raw_args"]),
+                dumps(sample_args_payload(call_data, now)),
                 call_data["params_summary"],
                 call_data["service_name"],
                 call_data["class_name"],
@@ -513,7 +527,7 @@ def upsert_interface(call_data, session_id, now):
             call_data["service_name"],
             call_data["class_name"],
             call_data["method_name"],
-            f"{call_data['object_name']} {call_data['cmd_name']} {call_data['slot_key']}",
+            f"{call_data['object_name']} {call_data['cmd_name']}",
             "DEBUG",
             call_data["cmd_name"],
             "",
@@ -524,7 +538,7 @@ def upsert_interface(call_data, session_id, now):
             call_data["description"],
             dumps(schema),
             dumps(schema),
-            dumps(call_data["raw_args"]),
+            dumps(sample_args_payload(call_data, now)),
             dumps(call_data["params"]),
             call_data["params_fingerprint"],
             call_data["params_summary"],
@@ -539,26 +553,67 @@ def upsert_interface(call_data, session_id, now):
 
 def upsert_param_sample(interface_id, call_data, now):
     db = get_db()
-    sample_id = uuid.uuid5(uuid.NAMESPACE_URL, "|".join([interface_id, call_data["params_fingerprint"]])).hex
+    sample_id = uuid.uuid5(uuid.NAMESPACE_URL, "|".join([interface_id, call_data["slot_key"], call_data["params_fingerprint"]])).hex
     existing = db.execute(
-        "SELECT id FROM interface_param_sample WHERE interface_id=? AND params_fingerprint=?",
-        (interface_id, call_data["params_fingerprint"]),
+        "SELECT id FROM interface_param_sample WHERE interface_id=? AND slot_key=? AND params_fingerprint=?",
+        (interface_id, call_data["slot_key"], call_data["params_fingerprint"]),
     ).fetchone()
     if existing:
         db.execute(
             """UPDATE interface_param_sample
-               SET params_json=?, last_seen_at=?, seen_count=seen_count+1
+               SET call_id=?, object_name=?, cmd_name=?, slot_id=?, args_json=?, params_json=?,
+                   last_seen_at=?, updated_at=?, seen_count=seen_count+1
                WHERE id=?""",
-            (dumps(call_data["params"]), now, existing["id"]),
+            (
+                call_data.get("call_id"),
+                call_data["object_name"],
+                call_data["cmd_name"],
+                call_data["slot_id"],
+                dumps(call_data["raw_args"]),
+                dumps(call_data["params"]),
+                now,
+                now,
+                existing["id"],
+            ),
         )
         return False
     db.execute(
         """INSERT INTO interface_param_sample
-           (id, interface_id, params_fingerprint, params_json, first_seen_at, last_seen_at, seen_count)
-           VALUES (?, ?, ?, ?, ?, ?, 1)""",
-        (sample_id, interface_id, call_data["params_fingerprint"], dumps(call_data["params"]), now, now),
+           (id, interface_id, call_id, object_name, cmd_name, slot_id, slot_key, args_json,
+            params_fingerprint, params_json, first_seen_at, last_seen_at, created_at, updated_at, seen_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+        (
+            sample_id,
+            interface_id,
+            call_data.get("call_id"),
+            call_data["object_name"],
+            call_data["cmd_name"],
+            call_data["slot_id"],
+            call_data["slot_key"],
+            dumps(call_data["raw_args"]),
+            call_data["params_fingerprint"],
+            dumps(call_data["params"]),
+            now,
+            now,
+            now,
+            now,
+        ),
     )
     return True
+
+
+def sample_args_payload(call_data, created_at):
+    return {
+        "callId": call_data.get("call_id"),
+        "objectName": call_data["object_name"],
+        "cmdName": call_data["cmd_name"],
+        "slotId": call_data["slot_id"],
+        "args": call_data["raw_args"],
+        "params": call_data["params"],
+        "success": call_data.get("success"),
+        "costMs": call_data.get("cost_ms"),
+        "createdAt": created_at,
+    }
 
 
 def params_schema(params):
@@ -589,13 +644,31 @@ def update_interface_stats(call_row, payload, now):
     )
 
 
+def update_param_sample_result(call_row, payload, now):
+    get_db().execute(
+        """UPDATE interface_param_sample
+           SET result_json=?, success=?, cost_ms=?, last_seen_at=?, updated_at=?
+           WHERE interface_id=? AND slot_key=? AND params_fingerprint=?""",
+        (
+            dumps(payload.get("result")),
+            1 if payload.get("success") else 0,
+            payload.get("costMs"),
+            now,
+            now,
+            call_row["interface_id"],
+            call_row["slot_key"],
+            call_row["params_fingerprint"],
+        ),
+    )
+
+
 def match_breakpoint(call_data, session_id):
     db = get_db()
     rows = db.execute(
         """SELECT * FROM breakpoint
-           WHERE enabled=1 AND session_id=? AND object_name=? AND cmd_name=? AND slot_key=?
+           WHERE enabled=1 AND session_id=? AND object_name=? AND cmd_name=?
            ORDER BY created_at ASC""",
-        (session_id, call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+        (session_id, call_data["object_name"], call_data["cmd_name"]),
     ).fetchall()
     for row in rows:
         item = normalize(row_to_dict(row))
@@ -608,6 +681,9 @@ def match_breakpoint(call_data, session_id):
 
 def _breakpoint_matches(item, call_data):
     mode = item.get("match_mode") or "command_only"
+    bp_slot = item.get("slot_id")
+    if bp_slot is not None and _normalize_slot_id(bp_slot) != call_data["slot_id"]:
+        return False
     if mode == "command_only":
         return True
     if mode == "params_snapshot":
@@ -690,21 +766,30 @@ def export_session_archive(session_id, payload=None):
     if not session:
         return {"success": False, "message": "session not found"}
     archive_id = str(session["archive_id"] or "").strip()
+    now = now_iso()
     if not archive_id:
         archive_id = f"mbrec-{uuid.uuid4().hex}"
-        now = now_iso()
-        db.execute("UPDATE debug_session SET archive_id=?, updated_at=? WHERE id=?", (archive_id, now, session_id))
-        db.commit()
-        session = db.execute("SELECT * FROM debug_session WHERE id=?", (session_id,)).fetchone()
-    archive_name = str(payload.get("archiveName") or session["archive_name"] or session["display_name"] or session_id).strip() or session_id
+    archive_name = str(payload.get("archiveName") or session["display_name"] or session["archive_name"] or session_id or "session").strip() or "session"
+    archive_remark = str(payload.get("remark") or "")
+    display_name = strip_mbrec_suffix(archive_name)
+    if not display_name:
+        display_name = session["display_name"]
+    db.execute(
+        """UPDATE debug_session
+           SET archive_id=?, archive_name=?, archive_remark=?, display_name=COALESCE(?, display_name), updated_at=?
+           WHERE id=?""",
+        (archive_id, archive_name, archive_remark, display_name, now, session_id),
+    )
+    db.commit()
+    session = db.execute("SELECT * FROM debug_session WHERE id=?", (session_id,)).fetchone()
     archive = {
         "format": MBREC_FORMAT,
         "extension": ".mbrec",
         "version": MBREC_VERSION,
         "archiveId": archive_id,
         "archiveName": archive_name,
-        "remark": payload.get("remark", ""),
-        "exportedAt": now_iso(),
+        "remark": archive_remark,
+        "exportedAt": now,
         "sourceSessionId": session_id,
         "session": row_to_dict(session),
         "calls": _archive_rows("SELECT * FROM call_record WHERE session_id=? ORDER BY call_index ASC, id ASC", (session_id,)),
@@ -755,6 +840,7 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
     display_name = imported_display_name(db, import_file_name, archive_name)
     interface_ids = {}
     call_ids = {}
+    imported_interface_ids = set()
 
     try:
         db.execute(
@@ -784,6 +870,9 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
             old_id = item.get("id")
             new_id = _imported_interface_id(new_session_id, item)
             interface_ids[old_id] = new_id
+            if new_id in imported_interface_ids:
+                continue
+            imported_interface_ids.add(new_id)
             _insert_archive_row(
                 db,
                 "discovered_interface",
@@ -802,13 +891,15 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
             if not new_interface_id:
                 continue
             fingerprint = item.get("params_fingerprint") or uuid.uuid4().hex
+            sample_slot_key = item.get("slot_key") or slot_key(item.get("slot_id"))
             _insert_archive_row(
                 db,
                 "interface_param_sample",
                 item,
                 {
-                    "id": uuid.uuid5(uuid.NAMESPACE_URL, "|".join([new_interface_id, fingerprint])).hex,
+                    "id": uuid.uuid5(uuid.NAMESPACE_URL, "|".join([new_interface_id, sample_slot_key, fingerprint])).hex,
                     "interface_id": new_interface_id,
+                    "slot_key": sample_slot_key,
                 },
             )
 
@@ -855,6 +946,9 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
                     "updated_at": item.get("updated_at") or now,
                 },
             )
+
+        for interface_id in set(interface_ids.values()):
+            recalculate_interface_stats(interface_id, now)
 
         if lock_interfaces:
             db.execute(
@@ -907,7 +1001,6 @@ def _imported_interface_id(session_id, item):
         session_id,
         item.get("object_name") or UNCATEGORIZED_OBJECT,
         item.get("cmd_name") or UNKNOWN_COMMAND,
-        item.get("slot_key") or slot_key(item.get("slot_id")),
     ]
     return uuid.uuid5(uuid.NAMESPACE_URL, "|".join(str(part) for part in parts)).hex
 
@@ -983,8 +1076,8 @@ def register_interface_from_call(call_id):
     rows = db.execute(
         """SELECT * FROM call_record
            WHERE session_id=? AND interface_registered=0
-             AND object_name=? AND cmd_name=? AND slot_key=?""",
-        (call["session_id"], call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+             AND object_name=? AND cmd_name=?""",
+        (call["session_id"], call_data["object_name"], call_data["cmd_name"]),
     ).fetchall()
     for item in rows:
         if item["call_id"] != call_id:
@@ -993,8 +1086,8 @@ def register_interface_from_call(call_id):
         """UPDATE call_record
            SET interface_id=?, interface_registered=1, discovery_enabled=1, updated_at=?
            WHERE session_id=? AND interface_registered=0
-             AND object_name=? AND cmd_name=? AND slot_key=?""",
-        (interface_id, now, call["session_id"], call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+             AND object_name=? AND cmd_name=?""",
+        (interface_id, now, call["session_id"], call_data["object_name"], call_data["cmd_name"]),
     )
     total = recalculate_interface_stats(interface_id, now)
     db.commit()
@@ -1091,11 +1184,16 @@ def call_data_from_record(call):
     params = call.get("params") or {}
     raw_args = call.get("raw_args") or call.get("args") or {}
     fingerprint = call.get("params_fingerprint") or params_fingerprint(params)
+    slot_id = _normalize_slot_id(call.get("slot_id"))
+    object_name = call.get("object_name") or UNCATEGORIZED_OBJECT
+    cmd_name = call.get("cmd_name") or UNKNOWN_COMMAND
+    raw_args = normalized_business_args(raw_args, object_name, cmd_name, slot_id, params)
     return {
-        "object_name": call.get("object_name") or UNCATEGORIZED_OBJECT,
-        "cmd_name": call.get("cmd_name") or UNKNOWN_COMMAND,
-        "slot_id": _normalize_slot_id(call.get("slot_id")),
-        "slot_key": call.get("slot_key") or slot_key(_normalize_slot_id(call.get("slot_id"))),
+        "call_id": call.get("call_id"),
+        "object_name": object_name,
+        "cmd_name": cmd_name,
+        "slot_id": slot_id,
+        "slot_key": call.get("slot_key") or slot_key(slot_id),
         "description": call.get("description") or "",
         "params": params,
         "params_fingerprint": fingerprint,
@@ -1106,6 +1204,8 @@ def call_data_from_record(call):
         "class_name": call.get("class_name"),
         "method_name": call.get("method_name"),
         "display_name": call.get("display_name"),
+        "success": call.get("success"),
+        "cost_ms": call.get("cost_ms"),
     }
 
 
@@ -1216,7 +1316,7 @@ def create_breakpoint(data):
             data.get("paramsFingerprint"),
             dumps(data.get("paramsSnapshot")),
             dumps(data.get("conditions", [])),
-            dumps(data.get("condition", {})),
+            dumps(breakpoint_condition(data, object_name, cmd_name, slot_id)),
             data.get("hitMode", "always"),
             data.get("hitLimit"),
             data.get("sourceType"),
@@ -1235,6 +1335,17 @@ def create_breakpoint(data):
     return {"success": True, "breakpointId": bp_id}
 
 
+def breakpoint_condition(data, object_name, cmd_name, slot_id):
+    condition = {}
+    condition["objectName"] = object_name
+    condition["cmdName"] = cmd_name
+    if slot_id is not None:
+        condition["slotId"] = slot_id
+    else:
+        condition.pop("slotId", None)
+    return condition
+
+
 def breakpoint_from_interface(interface_id, body):
     row = get_db().execute("SELECT * FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
     if not row:
@@ -1248,8 +1359,6 @@ def breakpoint_from_interface(interface_id, body):
             "sessionId": item["session_id"],
             "objectName": item["object_name"],
             "cmdName": item["cmd_name"],
-            "slotId": item["slot_id"],
-            "slotKey": item["slot_key"],
             "matchMode": match_mode,
             "paramsFingerprint": item["latest_params_fingerprint"] if match_mode == "params_snapshot" else None,
             "paramsSnapshot": item.get("latest_params") if match_mode == "params_snapshot" else None,

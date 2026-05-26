@@ -37,6 +37,7 @@ def test_call_record_uses_business_debug_fields():
     assert "objectName(item)" in qml
     assert "cmdName(item)" in qml
     assert "interfaceRegistered(item)" in qml
+    assert "args.instType" not in qml
     assert "加入已发现接口" in qml
     assert "bridge.addInterfaceFromCall" in qml
     assert "imported_paused" in qml
@@ -87,6 +88,8 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert qml.count('Layout.preferredHeight: 26') >= 4
     assert "MbDetailCard" in qml
     assert "接口身份" in qml
+    assert "sessionId + objectName + cmdName" in qml
+    assert "objectName: page.selectedSample().objectName" in qml
     assert "参数样本" in qml
     assert "相关调用" in qml
     assert '"调用 #"' in qml
@@ -222,6 +225,8 @@ def test_session_tab_exposes_mbrec_import_export_controls():
     assert "text: page.sessionDisplayName(modelData)" in qml
     assert "SessionId: " in qml
     assert 'text: page.isImportedSession(modelData) ? "导入" : "本地"' in qml
+    assert "item.archive_id || item.archiveId" not in qml
+    assert "item.import_file_name || item.importFileName || item.imported_at || item.importedAt" in qml
     assert "function requestImport" in qml
     assert "当前正在调试" in qml
     assert "暂停中的 Java 调用" in qml

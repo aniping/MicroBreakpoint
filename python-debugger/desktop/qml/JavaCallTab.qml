@@ -200,7 +200,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 10
 
-                        MbTextField { id: instType; appTheme: page.appTheme; Layout.fillWidth: true; placeholderText: "instType"; text: "VNA" }
+                        MbTextField { id: objectType; appTheme: page.appTheme; Layout.fillWidth: true; placeholderText: "仪表类型"; text: "VNA" }
                         MbTextField { id: cmdName; appTheme: page.appTheme; Layout.fillWidth: true; placeholderText: "cmdName"; text: "create" }
                         MbTextField { id: slotId; appTheme: page.appTheme; Layout.preferredWidth: 86; placeholderText: "slotId"; text: "1" }
                     }
@@ -224,7 +224,7 @@ Item {
                             iconText: "▶"
                             variant: "primary"
                             Layout.fillWidth: true
-                            onClicked: bridge.javaControl(baseUrl.text, instType.text, cmdName.text, page.normalizedSlotId())
+                            onClicked: bridge.javaControl(baseUrl.text, objectType.text, cmdName.text, page.normalizedSlotId())
                         }
 
                         MbButton {

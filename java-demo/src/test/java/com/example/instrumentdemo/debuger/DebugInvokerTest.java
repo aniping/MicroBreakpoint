@@ -25,7 +25,11 @@ class DebugInvokerTest {
         assertEquals("start", request.getCmdName());
         assertEquals(1, request.getSlotId());
         assertEquals(params, request.getParams());
+        assertEquals("SA", request.getRawArgs().get("objectName"));
+        assertEquals("start", request.getRawArgs().get("cmdName"));
+        assertEquals(1, request.getRawArgs().get("slotId"));
         assertEquals(params, request.getRawArgs().get("params"));
+        assertEquals(false, request.getRawArgs().containsKey("instType"));
         assertEquals("instrumentControl", request.getMethodName());
         assertNotNull(request.getParameterMeta());
     }

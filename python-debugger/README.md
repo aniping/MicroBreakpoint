@@ -37,6 +37,12 @@ python run_desktop.py
 
 后端通过 `archiveId` 防止重复导入。重复导入会先返回已有 Session ID，桌面端可打开该 Session，但不会停止当前调试、释放 paused 调用或修改当前 Session。导入时可选择导入后锁定接口，主页也提供常驻锁定接口开关。锁定接口只阻止新接口自动加入“已发现接口”，不会影响调用记录保存、断点判断或暂停逻辑；未登记调用会在调用记录中标记，并可手动批量加入已发现接口。
 
+## 接口发现规则
+
+已发现接口唯一性为 `sessionId + objectName + cmdName`。`serviceName` 仅作为普通字段展示，`slotId` 作为调用记录、样本和参数快照断点条件保存，不参与接口唯一性。Java Demo 对外请求仍可使用 `instType`，但 Java 上报 Python 时会转换为 `objectName / cmdName / slotId`，Python 后端和 QML 页面不把 `instType` 当作内部字段。
+
+从已发现接口创建断点时只包含 `objectName + cmdName`，会命中该接口下所有 `slotId`；从调用记录或样本创建参数快照断点时可以包含 `slotId`，用于命中指定槽位样本。
+
 ## 验收主链路
 
 1. 启动 Java Demo。

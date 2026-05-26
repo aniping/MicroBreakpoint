@@ -93,7 +93,7 @@ Item {
         return text.length > 12 ? text.slice(0, 12) : text
     }
     function uniqueKey(item) {
-        return cmdName(item) + " / " + slotText(item) + " / " + shortFingerprint(fingerprint(item))
+        return objectName(item) + " / " + cmdName(item)
     }
     function interfaceBreakpoints(item) {
         var result = []
@@ -101,7 +101,7 @@ Item {
         for (var i = 0; i < breakpoints.length; i++) {
             var bp = breakpoints[i]
             var sameSource = String(bp.source_interface_id || bp.sourceInterfaceId || "") === itemId(item)
-            var sameMatch = objectName(bp) === objectName(item) && cmdName(bp) === cmdName(item) && slotText(bp) === slotText(item)
+            var sameMatch = objectName(bp) === objectName(item) && cmdName(bp) === cmdName(item)
             if (sameSource || sameMatch) result.push(bp)
         }
         return result
@@ -179,7 +179,7 @@ Item {
         var result = []
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i]
-            var haystack = (cmdName(row) + " " + slotText(row) + " " + paramsSummary(row) + " " + uniqueKey(row)).toLowerCase()
+            var haystack = (cmdName(row) + " " + paramsSummary(row) + " " + uniqueKey(row)).toLowerCase()
             if (needle && haystack.indexOf(needle) < 0) continue
             result.push(row)
         }
@@ -198,7 +198,7 @@ Item {
         var result = []
         if (!item) return result
         for (var i = 0; i < calls.length; i++) {
-            if (objectName(calls[i]) === objectName(item) && cmdName(calls[i]) === cmdName(item) && slotText(calls[i]) === slotText(item)) result.push(calls[i])
+            if (objectName(calls[i]) === objectName(item) && cmdName(calls[i]) === cmdName(item)) result.push(calls[i])
         }
         result.sort(function(a, b) { return Number(b.call_index || b.callIndex || 0) - Number(a.call_index || a.callIndex || 0) })
         return result
@@ -217,10 +217,14 @@ Item {
                 for (var j = 0; j < text.length; j++) hash = ((hash << 5) - hash + text.charCodeAt(j)) | 0
                 fp = Math.abs(hash).toString(16)
             }
-            if (!byFingerprint[fp]) {
-                byFingerprint[fp] = {
+            var sampleKey = slotText(call) + "|" + fp
+            if (!byFingerprint[sampleKey]) {
+                byFingerprint[sampleKey] = {
                     fingerprint: fp,
                     callId: callId(call),
+                    objectName: objectName(call),
+                    cmdName: cmdName(call),
+                    slotId: slotText(call),
                     params: callParams(call),
                     paramsSummary: call.params_summary || call.paramsSummary || paramsSummary(call),
                     firstSeenAt: call.created_at || call.createdAt || "",
@@ -229,15 +233,15 @@ Item {
                     status: call.status || "",
                     costMs: call.cost_ms !== undefined ? call.cost_ms : call.costMs
                 }
-                result.push(byFingerprint[fp])
+                result.push(byFingerprint[sampleKey])
             } else {
-                byFingerprint[fp].seenCount += 1
+                byFingerprint[sampleKey].seenCount += 1
                 var time = call.created_at || call.createdAt || ""
-                if (String(time) > String(byFingerprint[fp].lastSeenAt || "")) {
-                    byFingerprint[fp].lastSeenAt = time
-                    byFingerprint[fp].callId = callId(call)
-                    byFingerprint[fp].status = call.status || ""
-                    byFingerprint[fp].costMs = call.cost_ms !== undefined ? call.cost_ms : call.costMs
+                if (String(time) > String(byFingerprint[sampleKey].lastSeenAt || "")) {
+                    byFingerprint[sampleKey].lastSeenAt = time
+                    byFingerprint[sampleKey].callId = callId(call)
+                    byFingerprint[sampleKey].status = call.status || ""
+                    byFingerprint[sampleKey].costMs = call.cost_ms !== undefined ? call.cost_ms : call.costMs
                 }
             }
         }
@@ -245,6 +249,9 @@ Item {
             result.push({
                 fingerprint: fingerprint(item),
                 callId: "",
+                objectName: objectName(item),
+                cmdName: cmdName(item),
+                slotId: slotText(item),
                 params: latestParams(item),
                 paramsSummary: paramsSummary(item),
                 firstSeenAt: item.first_seen_at || item.firstSeenAt || "",
@@ -288,7 +295,6 @@ Item {
         return [
             ["objectName", objectName(item)],
             ["cmdName", cmdName(item)],
-            ["slotId", slotText(item)],
             ["serviceName", textOf(item ? (item.service_name || item.serviceName) : "")],
             ["sessionId", textOf(item ? (item.session_id || item.sessionId) : "")],
             ["调用次数", textOf(item ? (item.call_count || item.callCount || 0) : 0)],
@@ -311,6 +317,7 @@ Item {
 
     function uniqueRows(item) {
         return [
+            ["唯一规则", "sessionId + objectName + cmdName"],
             ["唯一键", uniqueKey(item)],
             ["paramsFingerprint", fingerprint(item)]
         ]
@@ -482,7 +489,7 @@ Item {
                                                 appTheme: page.appTheme
                                                 Layout.preferredWidth: 360
                                                 Layout.preferredHeight: 36
-                                                placeholderText: "搜索 " + modelData.objectName + " 内接口（命令 / 槽位 / 参数）"
+                                                placeholderText: "搜索 " + modelData.objectName + " 内接口（命令 / 参数）"
                                                 text: page.groupSearch(modelData.objectName)
                                                 onTextChanged: page.groupSearches = page.setStoreValue(page.groupSearches, modelData.objectName, text)
                                             }
@@ -523,7 +530,7 @@ Item {
                                                         Layout.fillHeight: true
                                                         spacing: 6
                                                         Text { text: page.cmdName(modelData); color: page.appTheme.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                                        Text { text: page.objectName(modelData) + " / 槽位 " + page.slotText(modelData) + " / 命令接口"; color: page.appTheme.textNormal; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                        Text { text: page.objectName(modelData) + " / 命令接口"; color: page.appTheme.textNormal; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                         Text { text: "参数摘要: " + page.paramsSummary(modelData); color: page.appTheme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                         Text { text: "唯一键: " + page.uniqueKey(modelData); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                         Text { text: "最近调用 " + page.shortTime(modelData.last_seen_at || modelData.lastSeenAt); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
@@ -555,7 +562,7 @@ Item {
                                                         MbButton { appTheme: page.appTheme; text: "查看样本"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: { page.selectedInterfaceId = idValue; page.selectedSampleIndex = 0; page.detailTabIndex = 1 } }
                                                         MbButton { appTheme: page.appTheme; text: "相关调用"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: { page.selectedInterfaceId = idValue; page.detailTabIndex = 2 } }
                                                         MbButton { appTheme: page.appTheme; text: enabledBps > 0 ? "已启用断点" : "创建断点"; variant: enabledBps > 0 ? "success" : "primary"; enabled: enabledBps === 0; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: bridge.createBreakpointFromInterface(idValue) }
-                                                        MbButton { appTheme: page.appTheme; text: "复制请求"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: bridge.copyText(page.jsonText({objectName: page.objectName(modelData), cmdName: page.cmdName(modelData), slotId: page.slotText(modelData), params: page.latestParams(modelData)})) }
+                                                        MbButton { appTheme: page.appTheme; text: "复制请求"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: bridge.copyText(page.jsonText({objectName: page.objectName(modelData), cmdName: page.cmdName(modelData), params: page.latestParams(modelData)})) }
                                                     }
                                                 }
                                             }
@@ -694,7 +701,7 @@ Item {
                                         anchors.margins: 8
                                         spacing: 2
                                         Text { text: "样本 #" + modelData.index; color: page.appTheme.textStrong; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
-                                        Text { text: page.shortTime(modelData.lastSeenAt); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Text { text: "slotId " + modelData.slotId + " / " + page.shortTime(modelData.lastSeenAt); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                                         Text { text: "次数 " + modelData.seenCount + " / " + page.shortFingerprint(modelData.fingerprint); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
                                 }
@@ -704,7 +711,7 @@ Item {
                                 appTheme: page.appTheme
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                text: page.jsonText(page.selectedSample() ? page.selectedSample().params : {})
+                                text: page.jsonText(page.selectedSample() ? {objectName: page.selectedSample().objectName, cmdName: page.selectedSample().cmdName, slotId: page.selectedSample().slotId, params: page.selectedSample().params} : {})
                             }
                         }
                     }

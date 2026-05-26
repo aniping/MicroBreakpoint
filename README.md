@@ -75,7 +75,11 @@ cd java-demo
 
 历史会话列表优先显示 `display_name`，导入 `.mbrec` 时会保存导入文件名，并默认把去掉 `.mbrec` 后缀的文件名作为显示名；本地新建 Session 会自动命名为“未命名 1 / 未命名 2 / ...”。SessionId 仅作为技术信息显示在副标题小字中。
 
-锁定接口只阻止自动新增“已发现接口”。调用记录仍会保存，断点判断和暂停逻辑不受影响；锁定期间遇到的新接口调用会在调用记录中标记为“未登记”，用户可以从调用详情手动加入已发现接口。手动加入时会批量关联同一 Session 下相同 `objectName + cmdName + slotKey` 的未登记调用，并重新计算该接口统计。
+锁定接口只阻止自动新增“已发现接口”。调用记录仍会保存，断点判断和暂停逻辑不受影响；锁定期间遇到的新接口调用会在调用记录中标记为“未登记”，用户可以从调用详情手动加入已发现接口。手动加入时会批量关联同一 Session 下相同 `objectName + cmdName` 的未登记调用，并重新计算该接口统计。
+
+已发现接口唯一性固定为 `sessionId + objectName + cmdName`。`serviceName` 只是展示字段，不参与唯一性校验；`slotId` 不再拆分接口，只作为调用记录、接口样本和样本级断点条件保存。Java Demo 对外业务接口仍使用 `instType` 参数，例如 `GET /api/demo/control?instType=VNA&cmdName=create&slotId=1`；Java 上报到 Python 断点程序时会转换为 `objectName / cmdName / slotId`，Python 后端、数据库、QML、断点条件和调用详情都使用 `objectName`。
+
+从已发现接口创建断点时，断点条件只包含 `objectName + cmdName`，会命中该接口下所有 `slotId`；从调用记录或样本创建参数快照断点时，可以包含 `slotId`，用于精确命中某个槽位样本。
 
 ## 验收流程
 
@@ -84,8 +88,19 @@ cd java-demo
 3. 手动调用 Java Demo 的 `POST /api/demo/control` 或真实业务接口。
 4. “调用记录”页应出现当前 Session 的调用记录，并按 `objectName` 可折叠分组展示 `cmdName`、`slotId` 和 `params` 摘要；每个分组内支持搜索、状态过滤、断点命中过滤、表头排序和中间列列宽拖拽，表格铺满分组宽度，页面底部显示全局总计。
 5. “已发现接口”页应按 `objectName` 可折叠分组展示接口、参数样本数、唯一键、断点状态和整数平均耗时；接口卡片采用“主信息 / 指标网格 / 固定操作列”的三列布局，操作按钮统一对齐。
-6. “已发现接口”右侧详情可查看同一接口的不同参数样本。参数样本是相同 `objectName + cmdName + slotId` 下不同参数快照的去重结果，可用于回看历史入参，也可从对应调用创建参数快照断点；相关调用在窄面板中采用记录卡片展示，避免多列表格文本重叠。
+6. “已发现接口”右侧详情可查看同一接口的不同参数样本。参数样本按同一 `objectName + cmdName` 下的 `slotId + params` 去重，可用于回看历史入参，也可从对应调用创建参数快照断点；相关调用在窄面板中采用记录卡片展示，避免多列表格文本重叠。
 7. 从已发现接口创建命令断点，或从调用记录创建命令断点 / 参数快照断点；“调用记录”页右侧详情底部展示当前 Session 的断点列表，支持启用、禁用和删除；“断点管理”页按 `objectName` 可折叠分组展示启用状态、命中范围、来源和命中记录，卡片右侧保留固定操作区，匹配条件支持展开/收起查看完整参数，命中记录同样采用窄栏卡片展示。
+
+## 手工验证脚本
+
+仓库提供两个 bash 脚本用于验证新的接口唯一性和断点语义，默认 Python 后端为 `http://127.0.0.1:18601`，Java Demo 为 `http://127.0.0.1:8080`：
+
+```bash
+bash scripts/test_object_cmd_discovery.sh
+bash scripts/test_object_cmd_breakpoint.sh
+```
+
+脚本会覆盖：相同 `instType + cmdName` 不同 `slotId` 在 Python 中归并为一条 `objectName + cmdName` 接口；相同 `objectName` 不同 `cmdName` 拆分为不同接口；不同 `objectName` 相同 `cmdName` 拆分为不同接口；接口级断点命中同一 `objectName + cmdName` 下所有 `slotId`；样本级断点只命中指定 `slotId`。
 8. 按钮采用扁平化浅色背景和轻边框；JSON 查看区提供标题栏、内边距和自动换行，便于查看长字段；右侧详情附页隐藏滚动条，避免遮挡文字，仍可通过鼠标滚轮或触控板滚动内容。
 9. 底部日志栏会显示最近一次桌面操作的返回摘要，点击“展开”可查看完整 JSON 日志。
 10. 清空当前记录、清空历史、删除会话和删除断点都会先弹出确认框；确认后才执行删除，其中“清空历史”会删除全部 Session 及其调用记录、已发现接口和断点。

@@ -33,12 +33,6 @@ Item {
         return index % 2 ? appTheme.panelBgAlt : appTheme.panelBg
     }
 
-    function slotText(item) {
-        if (!item) return "-"
-        if (item.slot_id === null || item.slot_id === undefined) return "无槽位"
-        return String(item.slot_id)
-    }
-
     function paramsSummary(item) {
         if (!item) return "-"
         return item.params_summary || JSON.stringify(item.latest_params || {})
@@ -49,9 +43,7 @@ Item {
         result.sort(function(a, b) {
             var objectCompare = String(a.object_name || "").localeCompare(String(b.object_name || ""))
             if (objectCompare !== 0) return objectCompare
-            var cmdCompare = String(a.cmd_name || "").localeCompare(String(b.cmd_name || ""))
-            if (cmdCompare !== 0) return cmdCompare
-            return String(a.slot_key || "").localeCompare(String(b.slot_key || ""))
+            return String(a.cmd_name || "").localeCompare(String(b.cmd_name || ""))
         })
         return result
     }
@@ -192,7 +184,7 @@ Item {
                                             }
 
                                             Text {
-                                                text: (modelData.object_name || "-") + " / 槽位 " + page.slotText(modelData)
+                                                text: (modelData.object_name || "-") + " / 命令接口"
                                                 color: appTheme.textNormal
                                                 font.pixelSize: 13
                                                 Layout.fillWidth: true

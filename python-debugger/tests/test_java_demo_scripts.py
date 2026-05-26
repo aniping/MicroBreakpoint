@@ -40,3 +40,17 @@ def test_debugger_ports_are_configured_for_18601():
     assert "http://127.0.0.1:18601" in java_yml
     assert "http://127.0.0.1:18601" in java_settings
     assert "${debugger.server-url:http://127.0.0.1:18601}" in java_config
+
+
+def test_object_cmd_bash_scripts_cover_discovery_and_breakpoints():
+    discovery = (ROOT / "scripts" / "test_object_cmd_discovery.sh").read_text(encoding="utf-8")
+    breakpoint = (ROOT / "scripts" / "test_object_cmd_breakpoint.sh").read_text(encoding="utf-8")
+
+    assert "DEBUGGER_URL" in discovery
+    assert "DEMO_URL" in discovery
+    assert "instType=VNA&cmdName=create&slotId=1" in discovery
+    assert "instType=VNA&cmdName=create&slotId=2" in discovery
+    assert "Python 查询结果应显示 objectName" in discovery
+    assert "/api/interfaces/" in breakpoint
+    assert "/api/calls/continue-all" in breakpoint
+    assert "matchMode\":\"params_snapshot" in breakpoint

@@ -84,18 +84,8 @@ def migrate_db(db):
     ensure_column(db, "breakpoint", "conditions_json", "TEXT")
     ensure_column(db, "breakpoint", "hit_limit", "INTEGER")
     ensure_column(db, "breakpoint", "source_type", "TEXT")
-    db.execute(
-        """CREATE TABLE IF NOT EXISTS interface_param_sample (
-          id TEXT PRIMARY KEY,
-          interface_id TEXT,
-          params_fingerprint TEXT,
-          params_json TEXT,
-          first_seen_at TEXT,
-          last_seen_at TEXT,
-          seen_count INTEGER,
-          UNIQUE(interface_id, params_fingerprint)
-        )"""
-    )
+    ensure_interface_param_sample_schema(db)
+    ensure_interface_unique_index(db)
     db.execute(
         """CREATE TABLE IF NOT EXISTS app_setting (
           key TEXT PRIMARY KEY,
@@ -109,3 +99,109 @@ def ensure_column(db, table, column, definition):
     rows = db.execute(f"PRAGMA table_info({table})").fetchall()
     if column not in {row["name"] for row in rows}:
         db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def ensure_interface_param_sample_schema(db):
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS interface_param_sample (
+          id TEXT PRIMARY KEY,
+          interface_id TEXT,
+          call_id TEXT,
+          object_name TEXT,
+          cmd_name TEXT,
+          slot_id INTEGER,
+          slot_key TEXT,
+          args_json TEXT,
+          params_fingerprint TEXT,
+          params_json TEXT,
+          result_json TEXT,
+          success INTEGER,
+          cost_ms INTEGER,
+          first_seen_at TEXT,
+          last_seen_at TEXT,
+          created_at TEXT,
+          updated_at TEXT,
+          seen_count INTEGER,
+          UNIQUE(interface_id, slot_key, params_fingerprint)
+        )"""
+    )
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(interface_param_sample)").fetchall()}
+    required = {
+        "id", "interface_id", "call_id", "object_name", "cmd_name", "slot_id", "slot_key",
+        "args_json", "params_fingerprint", "params_json", "result_json", "success", "cost_ms",
+        "first_seen_at", "last_seen_at", "created_at", "updated_at", "seen_count",
+    }
+    has_new_unique = any(
+        index["unique"]
+        and [col["name"] for col in db.execute(f"PRAGMA index_info({index['name']})").fetchall()]
+        == ["interface_id", "slot_key", "params_fingerprint"]
+        for index in db.execute("PRAGMA index_list(interface_param_sample)").fetchall()
+    )
+    if required.issubset(columns) and has_new_unique:
+        return
+
+    db.execute("ALTER TABLE interface_param_sample RENAME TO interface_param_sample_old")
+    db.execute(
+        """CREATE TABLE interface_param_sample (
+          id TEXT PRIMARY KEY,
+          interface_id TEXT,
+          call_id TEXT,
+          object_name TEXT,
+          cmd_name TEXT,
+          slot_id INTEGER,
+          slot_key TEXT,
+          args_json TEXT,
+          params_fingerprint TEXT,
+          params_json TEXT,
+          result_json TEXT,
+          success INTEGER,
+          cost_ms INTEGER,
+          first_seen_at TEXT,
+          last_seen_at TEXT,
+          created_at TEXT,
+          updated_at TEXT,
+          seen_count INTEGER,
+          UNIQUE(interface_id, slot_key, params_fingerprint)
+        )"""
+    )
+    old_columns = {row["name"] for row in db.execute("PRAGMA table_info(interface_param_sample_old)").fetchall()}
+    select_value = lambda column, fallback: column if column in old_columns else fallback
+    db.execute(
+        f"""INSERT OR IGNORE INTO interface_param_sample
+           (id, interface_id, call_id, object_name, cmd_name, slot_id, slot_key, args_json,
+            params_fingerprint, params_json, result_json, success, cost_ms,
+            first_seen_at, last_seen_at, created_at, updated_at, seen_count)
+           SELECT id, interface_id,
+                  {select_value('call_id', 'NULL')},
+                  {select_value('object_name', 'NULL')},
+                  {select_value('cmd_name', 'NULL')},
+                  {select_value('slot_id', 'NULL')},
+                  COALESCE({select_value('slot_key', 'NULL')}, '__NULL__'),
+                  {select_value('args_json', 'NULL')},
+                  params_fingerprint, params_json,
+                  {select_value('result_json', 'NULL')},
+                  {select_value('success', 'NULL')},
+                  {select_value('cost_ms', 'NULL')},
+                  first_seen_at, last_seen_at,
+                  COALESCE({select_value('created_at', 'NULL')}, first_seen_at),
+                  COALESCE({select_value('updated_at', 'NULL')}, last_seen_at),
+                  seen_count
+           FROM interface_param_sample_old"""
+    )
+    db.execute("DROP TABLE interface_param_sample_old")
+
+
+def ensure_interface_unique_index(db):
+    duplicates = db.execute(
+        """SELECT 1
+           FROM discovered_interface
+           GROUP BY session_id, object_name, cmd_name
+           HAVING COUNT(*) > 1
+           LIMIT 1"""
+    ).fetchone()
+    if duplicates:
+        return
+    db.execute(
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_discovered_interface_session_object_cmd
+           ON discovered_interface(session_id, object_name, cmd_name)"""
+    )

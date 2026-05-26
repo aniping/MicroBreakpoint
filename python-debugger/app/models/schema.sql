@@ -93,18 +93,29 @@ CREATE TABLE IF NOT EXISTS discovered_interface (
   min_cost_ms INTEGER,
   created_at TEXT,
   updated_at TEXT,
-  UNIQUE(session_id, object_name, cmd_name, slot_key)
+  UNIQUE(session_id, object_name, cmd_name)
 );
 
 CREATE TABLE IF NOT EXISTS interface_param_sample (
   id TEXT PRIMARY KEY,
   interface_id TEXT,
+  call_id TEXT,
+  object_name TEXT,
+  cmd_name TEXT,
+  slot_id INTEGER,
+  slot_key TEXT,
+  args_json TEXT,
   params_fingerprint TEXT,
   params_json TEXT,
+  result_json TEXT,
+  success INTEGER,
+  cost_ms INTEGER,
   first_seen_at TEXT,
   last_seen_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
   seen_count INTEGER,
-  UNIQUE(interface_id, params_fingerprint)
+  UNIQUE(interface_id, slot_key, params_fingerprint)
 );
 
 CREATE TABLE IF NOT EXISTS breakpoint (

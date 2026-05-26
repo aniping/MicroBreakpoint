@@ -48,7 +48,18 @@ def update_interface_lock():
 @interface_api.get("/<interface_id>")
 def interface_detail(interface_id):
     row = get_db().execute("SELECT * FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
-    return jsonify(normalize(row_to_dict(row)) if row else {"success": False, "message": "not found"}), 200 if row else 404
+    if not row:
+        return jsonify({"success": False, "message": "not found"}), 404
+    item = normalize(row_to_dict(row))
+    samples = get_db().execute(
+        """SELECT * FROM interface_param_sample
+           WHERE interface_id=?
+           ORDER BY last_seen_at DESC, created_at DESC
+           LIMIT 50""",
+        (interface_id,),
+    ).fetchall()
+    item["samples"] = [normalize(row_to_dict(sample)) for sample in samples]
+    return jsonify(item)
 
 
 @interface_api.patch("/<interface_id>/alias")

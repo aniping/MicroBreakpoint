@@ -50,7 +50,7 @@ Item {
     }
 
     function isImportedSession(item) {
-        return !!(item && (item.archive_id || item.archiveId || item.import_file_name || item.importFileName))
+        return !!(item && (item.import_file_name || item.importFileName || item.imported_at || item.importedAt))
     }
 
     function sessionSubtitle(item) {

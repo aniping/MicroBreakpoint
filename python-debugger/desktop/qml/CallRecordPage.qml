@@ -51,7 +51,7 @@ Item {
     function rawArgs(item) { return safeObject(item ? (item.raw_args || item.rawArgs || item.args || {}) : {}, {}) }
     function objectName(item) {
         var args = rawArgs(item)
-        return String((item && (item.object_name || item.objectName)) || args.objectName || args.instType || "未分类")
+        return String((item && (item.object_name || item.objectName)) || args.objectName || "未分类")
     }
     function cmdName(item) {
         var args = rawArgs(item)

@@ -80,10 +80,21 @@ public class DebugInvoker {
         request.setDescription(methodInfo.getDescription());
         request.setThreadName(Thread.currentThread().getName());
         request.setTimestamp(System.currentTimeMillis());
-        request.setArgs(nonNullMap(methodInfo.getArgs()));
-        request.setRawArgs(nonNullMap(methodInfo.getArgs()));
+        Map<String, Object> args = businessArgs(methodInfo);
+        request.setArgs(args);
+        request.setRawArgs(args);
         request.setParameterMeta(methodInfo.getParameterMeta());
         return request;
+    }
+
+    private static Map<String, Object> businessArgs(DebugMethodInfo methodInfo) {
+        Map<String, Object> args = new LinkedHashMap<>(nonNullMap(methodInfo.getArgs()));
+        args.remove("instType");
+        args.put("objectName", methodInfo.getObjectName());
+        args.put("cmdName", methodInfo.getCmdName());
+        args.put("slotId", methodInfo.getSlotId());
+        args.put("params", nonNullMap(methodInfo.getParams()));
+        return args;
     }
 
     private static Map<String, Object> nonNullMap(Map<String, Object> value) {

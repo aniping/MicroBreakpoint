@@ -15,7 +15,7 @@ def make_before(call_id="call-1", object_name="SA", cmd="start", slot_id=1, para
         "methodName": "instrumentControl",
         "displayName": "仪表控制",
         "threadName": "test",
-        "rawArgs": {"instType": object_name, "cmdName": cmd, "slotId": slot_id, "params": params},
+        "rawArgs": {"objectName": object_name, "cmdName": cmd, "slotId": slot_id, "params": params},
         "parameterMeta": [{"name": "params", "displayName": "操作传参", "javaType": "java.util.Map"}],
     }
 
@@ -82,6 +82,38 @@ def test_debug_records_and_discovers_by_business_identity(tmp_path):
     assert by_cmd["start"]["call_count"] == 2
     assert by_cmd["start"]["params_sample_count"] == 2
     assert by_cmd["stop"]["call_count"] == 1
+
+
+def test_interface_identity_ignores_slot_and_service_name(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    first = make_before("slot-1", object_name="VNA", cmd="create", slot_id=1, params={"mode": "A"})
+    second = make_before("slot-2", object_name="VNA", cmd="create", slot_id=2, params={"mode": "B"})
+    third = make_before("slot-3", object_name="VNA", cmd="create", slot_id=3, params={"mode": "C"})
+    third["serviceName"] = "another-service"
+    client.post("/api/calls/before", json=first)
+    finish(client, "slot-1")
+    client.post("/api/calls/before", json=second)
+    finish(client, "slot-2")
+    client.post("/api/calls/before", json=third)
+    finish(client, "slot-3")
+
+    interfaces = client.get("/api/interfaces").get_json()["items"]
+    assert len(interfaces) == 1
+    assert interfaces[0]["object_name"] == "VNA"
+    assert interfaces[0]["cmd_name"] == "create"
+    assert interfaces[0]["call_count"] == 3
+    assert interfaces[0]["params_sample_count"] == 3
+
+    calls = client.get("/api/calls").get_json()["items"]
+    assert {item["slot_id"] for item in calls} == {1, 2, 3}
+    assert {item["interface_id"] for item in calls} == {interfaces[0]["id"]}
+    assert all("instType" not in item["raw_args"] for item in calls)
+
+    detail = client.get(f"/api/interfaces/{interfaces[0]['id']}").get_json()
+    assert {item["slot_id"] for item in detail["samples"]} == {1, 2, 3}
+    assert all(item["object_name"] == "VNA" and item["cmd_name"] == "create" for item in detail["samples"])
 
 
 def test_stop_then_restart_same_session_appends_data(tmp_path):
@@ -169,13 +201,41 @@ def test_command_and_params_snapshot_breakpoints(tmp_path):
     call_id = client.get("/api/calls").get_json()["items"][0]["call_id"]
     assert client.post(f"/api/calls/{call_id}/breakpoint", json={"matchMode": "params_snapshot"}).get_json()["success"]
 
-    paused = client.post("/api/calls/before", json=make_before("hit", params={"mode": "A"})).get_json()
+    missed_slot = client.post("/api/calls/before", json=make_before("miss-slot", slot_id=2, params={"mode": "A"})).get_json()
+    assert missed_slot["action"] == "continue"
+
+    paused = client.post("/api/calls/before", json=make_before("hit", slot_id=1, params={"mode": "A"})).get_json()
     assert paused["action"] == "pause"
     assert client.get("/api/debug/state").get_json()["state"] == "DEBUGGING_PAUSED"
     assert client.post("/api/calls/hit/continue").get_json()["released"] is True
 
     missed = client.post("/api/calls/before", json=make_before("miss", params={"mode": "B"})).get_json()
     assert missed["action"] == "continue"
+
+
+def test_interface_breakpoint_matches_all_slots_for_object_and_command(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("seed-slot-1", object_name="VNA", cmd="create", slot_id=1))
+    finish(client, "seed-slot-1")
+    interface = client.get("/api/interfaces").get_json()["items"][0]
+    created = client.post(f"/api/interfaces/{interface['id']}/breakpoint", json={}).get_json()
+    assert created["success"] is True
+    breakpoint = client.get("/api/breakpoints").get_json()["items"][0]
+    assert breakpoint["slot_id"] is None
+    assert breakpoint["condition"] == {"objectName": "VNA", "cmdName": "create"}
+
+    hit_slot_1 = client.post("/api/calls/before", json=make_before("hit-slot-1", object_name="VNA", cmd="create", slot_id=1)).get_json()
+    assert hit_slot_1["action"] == "pause"
+    client.post("/api/calls/hit-slot-1/continue")
+
+    hit_slot_2 = client.post("/api/calls/before", json=make_before("hit-slot-2", object_name="VNA", cmd="create", slot_id=2)).get_json()
+    assert hit_slot_2["action"] == "pause"
+    client.post("/api/calls/hit-slot-2/continue")
+
+    miss_cmd = client.post("/api/calls/before", json=make_before("miss-cmd", object_name="VNA", cmd="start", slot_id=1)).get_json()
+    assert miss_cmd["action"] == "continue"
 
 
 def test_clear_and_delete_session_respect_session_boundaries(tmp_path):
@@ -315,26 +375,26 @@ def test_manual_registration_batches_same_unregistered_interface_and_recalculate
 
     registered = client.post("/api/calls/batch-success/interface").get_json()
     assert registered["success"] is True
-    assert registered["updatedCallCount"] == 3
-    assert registered["totalInterfaceCallCount"] == 3
+    assert registered["updatedCallCount"] == 4
+    assert registered["totalInterfaceCallCount"] == 4
 
     calls = client.get("/api/calls").get_json()["items"]
     same_slot = [item for item in calls if item["slot_key"] == "1"]
     other_slot = [item for item in calls if item["slot_key"] == "2"][0]
     assert {item["interface_id"] for item in same_slot} == {registered["interfaceId"]}
     assert all(item["interface_registered"] == 1 for item in same_slot)
-    assert other_slot["interface_registered"] == 0
-    assert other_slot["interface_id"] is None
+    assert other_slot["interface_registered"] == 1
+    assert other_slot["interface_id"] == registered["interfaceId"]
 
     interface = client.get("/api/interfaces").get_json()["items"][0]
     assert interface["id"] == registered["interfaceId"]
-    assert interface["call_count"] == 3
+    assert interface["call_count"] == 4
     assert interface["success_count"] == 1
     assert interface["exception_count"] == 1
     assert interface["avg_cost_ms"] == 20
     assert interface["max_cost_ms"] == 30
     assert interface["min_cost_ms"] == 10
-    assert interface["params_sample_count"] == 3
+    assert interface["params_sample_count"] == 4
     assert interface["first_seen_at"]
     assert interface["last_seen_at"]
 
@@ -367,20 +427,33 @@ def test_archive_id_stays_stable_across_renamed_exports_and_duplicate_import(tmp
 
     first_archive = source_client.post(
         f"/api/sessions/{source_session}/export",
-        json={"archiveName": "first archive", "remark": "one"},
+        json={"archiveName": "first archive.mbrec", "remark": "one"},
     ).get_json()["archive"]
     archive_id = first_archive["archiveId"]
     assert archive_id
     assert first_archive["session"]["archive_id"] == archive_id
-    assert session_by_id(source_client, source_session)["archive_id"] == archive_id
+    exported_source = session_by_id(source_client, source_session)
+    assert exported_source["archive_id"] == archive_id
+    assert exported_source["archive_name"] == "first archive.mbrec"
+    assert exported_source["archive_remark"] == "one"
+    assert exported_source["display_name"] == "first archive"
+    assert exported_source["import_file_name"] is None
+    assert exported_source["imported_at"] is None
 
     renamed_archive = source_client.post(
         f"/api/sessions/{source_session}/export",
-        json={"archiveName": "renamed archive", "remark": "two"},
+        json={"archiveName": "renamed archive.MBREC", "remark": "two"},
     ).get_json()["archive"]
     assert renamed_archive["archiveId"] == archive_id
-    assert renamed_archive["archiveName"] == "renamed archive"
+    assert renamed_archive["archiveName"] == "renamed archive.MBREC"
     assert renamed_archive["session"]["archive_id"] == archive_id
+    renamed_source = session_by_id(source_client, source_session)
+    assert renamed_source["archive_id"] == archive_id
+    assert renamed_source["archive_name"] == "renamed archive.MBREC"
+    assert renamed_source["archive_remark"] == "two"
+    assert renamed_source["display_name"] == "renamed archive"
+    assert renamed_source["import_file_name"] is None
+    assert renamed_source["imported_at"] is None
 
     target_client = make_client(tmp_path / "target")
     imported = target_client.post(
@@ -419,7 +492,7 @@ def test_archive_id_stays_stable_across_renamed_exports_and_duplicate_import(tmp
     assert duplicate_payload["existingSessionId"] == imported_session
     assert duplicate_payload["openExisting"] is True
     assert duplicate_payload["archiveId"] == archive_id
-    assert duplicate_payload["archiveName"] == "renamed archive"
+    assert duplicate_payload["archiveName"] == "renamed archive.MBREC"
     assert duplicate_payload["importFileName"] == "Renamed.MBREC"
     assert "releasedCount" not in duplicate_payload
 

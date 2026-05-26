@@ -47,8 +47,8 @@ MicroBreakpoint 是一个面向 Java 微服务的 Session 化接口断点调试�
 6. DebugMethodInfo 中 params 提升为顶层一等字段。
 7. args / parameterMeta 保留为可选技术信息，不参与主业务流程。
 8. Session 隔离调用记录、已发现接口、接口统计和断点。
-9. 已发现接口唯一键为：sessionId + objectName + cmdName + slotId。
-10. params 不参与接口唯一键，但用于参数展示、参数样例、参数快照断点和未来参数条件断点。
+9. 已发现接口唯一键为：sessionId + objectName + cmdName。
+10. slotId 和 params 不参与接口唯一键，但用于参数展示、参数样例、参数快照断点和未来参数条件断点。
 11. 调用记录和已发现接口都按 objectName 折叠分组。
 12. objectName 外层不做搜索排序；搜索、过滤、排序只在每个 objectName 分组内部进行。
 13. 顶部按钮按 Session 管理、调试控制、执行控制、界面设置分区。
@@ -749,22 +749,22 @@ paramsFingerprint 计算。
 已发现接口按 Session 隔离，唯一键为：
 
 ```text
-sessionId + objectName + cmdName + slotId
+sessionId + objectName + cmdName
 ```
 
 即：
 
 ```text
-interfaceUniqueKey = sessionId + objectName + cmdName + slotId
+interfaceUniqueKey = sessionId + objectName + cmdName
 ```
 
-实现时需要注意 SQLite 的 `NULL` 唯一约束语义：
+slotId 降级为同一接口下的样本参数：
 
 ```text
-slotId 可为 null，但 SQLite 的 UNIQUE 允许多个 NULL。
-数据库中建议增加 slot_key 字段，将 null 统一归一化为 "__NULL__"。
-唯一约束使用 unique(session_id, object_name, cmd_name, slot_key)。
-页面和 API 仍暴露 slotId，slot_key 只作为数据库实现细节。
+slotId 可为 null，但不参与 discovered_interface 唯一性。
+调用记录和接口样本仍保存 slotId。
+样本去重可使用 slot_key + params_fingerprint。
+唯一约束使用 unique(session_id, object_name, cmd_name)。
 ```
 
 ### 12.2 params 不参与唯一键
@@ -772,7 +772,7 @@ slotId 可为 null，但 SQLite 的 UNIQUE 允许多个 NULL。
 原因：
 
 ```text
-同一个 objectName + cmdName + slotId，params 值不同，本质上仍然是同一个接口/命令的不同调用样例。
+同一个 objectName + cmdName 下，不同 slotId 或 params 值，本质上仍然是同一个接口/命令的不同调用样例。
 ```
 
 示例：
@@ -2141,7 +2141,7 @@ ParamsFingerprintService
 
 ```text
 根据 before-call 发现或更新接口。
-使用 sessionId + objectName + cmdName + slotId 唯一键。
+使用 sessionId + objectName + cmdName 唯一键。
 维护接口统计。
 维护 latestParams 和 paramsSampleCount。
 ```
@@ -2383,7 +2383,7 @@ Python 后端能直接读取 params 字段。
 
 ```text
 1. call_record 增加 objectName/cmdName/slotId/params 字段。
-2. discovered_interface 唯一键改为 sessionId + objectName + cmdName + slot_key。
+2. discovered_interface 唯一键改为 sessionId + objectName + cmdName。
 3. 实现 paramsFingerprint。
 4. 实现 paramsSummary。
 5. 实现 interface_param_sample 或等价的 fingerprint 去重存储。
@@ -2629,7 +2629,7 @@ Codex 重构时必须遵守：
 9. args / parameterMeta 可以保留，但不得作为主流程依赖。
 10. 已发现接口必须按 Session 隔离。
 11. 断点必须按 Session 隔离，不得默认跨 Session 生效。
-12. 已发现接口唯一键必须是 sessionId + objectName + cmdName + slot_key。
+12. 已发现接口唯一键必须是 sessionId + objectName + cmdName。
 13. params 不得参与接口唯一键。
 14. source_* 字段只记录来源，不参与断点作用域判断。
 15. 停止调试后同一 Session 必须允许再次开始并继续追加数据。
