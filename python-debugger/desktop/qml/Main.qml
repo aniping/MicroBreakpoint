@@ -236,14 +236,13 @@ ApplicationWindow {
                 MbStatusChip { appTheme: theme; label: "断点"; value: String(stateData.breakpointCount || 0); type: "neutral"; Layout.preferredWidth: 104 }
                 MbStatusChip { appTheme: theme; label: "暂停"; value: String(stateData.pausedCount || 0); type: stateData.pausedCount > 0 ? "warning" : "neutral"; Layout.preferredWidth: 104 }
                 RowLayout {
-                    Layout.preferredWidth: 150
-                    spacing: 8
+                    Layout.preferredWidth: 104
+                    spacing: 6
                     Text {
                         text: "锁定接口"
                         color: stateData.interfaceLocked ? theme.warning : theme.textNormal
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
-                        Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
                     MbSwitch {

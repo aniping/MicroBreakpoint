@@ -63,10 +63,28 @@ Invoke-DemoCurl `
     -JsonBody '{"instType":"VNA","slotId":1}'
 
 Invoke-DemoCurl `
+    -Title "POST /api/demo/initialize - VNA slot 2" `
+    -Method "POST" `
+    -Path "/api/demo/initialize" `
+    -JsonBody '{"instType":"VNA","slotId":2}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/initialize - SA slot 1" `
+    -Method "POST" `
+    -Path "/api/demo/initialize" `
+    -JsonBody '{"instType":"SA","slotId":1}'
+
+Invoke-DemoCurl `
     -Title "POST /api/demo/initialize - SA slot 2" `
     -Method "POST" `
     -Path "/api/demo/initialize" `
     -JsonBody '{"instType":"SA","slotId":2}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/initialize - DMM slot 2" `
+    -Method "POST" `
+    -Path "/api/demo/initialize" `
+    -JsonBody '{"instType":"DMM","slotId":2}'
 
 Invoke-DemoCurl `
     -Title "POST /api/demo/initialize - DMM slot 3" `
@@ -97,6 +115,12 @@ Invoke-DemoCurl `
     -Method "POST" `
     -Path "/api/demo/control" `
     -JsonBody '{"instType":"VNA","cmdName":"start","slotId":1,"params":{"mode":"MANUAL","durationMs":1500,"operator":"curl-demo","trace":"S11"}}'
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - VNA start sample 3" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody '{"instType":"VNA","cmdName":"start","slotId":2,"params":{"mode":"MANUAL","durationMs":1500,"operator":"curl-demo","trace":"S11"}}'
 
 Invoke-DemoCurl `
     -Title "POST /api/demo/control - VNA start sample 3" `
