@@ -38,6 +38,10 @@ def finish(client, call_id, success=True, cost_ms=5):
     ).get_json()
 
 
+def session_by_id(client, session_id):
+    return {item["id"]: item for item in client.get("/api/sessions").get_json()["items"]}[session_id]
+
+
 def test_non_debug_reports_are_ignored(tmp_path):
     client = make_client(tmp_path)
 
@@ -241,6 +245,20 @@ def test_clear_sessions_requires_stopped_debugging(tmp_path):
     assert len(client.get("/api/sessions").get_json()["items"]) == 1
 
 
+def test_create_session_assigns_incrementing_display_names(tmp_path):
+    client = make_client(tmp_path)
+
+    first = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    second = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    custom = client.post("/api/sessions", json={"displayName": "手工命名"}).get_json()["sessionId"]
+    third = client.post("/api/sessions", json={}).get_json()["sessionId"]
+
+    assert session_by_id(client, first)["display_name"] == "未命名 1"
+    assert session_by_id(client, second)["display_name"] == "未命名 2"
+    assert session_by_id(client, custom)["display_name"] == "手工命名"
+    assert session_by_id(client, third)["display_name"] == "未命名 3"
+
+
 def test_interface_lock_marks_unregistered_calls_and_allows_manual_registration(tmp_path):
     client = make_client(tmp_path)
 
@@ -288,6 +306,12 @@ def test_manual_registration_batches_same_unregistered_interface_and_recalculate
     finish(client, "batch-error", success=False, cost_ms=30)
     client.post("/api/calls/before", json=make_before("batch-running", cmd="measure", params={"mode": "C"}))
     client.post("/api/calls/before", json=make_before("other-slot", cmd="measure", slot_id=2, params={"mode": "D"}))
+    with client.application.app_context():
+        from app.db.database import get_db
+
+        db = get_db()
+        db.execute("UPDATE call_record SET cost_ms=99 WHERE call_id='batch-running'")
+        db.commit()
 
     registered = client.post("/api/calls/batch-success/interface").get_json()
     assert registered["success"] is True
@@ -335,13 +359,86 @@ def test_interface_lock_still_updates_existing_interfaces(tmp_path):
     assert all(item["interface_registered"] == 1 for item in client.get("/api/calls").get_json()["items"])
 
 
-def test_session_archive_import_stops_debug_loads_import_and_rejects_duplicate(tmp_path):
-    client = make_client(tmp_path)
+def test_archive_id_stays_stable_across_renamed_exports_and_duplicate_import(tmp_path):
+    source_client = make_client(tmp_path / "source")
 
-    source_session, _ = create_and_start(client)
-    client.post("/api/calls/before", json=make_before("archived-call", cmd="start", params={"mode": "A"}))
-    finish(client, "archived-call")
-    exported = client.post(
+    source_session, _ = create_and_start(source_client)
+    assert session_by_id(source_client, source_session)["archive_id"] is None
+
+    first_archive = source_client.post(
+        f"/api/sessions/{source_session}/export",
+        json={"archiveName": "first archive", "remark": "one"},
+    ).get_json()["archive"]
+    archive_id = first_archive["archiveId"]
+    assert archive_id
+    assert first_archive["session"]["archive_id"] == archive_id
+    assert session_by_id(source_client, source_session)["archive_id"] == archive_id
+
+    renamed_archive = source_client.post(
+        f"/api/sessions/{source_session}/export",
+        json={"archiveName": "renamed archive", "remark": "two"},
+    ).get_json()["archive"]
+    assert renamed_archive["archiveId"] == archive_id
+    assert renamed_archive["archiveName"] == "renamed archive"
+    assert renamed_archive["session"]["archive_id"] == archive_id
+
+    target_client = make_client(tmp_path / "target")
+    imported = target_client.post(
+        "/api/sessions/import",
+        json={"archive": first_archive, "importFileName": "VNA初始化流程.mbrec"},
+    )
+    assert imported.status_code == 200
+    imported_session = imported.get_json()["importedSessionId"]
+    imported_item = session_by_id(target_client, imported_session)
+    assert imported_item["archive_id"] == archive_id
+    assert imported_item["import_file_name"] == "VNA初始化流程.mbrec"
+    assert imported_item["display_name"] == "VNA初始化流程"
+
+    exported_import = target_client.post(
+        f"/api/sessions/{imported_session}/export",
+        json={"archiveName": "export imported again"},
+    ).get_json()["archive"]
+    assert exported_import["archiveId"] == archive_id
+
+    duplicate_session = target_client.post("/api/sessions", json={}).get_json()["sessionId"]
+    target_client.post("/api/debug/start", json={})
+    target_client.post(
+        "/api/breakpoints",
+        json={"objectName": "SA", "cmdName": "dup-pause", "slotId": 1, "matchMode": "command_only"},
+    )
+    assert target_client.post("/api/calls/before", json=make_before("paused-before-duplicate", cmd="dup-pause")).get_json()["action"] == "pause"
+
+    duplicate = target_client.post(
+        "/api/sessions/import",
+        json={"archive": renamed_archive, "importFileName": "Renamed.MBREC"},
+    )
+    assert duplicate.status_code == 409
+    duplicate_payload = duplicate.get_json()
+    assert duplicate_payload["success"] is False
+    assert duplicate_payload["message"] == "archive already imported"
+    assert duplicate_payload["existingSessionId"] == imported_session
+    assert duplicate_payload["openExisting"] is True
+    assert duplicate_payload["archiveId"] == archive_id
+    assert duplicate_payload["archiveName"] == "renamed archive"
+    assert duplicate_payload["importFileName"] == "Renamed.MBREC"
+    assert "releasedCount" not in duplicate_payload
+
+    state = target_client.get("/api/debug/state").get_json()
+    assert state["debugging"] is True
+    assert state["sessionId"] == duplicate_session
+    assert state["pausedCount"] == 1
+    duplicate_calls = target_client.get("/api/calls").get_json()["items"]
+    assert duplicate_calls[0]["call_id"] == "paused-before-duplicate"
+    assert duplicate_calls[0]["status"] == "paused"
+
+
+def test_session_archive_import_stops_debug_loads_import_and_rejects_duplicate(tmp_path):
+    source_client = make_client(tmp_path / "source")
+
+    source_session, _ = create_and_start(source_client)
+    source_client.post("/api/calls/before", json=make_before("archived-call", cmd="start", params={"mode": "A"}))
+    finish(source_client, "archived-call")
+    exported = source_client.post(
         f"/api/sessions/{source_session}/export",
         json={"archiveName": "first archive", "remark": "review note"},
     ).get_json()
@@ -351,6 +448,7 @@ def test_session_archive_import_stops_debug_loads_import_and_rejects_duplicate(t
     assert archive["archiveName"] == "first archive"
     assert archive["remark"] == "review note"
 
+    client = make_client(tmp_path / "target")
     paused_session = client.post("/api/sessions", json={}).get_json()["sessionId"]
     client.post("/api/debug/start", json={})
     client.post(
@@ -366,7 +464,7 @@ def test_session_archive_import_stops_debug_loads_import_and_rejects_duplicate(t
     assert imported_payload["debugging"] is False
     assert imported_payload["sessionId"] == imported_session
     assert imported_payload["interfaceLocked"] is True
-    assert imported_session not in {source_session, paused_session}
+    assert imported_session != paused_session
 
     paused_calls = client.get("/api/calls", query_string={"sessionId": paused_session}).get_json()["items"]
     assert paused_calls[0]["status"] == "continued"
@@ -403,19 +501,20 @@ def test_session_archive_import_stops_debug_loads_import_and_rejects_duplicate(t
 
 
 def test_session_archive_import_converts_historical_paused_calls(tmp_path):
-    client = make_client(tmp_path)
+    source_client = make_client(tmp_path / "source")
 
-    source_session, _ = create_and_start(client)
-    client.post(
+    source_session, _ = create_and_start(source_client)
+    source_client.post(
         "/api/breakpoints",
         json={"objectName": "SA", "cmdName": "archive-paused", "slotId": 1, "matchMode": "command_only"},
     )
-    assert client.post("/api/calls/before", json=make_before("archived-paused-call", cmd="archive-paused")).get_json()["action"] == "pause"
-    archive = client.post(
+    assert source_client.post("/api/calls/before", json=make_before("archived-paused-call", cmd="archive-paused")).get_json()["action"] == "pause"
+    archive = source_client.post(
         f"/api/sessions/{source_session}/export",
         json={"archiveName": "paused archive", "remark": "paused note"},
     ).get_json()["archive"]
 
+    client = make_client(tmp_path / "target")
     imported = client.post("/api/sessions/import", json={"archive": archive}).get_json()
     assert imported["success"] is True
     imported_calls = client.get("/api/calls").get_json()["items"]
@@ -423,6 +522,9 @@ def test_session_archive_import_converts_historical_paused_calls(tmp_path):
     assert imported_calls[0]["status"] == "imported_paused"
     assert imported_calls[0]["continued_at"] is None
     assert client.get("/api/debug/state").get_json()["pausedCount"] == 0
+    continued = client.post(f"/api/calls/{imported_calls[0]['call_id']}/continue").get_json()
+    assert continued["success"] is False
+    assert client.get("/api/calls").get_json()["items"][0]["status"] == "imported_paused"
 
 
 def test_grouped_endpoints_return_object_groups(tmp_path):

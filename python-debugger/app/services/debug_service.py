@@ -23,10 +23,13 @@ def create_session(payload):
     now = now_iso()
     STATE.update(debugging=False, mode="idle", sessionId=session_id)
     db = get_db()
+    display_name = str(payload.get("displayName") or payload.get("display_name") or "").strip()
+    if not display_name:
+        display_name = next_untitled_session_name(db)
     db.execute(
         """INSERT INTO debug_session
-        (id, mode, status, service_name, operator, start_time, recording, debugging, remark, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (id, mode, status, service_name, operator, start_time, recording, debugging, remark, display_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id,
             "idle",
@@ -37,6 +40,7 @@ def create_session(payload):
             0,
             0,
             payload.get("remark", ""),
+            display_name,
             now,
             now,
         ),
@@ -650,13 +654,19 @@ def _increment_breakpoint_count(db, item, now):
 
 
 def continue_call(call_id):
+    db = get_db()
+    row = db.execute("SELECT status FROM call_record WHERE call_id=?", (call_id,)).fetchone()
+    if not row:
+        return {"success": False, "message": "call not found", "released": False}
+    if row["status"] != "paused":
+        return {"success": False, "message": "call is not paused", "released": False}
     now = now_iso()
     released = wait_manager.continue_one(call_id)
-    get_db().execute(
-        "UPDATE call_record SET status='continued', continued_at=?, updated_at=? WHERE call_id=?",
+    db.execute(
+        "UPDATE call_record SET status='continued', continued_at=?, updated_at=? WHERE call_id=? AND status='paused'",
         (now, now, call_id),
     )
-    get_db().commit()
+    db.commit()
     return {"success": True, "released": released}
 
 
@@ -679,12 +689,19 @@ def export_session_archive(session_id, payload=None):
     session = db.execute("SELECT * FROM debug_session WHERE id=?", (session_id,)).fetchone()
     if not session:
         return {"success": False, "message": "session not found"}
-    archive_name = str(payload.get("archiveName") or session_id).strip() or session_id
+    archive_id = str(session["archive_id"] or "").strip()
+    if not archive_id:
+        archive_id = f"mbrec-{uuid.uuid4().hex}"
+        now = now_iso()
+        db.execute("UPDATE debug_session SET archive_id=?, updated_at=? WHERE id=?", (archive_id, now, session_id))
+        db.commit()
+        session = db.execute("SELECT * FROM debug_session WHERE id=?", (session_id,)).fetchone()
+    archive_name = str(payload.get("archiveName") or session["archive_name"] or session["display_name"] or session_id).strip() or session_id
     archive = {
         "format": MBREC_FORMAT,
         "extension": ".mbrec",
         "version": MBREC_VERSION,
-        "archiveId": payload.get("archiveId") or f"mbrec-{uuid.uuid4().hex}",
+        "archiveId": archive_id,
         "archiveName": archive_name,
         "remark": payload.get("remark", ""),
         "exportedAt": now_iso(),
@@ -704,7 +721,7 @@ def export_session_archive(session_id, payload=None):
     return {"success": True, "archive": archive}
 
 
-def import_session_archive(archive, lock_interfaces=False):
+def import_session_archive(archive, lock_interfaces=False, import_file_name=None):
     if not isinstance(archive, dict):
         return {"success": False, "message": "invalid archive"}
     if archive.get("format") != MBREC_FORMAT or archive.get("version") != MBREC_VERSION:
@@ -714,6 +731,7 @@ def import_session_archive(archive, lock_interfaces=False):
         return {"success": False, "message": "archiveId missing"}
 
     db = get_db()
+    import_file_name = clean_import_file_name(import_file_name)
     existing = db.execute("SELECT id FROM debug_session WHERE archive_id=?", (archive_id,)).fetchone()
     if existing:
         source = archive.get("session") or {}
@@ -723,6 +741,7 @@ def import_session_archive(archive, lock_interfaces=False):
             "message": "archive already imported",
             "archiveId": archive_id,
             "archiveName": archive_name,
+            "importFileName": import_file_name,
             "existingSessionId": existing["id"],
             "openExisting": True,
         }
@@ -731,8 +750,9 @@ def import_session_archive(archive, lock_interfaces=False):
     now = now_iso()
     source = archive.get("session") or {}
     new_session_id = f"session-{uuid.uuid4().hex[:10]}"
-    archive_name = str(archive.get("archiveName") or source.get("id") or new_session_id).strip() or new_session_id
+    archive_name = str(archive.get("archiveName") or "").strip()
     archive_remark = str(archive.get("remark") or "")
+    display_name = imported_display_name(db, import_file_name, archive_name)
     interface_ids = {}
     call_ids = {}
 
@@ -740,8 +760,8 @@ def import_session_archive(archive, lock_interfaces=False):
         db.execute(
             """INSERT INTO debug_session
                (id, mode, status, service_name, operator, start_time, end_time, recording, debugging, remark,
-                archive_id, archive_name, archive_remark, imported_at, created_at, updated_at)
-               VALUES (?, 'idle', 'idle', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)""",
+                display_name, import_file_name, archive_id, archive_name, archive_remark, imported_at, created_at, updated_at)
+               VALUES (?, 'idle', 'idle', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 new_session_id,
                 source.get("service_name", "instrument-service-demo"),
@@ -749,6 +769,8 @@ def import_session_archive(archive, lock_interfaces=False):
                 source.get("start_time") or source.get("created_at") or now,
                 source.get("end_time"),
                 archive_remark or source.get("remark", ""),
+                display_name,
+                import_file_name,
                 archive_id,
                 archive_name,
                 archive_remark,
@@ -991,7 +1013,7 @@ def recalculate_interface_stats(interface_id, now):
     call_count = len(rows)
     success_count = sum(1 for row in rows if row["success"] == 1)
     exception_count = sum(1 for row in rows if row["status"] == "exception" or row["success"] == 0)
-    costs = [row["cost_ms"] for row in rows if row["cost_ms"] is not None]
+    costs = [row["cost_ms"] for row in rows if row["status"] in ("finished", "exception") and row["cost_ms"] is not None]
     avg_cost = (sum(costs) / len(costs)) if costs else None
     max_cost = max(costs) if costs else None
     min_cost = min(costs) if costs else None
@@ -1027,6 +1049,42 @@ def recalculate_interface_stats(interface_id, now):
         ),
     )
     return call_count
+
+
+def next_untitled_session_name(db):
+    prefix = "未命名 "
+    rows = db.execute("SELECT display_name FROM debug_session WHERE display_name LIKE ?", (prefix + "%",)).fetchall()
+    max_index = 0
+    for row in rows:
+        text = str(row["display_name"] or "")
+        if not text.startswith(prefix):
+            continue
+        suffix = text[len(prefix):].strip()
+        if suffix.isdigit():
+            max_index = max(max_index, int(suffix))
+    return f"{prefix}{max_index + 1}"
+
+
+def clean_import_file_name(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text.replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def strip_mbrec_suffix(value):
+    text = str(value or "").strip()
+    return text[:-6] if text.lower().endswith(".mbrec") else text
+
+
+def imported_display_name(db, import_file_name, archive_name):
+    file_display_name = strip_mbrec_suffix(import_file_name)
+    if file_display_name:
+        return file_display_name
+    archive_display_name = str(archive_name or "").strip()
+    if archive_display_name:
+        return archive_display_name
+    return next_untitled_session_name(db)
 
 
 def call_data_from_record(call):

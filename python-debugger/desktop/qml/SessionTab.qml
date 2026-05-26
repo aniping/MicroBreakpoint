@@ -17,6 +17,7 @@ Item {
     property bool importLockInterfaces: false
     property string duplicateExistingSessionId: ""
     property string duplicateArchiveName: ""
+    property string duplicateImportFileName: ""
 
     function modeText(mode) {
         if (mode === "record") return "记录"
@@ -33,6 +34,31 @@ Item {
     function compactTime(value) {
         if (!value) return "-"
         return String(value).replace("T", " ").split("+")[0]
+    }
+
+    function stripMbrecSuffix(name) {
+        var text = String(name || "")
+        return text.toLowerCase().endsWith(".mbrec") ? text.slice(0, -6) : text
+    }
+
+    function sessionDisplayName(item) {
+        if (!item) return "未命名"
+        if (item.display_name || item.displayName) return item.display_name || item.displayName
+        if (item.import_file_name || item.importFileName) return stripMbrecSuffix(item.import_file_name || item.importFileName)
+        if (item.archive_name || item.archiveName) return item.archive_name || item.archiveName
+        return "未命名"
+    }
+
+    function isImportedSession(item) {
+        return !!(item && (item.archive_id || item.archiveId || item.import_file_name || item.importFileName))
+    }
+
+    function sessionSubtitle(item) {
+        if (!item) return "-"
+        var parts = ["服务: " + (item.service_name || item.serviceName || "-")]
+        if (item.archive_name || item.archiveName) parts.push("归档: " + (item.archive_name || item.archiveName))
+        if (item.archive_remark || item.archiveRemark || item.remark) parts.push("备注: " + (item.archive_remark || item.archiveRemark || item.remark))
+        return parts.join("    ")
     }
 
     function currentHint() {
@@ -53,8 +79,8 @@ Item {
 
     function openExportDialog(item) {
         exportSessionId = item.id || ""
-        exportArchiveName = item.archive_name || item.id || "session"
-        exportRemark = item.archive_remark || item.remark || ""
+        exportArchiveName = item.archive_name || item.archiveName || page.sessionDisplayName(item) || item.id || "session"
+        exportRemark = item.archive_remark || item.archiveRemark || item.remark || ""
         exportDialog.open()
     }
 
@@ -74,6 +100,7 @@ Item {
 
     function duplicateMessage() {
         var text = "该 Session 已存在，不能重复导入。"
+        if (duplicateImportFileName) text += "\n导入文件: " + stripMbrecSuffix(duplicateImportFileName)
         if (duplicateArchiveName) text += "\narchiveName: " + duplicateArchiveName
         text += "\nexistingSessionId: " + duplicateExistingSessionId
         return text
@@ -90,6 +117,7 @@ Item {
             var data = JSON.parse(payload)
             page.duplicateExistingSessionId = data.existingSessionId || ""
             page.duplicateArchiveName = data.archiveName || ""
+            page.duplicateImportFileName = data.importFileName || ""
             duplicateImportDialog.open()
         }
     }
@@ -99,7 +127,7 @@ Item {
         modal: true
         focus: true
         width: 440
-        height: 214
+        height: 238
         anchors.centerIn: parent
         background: Rectangle { radius: 6; color: page.appTheme.panelBg; border.color: page.appTheme.border }
 
@@ -107,7 +135,7 @@ Item {
             anchors.fill: parent
             anchors.margins: 16
             spacing: 12
-            Text { text: "该 Session 已存在，不能重复导入。"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.Wrap }
+            Text { text: "该 Session 已存在"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.Wrap }
             Text { text: page.duplicateMessage(); color: page.appTheme.textNormal; font.pixelSize: 13; lineHeight: 1.25; wrapMode: Text.Wrap; Layout.fillWidth: true }
             Item { Layout.fillHeight: true }
             RowLayout {
@@ -331,8 +359,14 @@ Item {
                                         type: page.modeType(modelData.mode)
                                     }
 
+                                    MbTag {
+                                        appTheme: page.appTheme
+                                        text: page.isImportedSession(modelData) ? "导入" : "本地"
+                                        type: page.isImportedSession(modelData) ? "primary" : "neutral"
+                                    }
+
                                     Text {
-                                        text: modelData.id
+                                        text: page.sessionDisplayName(modelData)
                                         color: appTheme.textStrong
                                         font.pixelSize: 15
                                         font.weight: Font.DemiBold
@@ -349,11 +383,19 @@ Item {
                                 }
 
                                 Text {
-                                    text: "服务: " + (modelData.service_name || "-") + "    归档: " + (modelData.archive_name || "-") + "    备注: " + (modelData.remark || "-")
+                                    text: page.sessionSubtitle(modelData)
                                     color: appTheme.textMuted
                                     font.pixelSize: 12
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    text: "SessionId: " + (modelData.id || "-")
+                                    color: appTheme.textDisabled
+                                    font.pixelSize: 11
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideMiddle
                                 }
 
                                 RowLayout {

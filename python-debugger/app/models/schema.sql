@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS debug_session (
   recording INTEGER,
   debugging INTEGER,
   remark TEXT,
+  display_name TEXT,
+  import_file_name TEXT,
   archive_id TEXT,
   archive_name TEXT,
   archive_remark TEXT,

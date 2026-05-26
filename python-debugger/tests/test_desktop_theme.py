@@ -42,6 +42,9 @@ def test_call_record_uses_business_debug_fields():
     assert "imported_paused" in qml
     assert "历史暂停" in qml
     assert 'page.statusValue(page.selectedItem) === "paused"' in qml
+    assert 'label: "接口状态"' in qml
+    assert 'label: "断点"' in qml
+    assert "接口 / 断点" not in qml
 
 
 def test_call_record_page_keeps_filters_inside_groups():
@@ -209,18 +212,26 @@ def test_main_has_persistent_interface_lock_switch():
 def test_session_tab_exposes_mbrec_import_export_controls():
     qml = (QML_ROOT / "SessionTab.qml").read_text(encoding="utf-8")
     main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+    bridge_source = (QML_ROOT.parent / "bridge.py").read_text(encoding="utf-8")
 
     assert "导入 .mbrec" in qml
     assert "导出 .mbrec" in qml
     assert "导入后锁定接口" in qml
+    assert "function stripMbrecSuffix" in qml
+    assert "function sessionDisplayName" in qml
+    assert "text: page.sessionDisplayName(modelData)" in qml
+    assert "SessionId: " in qml
+    assert 'text: page.isImportedSession(modelData) ? "导入" : "本地"' in qml
     assert "function requestImport" in qml
     assert "当前正在调试" in qml
     assert "暂停中的 Java 调用" in qml
     assert "onImportDuplicate" in qml
     assert "该 Session 已存在，不能重复导入。" in qml
+    assert "duplicateImportFileName" in qml
     assert "bridge.openExistingSession(sessionId)" in qml
     assert "bridge.importSession(page.importLockInterfaces)" in qml
     assert "bridge.exportSession(page.exportSessionId, page.exportArchiveName, page.exportRemark)" in qml
+    assert '"importFileName": Path(path).name' in bridge_source
     assert "debugging: !!stateData.debugging" in main
     assert "pausedCount: Number(stateData.pausedCount || 0)" in main
 
@@ -298,11 +309,13 @@ def test_bridge_emits_duplicate_import_and_can_open_existing_session():
         "openExisting": True,
         "existingSessionId": "session-existing",
         "archiveName": "existing archive",
+        "importFileName": "Existing.MBREC",
     })
     bridge.openExistingSession("session-existing")
 
     assert len(duplicates) == 1
     assert "session-existing" in duplicates[0]
     assert "existing archive" in duplicates[0]
+    assert "Existing.MBREC" in duplicates[0]
     assert bridge.requests == [("POST", f"{bridge.backend}/api/sessions/session-existing/select", {})]
     assert bridge.refreshed == 1

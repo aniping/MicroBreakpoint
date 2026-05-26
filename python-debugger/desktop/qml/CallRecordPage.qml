@@ -19,8 +19,8 @@ Item {
     property var groupHitFilters: ({})
     property var groupSortKeys: ({})
     property var groupSortOrders: ({})
-    property var columnWidths: [64, 72, 160, 72, 220, 84, 96, 170, 170, 96]
-    property var columnMinWidths: [64, 72, 120, 72, 220, 84, 80, 120, 140, 96]
+    property var columnWidths: [64, 72, 160, 72, 220, 84, 96, 170, 170, 92, 82]
+    property var columnMinWidths: [64, 72, 120, 72, 220, 84, 80, 120, 140, 92, 82]
     property var selectedItem: selectedItemForId(selectedCallId)
     signal clearBreakpointFilterRequested()
     signal selectedCallChanged(string callId, string status)
@@ -299,6 +299,7 @@ Item {
         if (key === "cost_ms") return Number(item.cost_ms || item.costMs || 0)
         if (key === "thread_name") return String(item.thread_name || item.threadName || "")
         if (key === "created_at") return String(item.created_at || item.createdAt || "")
+        if (key === "interface_registered") return interfaceRegistered(item) ? 1 : 0
         if (key === "hit") return breakpointId(item) ? 1 : 0
         return ""
     }
@@ -739,7 +740,8 @@ Item {
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "耗时(ms)"; sortField: "cost_ms" }
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 7; label: "线程名"; sortField: "thread_name" }
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 8; label: "调用时间"; sortField: "created_at" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 9; label: "接口 / 断点"; sortField: "hit" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 9; label: "接口状态"; sortField: "interface_registered" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 10; label: "断点"; sortField: "hit" }
                                                 }
                                                 Repeater {
                                                     model: page.filteredRows(modelData)
@@ -770,8 +772,14 @@ Item {
                                                             DataCell {
                                                                 tableWidth: tableFlick.width
                                                                 column: 9
-                                                                label: !page.interfaceRegistered(modelData) ? "未登记" : (page.breakpointId(modelData) ? "命中" : "未命中")
-                                                                labelColor: !page.interfaceRegistered(modelData) ? page.appTheme.danger : (page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted)
+                                                                label: page.interfaceRegistered(modelData) ? "已登记" : "未登记"
+                                                                labelColor: page.interfaceRegistered(modelData) ? page.appTheme.textMuted : page.appTheme.danger
+                                                            }
+                                                            DataCell {
+                                                                tableWidth: tableFlick.width
+                                                                column: 10
+                                                                label: page.breakpointId(modelData) ? "命中" : "未命中"
+                                                                labelColor: page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted
                                                             }
                                                         }
                                                         MouseArea {

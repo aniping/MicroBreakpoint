@@ -36,6 +36,8 @@ def row_to_dict(row):
 
 def migrate_db(db):
     ensure_column(db, "debug_session", "status", "TEXT")
+    ensure_column(db, "debug_session", "display_name", "TEXT")
+    ensure_column(db, "debug_session", "import_file_name", "TEXT")
     ensure_column(db, "debug_session", "archive_id", "TEXT")
     ensure_column(db, "debug_session", "archive_name", "TEXT")
     ensure_column(db, "debug_session", "archive_remark", "TEXT")

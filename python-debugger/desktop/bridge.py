@@ -138,7 +138,11 @@ class Bridge(QObject):
         except Exception as exc:
             self._emit_result({"success": False, "message": f"invalid archive: {exc}"})
             return
-        result = self._request("POST", f"{self.backend}/api/sessions/import", json={"archive": archive, "lockInterfaces": lockInterfaces})
+        result = self._request(
+            "POST",
+            f"{self.backend}/api/sessions/import",
+            json={"archive": archive, "lockInterfaces": lockInterfaces, "importFileName": Path(path).name},
+        )
         self._handle_import_result(result)
         self.refreshAll()
 

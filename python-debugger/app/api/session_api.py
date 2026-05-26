@@ -55,7 +55,7 @@ def export_session(session_id):
 def import_session():
     body = request.get_json(silent=True) or {}
     archive = body.get("archive") or body
-    result = import_session_archive(archive, bool(body.get("lockInterfaces")))
+    result = import_session_archive(archive, bool(body.get("lockInterfaces")), body.get("importFileName"))
     if result.get("success"):
         return jsonify(result)
     status = 409 if result.get("existingSessionId") else 400
