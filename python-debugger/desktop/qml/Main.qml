@@ -348,7 +348,14 @@ ApplicationWindow {
                         root.currentPage = 0
                     }
                 }
-                SessionTab { appTheme: theme; items: sessionItems; activeSessionId: stateData.sessionId || ""; canClearSessions: !stateData.debugging }
+                SessionTab {
+                    appTheme: theme
+                    items: sessionItems
+                    activeSessionId: stateData.sessionId || ""
+                    canClearSessions: !stateData.debugging
+                    debugging: !!stateData.debugging
+                    pausedCount: Number(stateData.pausedCount || 0)
+                }
                 SettingsTab {
                     appTheme: theme
                     themeMode: root.themeMode

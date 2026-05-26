@@ -39,6 +39,9 @@ def test_call_record_uses_business_debug_fields():
     assert "interfaceRegistered(item)" in qml
     assert "加入已发现接口" in qml
     assert "bridge.addInterfaceFromCall" in qml
+    assert "imported_paused" in qml
+    assert "历史暂停" in qml
+    assert 'page.statusValue(page.selectedItem) === "paused"' in qml
 
 
 def test_call_record_page_keeps_filters_inside_groups():
@@ -205,12 +208,21 @@ def test_main_has_persistent_interface_lock_switch():
 
 def test_session_tab_exposes_mbrec_import_export_controls():
     qml = (QML_ROOT / "SessionTab.qml").read_text(encoding="utf-8")
+    main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
 
     assert "导入 .mbrec" in qml
     assert "导出 .mbrec" in qml
     assert "导入后锁定接口" in qml
+    assert "function requestImport" in qml
+    assert "当前正在调试" in qml
+    assert "暂停中的 Java 调用" in qml
+    assert "onImportDuplicate" in qml
+    assert "该 Session 已存在，不能重复导入。" in qml
+    assert "bridge.openExistingSession(sessionId)" in qml
     assert "bridge.importSession(page.importLockInterfaces)" in qml
     assert "bridge.exportSession(page.exportSessionId, page.exportArchiveName, page.exportRemark)" in qml
+    assert "debugging: !!stateData.debugging" in main
+    assert "pausedCount: Number(stateData.pausedCount || 0)" in main
 
 
 def test_main_restores_operation_log_panel():
@@ -274,3 +286,23 @@ def test_bridge_wires_interface_lock_and_manual_registration():
     assert bridge.requests[0] == ("POST", f"{bridge.backend}/api/interfaces/lock", {"json": {"locked": True}})
     assert bridge.requests[1] == ("POST", f"{bridge.backend}/api/calls/call-1/interface", {})
     assert bridge.refreshed == 2
+
+
+def test_bridge_emits_duplicate_import_and_can_open_existing_session():
+    bridge = CaptureBridge()
+    duplicates = []
+    bridge.importDuplicate.connect(duplicates.append)
+
+    bridge._handle_import_result({
+        "success": False,
+        "openExisting": True,
+        "existingSessionId": "session-existing",
+        "archiveName": "existing archive",
+    })
+    bridge.openExistingSession("session-existing")
+
+    assert len(duplicates) == 1
+    assert "session-existing" in duplicates[0]
+    assert "existing archive" in duplicates[0]
+    assert bridge.requests == [("POST", f"{bridge.backend}/api/sessions/session-existing/select", {})]
+    assert bridge.refreshed == 1

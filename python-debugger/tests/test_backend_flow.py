@@ -266,6 +266,8 @@ def test_interface_lock_marks_unregistered_calls_and_allows_manual_registration(
     finish(client, "locked-hit")
     registered = client.post("/api/calls/locked-hit/interface").get_json()
     assert registered["success"] is True
+    assert registered["updatedCallCount"] == 1
+    assert registered["totalInterfaceCallCount"] == 1
 
     call = client.get("/api/calls").get_json()["items"][0]
     assert call["interface_registered"] == 1
@@ -273,6 +275,44 @@ def test_interface_lock_marks_unregistered_calls_and_allows_manual_registration(
     interfaces = client.get("/api/interfaces").get_json()["items"]
     assert len(interfaces) == 1
     assert interfaces[0]["call_count"] == 1
+
+
+def test_manual_registration_batches_same_unregistered_interface_and_recalculates_stats(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/interfaces/lock", json={"locked": True})
+    client.post("/api/calls/before", json=make_before("batch-success", cmd="measure", params={"mode": "A"}))
+    finish(client, "batch-success", success=True, cost_ms=10)
+    client.post("/api/calls/before", json=make_before("batch-error", cmd="measure", params={"mode": "B"}))
+    finish(client, "batch-error", success=False, cost_ms=30)
+    client.post("/api/calls/before", json=make_before("batch-running", cmd="measure", params={"mode": "C"}))
+    client.post("/api/calls/before", json=make_before("other-slot", cmd="measure", slot_id=2, params={"mode": "D"}))
+
+    registered = client.post("/api/calls/batch-success/interface").get_json()
+    assert registered["success"] is True
+    assert registered["updatedCallCount"] == 3
+    assert registered["totalInterfaceCallCount"] == 3
+
+    calls = client.get("/api/calls").get_json()["items"]
+    same_slot = [item for item in calls if item["slot_key"] == "1"]
+    other_slot = [item for item in calls if item["slot_key"] == "2"][0]
+    assert {item["interface_id"] for item in same_slot} == {registered["interfaceId"]}
+    assert all(item["interface_registered"] == 1 for item in same_slot)
+    assert other_slot["interface_registered"] == 0
+    assert other_slot["interface_id"] is None
+
+    interface = client.get("/api/interfaces").get_json()["items"][0]
+    assert interface["id"] == registered["interfaceId"]
+    assert interface["call_count"] == 3
+    assert interface["success_count"] == 1
+    assert interface["exception_count"] == 1
+    assert interface["avg_cost_ms"] == 20
+    assert interface["max_cost_ms"] == 30
+    assert interface["min_cost_ms"] == 10
+    assert interface["params_sample_count"] == 3
+    assert interface["first_seen_at"]
+    assert interface["last_seen_at"]
 
 
 def test_interface_lock_still_updates_existing_interfaces(tmp_path):
@@ -336,12 +376,53 @@ def test_session_archive_import_stops_debug_loads_import_and_rejects_duplicate(t
     assert imported_calls[0]["call_id"] != "archived-call"
     assert len(client.get("/api/interfaces").get_json()["items"]) == 1
 
+    duplicate_session = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    client.post("/api/debug/start", json={})
+    client.post(
+        "/api/breakpoints",
+        json={"objectName": "SA", "cmdName": "dup-pause", "slotId": 1, "matchMode": "command_only"},
+    )
+    assert client.post("/api/calls/before", json=make_before("paused-before-duplicate", cmd="dup-pause")).get_json()["action"] == "pause"
+
     duplicate = client.post("/api/sessions/import", json={"archive": archive})
     assert duplicate.status_code == 409
     duplicate_payload = duplicate.get_json()
     assert duplicate_payload["success"] is False
+    assert duplicate_payload["archiveName"] == "first archive"
     assert duplicate_payload["existingSessionId"] == imported_session
     assert duplicate_payload["openExisting"] is True
+    assert "releasedCount" not in duplicate_payload
+
+    state = client.get("/api/debug/state").get_json()
+    assert state["debugging"] is True
+    assert state["sessionId"] == duplicate_session
+    assert state["pausedCount"] == 1
+    duplicate_calls = client.get("/api/calls").get_json()["items"]
+    assert duplicate_calls[0]["call_id"] == "paused-before-duplicate"
+    assert duplicate_calls[0]["status"] == "paused"
+
+
+def test_session_archive_import_converts_historical_paused_calls(tmp_path):
+    client = make_client(tmp_path)
+
+    source_session, _ = create_and_start(client)
+    client.post(
+        "/api/breakpoints",
+        json={"objectName": "SA", "cmdName": "archive-paused", "slotId": 1, "matchMode": "command_only"},
+    )
+    assert client.post("/api/calls/before", json=make_before("archived-paused-call", cmd="archive-paused")).get_json()["action"] == "pause"
+    archive = client.post(
+        f"/api/sessions/{source_session}/export",
+        json={"archiveName": "paused archive", "remark": "paused note"},
+    ).get_json()["archive"]
+
+    imported = client.post("/api/sessions/import", json={"archive": archive}).get_json()
+    assert imported["success"] is True
+    imported_calls = client.get("/api/calls").get_json()["items"]
+    assert len(imported_calls) == 1
+    assert imported_calls[0]["status"] == "imported_paused"
+    assert imported_calls[0]["continued_at"] is None
+    assert client.get("/api/debug/state").get_json()["pausedCount"] == 0
 
 
 def test_grouped_endpoints_return_object_groups(tmp_path):

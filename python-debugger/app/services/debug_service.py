@@ -713,19 +713,21 @@ def import_session_archive(archive, lock_interfaces=False):
     if not archive_id:
         return {"success": False, "message": "archiveId missing"}
 
-    released = stop_debug()
     db = get_db()
     existing = db.execute("SELECT id FROM debug_session WHERE archive_id=?", (archive_id,)).fetchone()
     if existing:
+        source = archive.get("session") or {}
+        archive_name = str(archive.get("archiveName") or source.get("archive_name") or source.get("id") or archive_id).strip() or archive_id
         return {
             "success": False,
             "message": "archive already imported",
             "archiveId": archive_id,
+            "archiveName": archive_name,
             "existingSessionId": existing["id"],
             "openExisting": True,
-            "releasedCount": released,
         }
 
+    released = stop_debug()
     now = now_iso()
     source = archive.get("session") or {}
     new_session_id = f"session-{uuid.uuid4().hex[:10]}"
@@ -795,6 +797,7 @@ def import_session_archive(archive, lock_interfaces=False):
             old_interface_id = item.get("interface_id")
             new_interface_id = interface_ids.get(old_interface_id)
             interface_registered = 1 if new_interface_id else int(item.get("interface_registered", 0) or 0)
+            status = "imported_paused" if item.get("status") == "paused" else item.get("status")
             _insert_archive_row(
                 db,
                 "call_record",
@@ -802,9 +805,12 @@ def import_session_archive(archive, lock_interfaces=False):
                 {
                     "call_id": new_call_id,
                     "session_id": new_session_id,
+                    "status": status,
                     "interface_id": new_interface_id,
                     "interface_registered": interface_registered,
                     "discovery_enabled": int(item.get("discovery_enabled", interface_registered) or 0),
+                    "continued_at": None if item.get("status") == "paused" else item.get("continued_at"),
+                    "finished_at": item.get("finished_at"),
                     "created_at": item.get("created_at") or now,
                     "updated_at": item.get("updated_at") or now,
                 },
@@ -939,22 +945,88 @@ def register_interface_from_call(call_id):
         return {"success": False, "message": "call not found"}
     call = normalize(row_to_dict(row))
     if call.get("interface_id") and call.get("interface_registered", 1):
-        return {"success": True, "interfaceId": call["interface_id"], "alreadyRegistered": True}
+        total = recalculate_interface_stats(call["interface_id"], now_iso())
+        db.commit()
+        return {
+            "success": True,
+            "interfaceId": call["interface_id"],
+            "callId": call_id,
+            "alreadyRegistered": True,
+            "updatedCallCount": 0,
+            "totalInterfaceCallCount": total,
+        }
     now = now_iso()
     call_data = call_data_from_record(call)
     interface_id = upsert_interface(call_data, call["session_id"], now)
+    rows = db.execute(
+        """SELECT * FROM call_record
+           WHERE session_id=? AND interface_registered=0
+             AND object_name=? AND cmd_name=? AND slot_key=?""",
+        (call["session_id"], call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
+    ).fetchall()
+    for item in rows:
+        if item["call_id"] != call_id:
+            upsert_param_sample(interface_id, call_data_from_record(normalize(row_to_dict(item))), now)
     db.execute(
-        "UPDATE call_record SET interface_id=?, interface_registered=1, discovery_enabled=1, updated_at=? WHERE call_id=?",
-        (interface_id, now, call_id),
+        """UPDATE call_record
+           SET interface_id=?, interface_registered=1, discovery_enabled=1, updated_at=?
+           WHERE session_id=? AND interface_registered=0
+             AND object_name=? AND cmd_name=? AND slot_key=?""",
+        (interface_id, now, call["session_id"], call_data["object_name"], call_data["cmd_name"], call_data["slot_key"]),
     )
-    if call.get("status") in ("finished", "exception"):
-        update_interface_stats(
-            {"interface_id": interface_id},
-            {"success": bool(call.get("success")), "costMs": call.get("cost_ms")},
-            now,
-        )
+    total = recalculate_interface_stats(interface_id, now)
     db.commit()
-    return {"success": True, "interfaceId": interface_id, "callId": call_id}
+    return {
+        "success": True,
+        "interfaceId": interface_id,
+        "callId": call_id,
+        "updatedCallCount": len(rows),
+        "totalInterfaceCallCount": total,
+    }
+
+
+def recalculate_interface_stats(interface_id, now):
+    db = get_db()
+    rows = db.execute("SELECT * FROM call_record WHERE interface_id=? ORDER BY created_at ASC, id ASC", (interface_id,)).fetchall()
+    call_count = len(rows)
+    success_count = sum(1 for row in rows if row["success"] == 1)
+    exception_count = sum(1 for row in rows if row["status"] == "exception" or row["success"] == 0)
+    costs = [row["cost_ms"] for row in rows if row["cost_ms"] is not None]
+    avg_cost = (sum(costs) / len(costs)) if costs else None
+    max_cost = max(costs) if costs else None
+    min_cost = min(costs) if costs else None
+    seen_times = [row["created_at"] or row["updated_at"] for row in rows if row["created_at"] or row["updated_at"]]
+    first_seen = min(seen_times) if seen_times else now
+    last_seen = max(seen_times) if seen_times else now
+    latest = rows[-1] if rows else None
+    sample_count = db.execute("SELECT COUNT(*) FROM interface_param_sample WHERE interface_id=?", (interface_id,)).fetchone()[0]
+    db.execute(
+        """UPDATE discovered_interface
+           SET call_count=?, success_count=?, exception_count=?, avg_cost_ms=?, max_cost_ms=?, min_cost_ms=?,
+               first_seen_at=?, last_seen_at=?, params_sample_count=?,
+               latest_params_json=COALESCE(?, latest_params_json),
+               latest_params_fingerprint=COALESCE(?, latest_params_fingerprint),
+               params_summary=COALESCE(?, params_summary),
+               updated_at=?
+           WHERE id=?""",
+        (
+            call_count,
+            success_count,
+            exception_count,
+            avg_cost,
+            max_cost,
+            min_cost,
+            first_seen,
+            last_seen,
+            sample_count,
+            latest["params_json"] if latest else None,
+            latest["params_fingerprint"] if latest else None,
+            latest["params_summary"] if latest else None,
+            now,
+            interface_id,
+        ),
+    )
+    return call_count
 
 
 def call_data_from_record(call):

@@ -68,6 +68,7 @@ Item {
         if (status === "running") return "运行中"
         if (status === "finished") return "成功"
         if (status === "paused") return "暂停"
+        if (status === "imported_paused") return "历史暂停"
         if (status === "exception") return "异常"
         if (status === "continued") return "继续"
         if (status === "timeout") return "超时"
@@ -75,7 +76,7 @@ Item {
     }
     function statusType(status) {
         if (status === "finished") return "success"
-        if (status === "paused" || status === "timeout") return "warning"
+        if (status === "paused" || status === "imported_paused" || status === "timeout") return "warning"
         if (status === "exception") return "danger"
         if (status === "running" || status === "continued") return "primary"
         return "neutral"

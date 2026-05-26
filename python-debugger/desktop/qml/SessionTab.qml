@@ -9,10 +9,14 @@ Item {
     property var items: []
     property string activeSessionId: ""
     property bool canClearSessions: false
+    property bool debugging: false
+    property int pausedCount: 0
     property string exportSessionId: ""
     property string exportArchiveName: ""
     property string exportRemark: ""
     property bool importLockInterfaces: false
+    property string duplicateExistingSessionId: ""
+    property string duplicateArchiveName: ""
 
     function modeText(mode) {
         if (mode === "record") return "记录"
@@ -54,9 +58,78 @@ Item {
         exportDialog.open()
     }
 
+    function requestImport() {
+        importDialog.close()
+        if (debugging) {
+            var message = pausedCount > 0
+                    ? "当前正在调试，并存在暂停中的 Java 调用。导入 Session 会释放所有暂停调用、停止当前调试，并切换到导入的历史 Session。是否继续？"
+                    : "当前正在调试。导入 Session 会停止当前调试，并切换到导入的历史 Session。是否继续？"
+            confirmDialog.ask("导入 Session", message, "继续导入", function() {
+                bridge.importSession(page.importLockInterfaces)
+            })
+            return
+        }
+        bridge.importSession(page.importLockInterfaces)
+    }
+
+    function duplicateMessage() {
+        var text = "该 Session 已存在，不能重复导入。"
+        if (duplicateArchiveName) text += "\narchiveName: " + duplicateArchiveName
+        text += "\nexistingSessionId: " + duplicateExistingSessionId
+        return text
+    }
+
     ConfirmDialog {
         id: confirmDialog
         appTheme: page.appTheme
+    }
+
+    Connections {
+        target: bridge
+        function onImportDuplicate(payload) {
+            var data = JSON.parse(payload)
+            page.duplicateExistingSessionId = data.existingSessionId || ""
+            page.duplicateArchiveName = data.archiveName || ""
+            duplicateImportDialog.open()
+        }
+    }
+
+    Popup {
+        id: duplicateImportDialog
+        modal: true
+        focus: true
+        width: 440
+        height: 214
+        anchors.centerIn: parent
+        background: Rectangle { radius: 6; color: page.appTheme.panelBg; border.color: page.appTheme.border }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            Text { text: "该 Session 已存在，不能重复导入。"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.Wrap }
+            Text { text: page.duplicateMessage(); color: page.appTheme.textNormal; font.pixelSize: 13; lineHeight: 1.25; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            Item { Layout.fillHeight: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                MbButton { appTheme: page.appTheme; text: "取消"; variant: "neutral"; Layout.preferredWidth: 86; Layout.preferredHeight: 36; onClicked: duplicateImportDialog.close() }
+                MbButton {
+                    appTheme: page.appTheme
+                    text: "打开已有 Session"
+                    variant: "primary"
+                    Layout.preferredWidth: 138
+                    Layout.preferredHeight: 36
+                    enabled: page.duplicateExistingSessionId.length > 0
+                    onClicked: {
+                        var sessionId = page.duplicateExistingSessionId
+                        duplicateImportDialog.close()
+                        bridge.openExistingSession(sessionId)
+                    }
+                }
+            }
+        }
     }
 
     Popup {
@@ -129,10 +202,7 @@ Item {
                     variant: "primary"
                     Layout.preferredWidth: 104
                     Layout.preferredHeight: 36
-                    onClicked: {
-                        bridge.importSession(page.importLockInterfaces)
-                        importDialog.close()
-                    }
+                    onClicked: page.requestImport()
                 }
             }
         }

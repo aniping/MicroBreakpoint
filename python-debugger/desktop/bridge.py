@@ -16,6 +16,7 @@ class Bridge(QObject):
     sessionsChanged = Signal(str)
     resultChanged = Signal(str)
     themeChanged = Signal(str)
+    importDuplicate = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -137,8 +138,14 @@ class Bridge(QObject):
         except Exception as exc:
             self._emit_result({"success": False, "message": f"invalid archive: {exc}"})
             return
-        self._emit_result(self._request("POST", f"{self.backend}/api/sessions/import", json={"archive": archive, "lockInterfaces": lockInterfaces}))
+        result = self._request("POST", f"{self.backend}/api/sessions/import", json={"archive": archive, "lockInterfaces": lockInterfaces})
+        self._handle_import_result(result)
         self.refreshAll()
+
+    def _handle_import_result(self, result):
+        self._emit_result(result)
+        if not result.get("success") and result.get("openExisting") and result.get("existingSessionId"):
+            self.importDuplicate.emit(json.dumps(result, ensure_ascii=False))
 
     def _archive_filename(self, name):
         cleaned = "".join(char if char not in '<>:"/\\|?*' else "_" for char in str(name or "session")).strip()
