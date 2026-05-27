@@ -19,8 +19,8 @@ Item {
     property var groupHitFilters: ({})
     property var groupSortKeys: ({})
     property var groupSortOrders: ({})
-    property var columnWidths: [64, 170, 64, 240, 82, 76, 132]
-    property var columnMinWidths: [64, 120, 64, 240, 82, 76, 112]
+    property var columnWidths: [64, 170, 64, 240, 82, 76, 96, 96]
+    property var columnMinWidths: [64, 120, 64, 240, 82, 76, 88, 88]
     property bool columnsWereResized: false
     property var selectedItem: selectedItemForId(selectedCallId)
     signal clearBreakpointFilterRequested()
@@ -306,7 +306,7 @@ Item {
     }
 
     function isResizableColumn(index) {
-        return index === 1 || index === 3 || index === 6
+        return index === 1 || index === 3
     }
 
     function storedColumnWidth(index) {
@@ -568,28 +568,21 @@ Item {
         }
     }
 
-    component MarkerCell: Rectangle {
-        id: markerCell
-        property var item
+    component TagCell: Rectangle {
+        property int column: 0
+        property string label: ""
+        property string type: "neutral"
         property real tableWidth: 0
-        width: page.colWidth(6, tableWidth)
+        width: page.colWidth(column, tableWidth)
         height: 38
         color: "transparent"
         border.color: page.appTheme.borderSoft
-        Column {
+        MiniTag {
             anchors.centerIn: parent
             width: Math.max(0, parent.width - 12)
-            spacing: 2
-            MiniTag {
-                width: parent.width
-                text: page.breakpointId(markerCell.item) ? "断点已命中" : "断点未命中"
-                type: page.breakpointId(markerCell.item) ? "warning" : "neutral"
-            }
-            MiniTag {
-                width: parent.width
-                text: page.interfaceRegistered(markerCell.item) ? "接口已登记" : "接口未登记"
-                type: page.interfaceRegistered(markerCell.item) ? "success" : "danger"
-            }
+            height: 20
+            text: parent.label
+            type: parent.type
         }
     }
 
@@ -804,7 +797,8 @@ Item {
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 3; label: "参数摘要"; sortField: "params"; sortable: false }
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 4; label: "状态"; sortField: "status" }
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 5; label: "耗时"; sortField: "cost_ms" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "标记"; sortField: "hit" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "断点"; sortField: "hit" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 7; label: "接口"; sortField: "interface_registered" }
                                                 }
                                                 Repeater {
                                                     model: page.filteredRows(modelData)
@@ -829,7 +823,18 @@ Item {
                                                                 StatusBadge { value: page.statusValue(modelData); anchors.centerIn: parent }
                                                             }
                                                             DataCell { tableWidth: tableFlick.width; column: 5; label: page.costValue(modelData) }
-                                                            MarkerCell { tableWidth: tableFlick.width; item: modelData }
+                                                            TagCell {
+                                                                tableWidth: tableFlick.width
+                                                                column: 6
+                                                                label: page.breakpointId(modelData) ? "已命中" : "未命中"
+                                                                type: page.breakpointId(modelData) ? "warning" : "neutral"
+                                                            }
+                                                            TagCell {
+                                                                tableWidth: tableFlick.width
+                                                                column: 7
+                                                                label: page.interfaceRegistered(modelData) ? "已登记" : "未登记"
+                                                                type: page.interfaceRegistered(modelData) ? "success" : "danger"
+                                                            }
                                                         }
                                                         MouseArea {
                                                             anchors.fill: parent
