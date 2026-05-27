@@ -23,9 +23,9 @@ def test_theme_mode_persists_between_bridge_instances():
 
 
 def test_call_record_filter_includes_interface_alias():
-    qml = (QML_ROOT / "CallRecordTab.qml").read_text(encoding="utf-8")
+    qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
 
-    assert "item.interface_alias" in qml
+    assert "item.interface_alias || item.interfaceAlias" in qml
 
 
 def test_call_record_uses_business_debug_fields():
@@ -43,9 +43,11 @@ def test_call_record_uses_business_debug_fields():
     assert "imported_paused" in qml
     assert "历史暂停" in qml
     assert 'page.statusValue(page.selectedItem) === "paused"' in qml
-    assert 'label: "接口状态"' in qml
-    assert 'label: "断点"' in qml
-    assert "接口 / 断点" not in qml
+    assert 'label: "标记"' in qml
+    assert 'label: "接口状态"' not in qml
+    assert 'label: "断点"' not in qml
+    assert 'label: "线程名"' not in qml
+    assert 'label: "调用时间"' not in qml
 
 
 def test_call_record_page_keeps_filters_inside_groups():
@@ -53,11 +55,19 @@ def test_call_record_page_keeps_filters_inside_groups():
     main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
 
     assert "CallRecordPage" in main
+    assert not (QML_ROOT / "CallRecordTab.qml").exists()
     assert "搜索 \" + modelData.objectName + \" 内调用" in qml
     assert "HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName" in qml
+    assert "property var columnWidths: [64, 170, 64, 240, 82, 76, 132]" in qml
     assert "function setColumnWidth" in qml
     assert "function isResizableColumn" in qml
-    assert "index === 2 || index === 4 || index === 6 || index === 7 || index === 8" in qml
+    assert "index === 1 || index === 3 || index === 6" in qml
+    assert "function tableContentWidth" in qml
+    assert "columnsWereResized && total > available ? total : available" in qml
+    assert "component MarkerCell" in qml
+    assert "断点已命中" in qml
+    assert "接口已登记" in qml
+    assert 'label: "对象"' not in qml
     assert "function setSort" in qml
     assert "function pagedRows" not in qml
     assert "Flickable {" in qml
@@ -164,7 +174,6 @@ def test_destructive_actions_use_confirmation_dialog():
         "CallRecordPage.qml",
         "BreakpointPage.qml",
         "SessionTab.qml",
-        "CallRecordTab.qml",
         "BreakpointTab.qml",
         "InterfaceTab.qml",
     ]

@@ -19,8 +19,9 @@ Item {
     property var groupHitFilters: ({})
     property var groupSortKeys: ({})
     property var groupSortOrders: ({})
-    property var columnWidths: [64, 72, 160, 72, 220, 84, 96, 170, 170, 92, 82]
-    property var columnMinWidths: [64, 72, 120, 72, 220, 84, 80, 120, 140, 92, 82]
+    property var columnWidths: [64, 170, 64, 240, 82, 76, 132]
+    property var columnMinWidths: [64, 120, 64, 240, 82, 76, 112]
+    property bool columnsWereResized: false
     property var selectedItem: selectedItemForId(selectedCallId)
     signal clearBreakpointFilterRequested()
     signal selectedCallChanged(string callId, string status)
@@ -270,7 +271,7 @@ Item {
         var result = []
         for (var i = 0; i < rows.length; i++) {
             var item = rows[i]
-            var haystack = (cmdName(item) + " " + paramsSummary(item) + " " + textOf(item.thread_name || item.threadName) + " " + callId(item)).toLowerCase()
+            var haystack = (cmdName(item) + " " + paramsSummary(item) + " " + textOf(item.thread_name || item.threadName) + " " + textOf(item.interface_alias || item.interfaceAlias) + " " + callId(item)).toLowerCase()
             if (needle && haystack.indexOf(needle) < 0) continue
             if (state === "成功" && statusValue(item) !== "finished") continue
             if (state === "暂停" && statusValue(item) !== "paused") continue
@@ -305,7 +306,7 @@ Item {
     }
 
     function isResizableColumn(index) {
-        return index === 2 || index === 4 || index === 6 || index === 7 || index === 8
+        return index === 1 || index === 3 || index === 6
     }
 
     function storedColumnWidth(index) {
@@ -313,13 +314,13 @@ Item {
     }
 
     function colWidth(index, tableWidth) {
-        if (index === 4) {
+        if (index === 3) {
             var available = Math.max(0, Number(tableWidth) || 0)
             var otherTotal = 0
             for (var i = 0; i < columnWidths.length; i++) {
-                if (i !== 4) otherTotal += storedColumnWidth(i)
+                if (i !== 3) otherTotal += storedColumnWidth(i)
             }
-            return Math.max(columnMinWidths[4], storedColumnWidth(4), available - otherTotal)
+            return Math.max(columnMinWidths[3], storedColumnWidth(3), available - otherTotal)
         }
         return storedColumnWidth(index)
     }
@@ -329,12 +330,24 @@ Item {
         var next = columnWidths.slice()
         next[index] = Math.max(columnMinWidths[index] || 80, Math.min(520, width))
         columnWidths = next
+        columnsWereResized = true
     }
 
     function totalColumnWidth(tableWidth) {
         var total = 0
         for (var i = 0; i < columnWidths.length; i++) total += colWidth(i, tableWidth)
         return total
+    }
+
+    function tableContentWidth(tableWidth) {
+        var available = Math.max(0, Number(tableWidth) || 0)
+        var total = totalColumnWidth(available)
+        return columnsWereResized && total > available ? total : available
+    }
+
+    function tableHasHorizontalOverflow(tableWidth) {
+        var available = Math.max(0, Number(tableWidth) || 0)
+        return tableContentWidth(available) > available
     }
 
     function overviewRows(item) {
@@ -467,8 +480,9 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: 10
+            width: 12
             color: resizeArea.pressed || resizeArea.containsMouse ? page.appTheme.primarySoft : "transparent"
+            border.color: resizeArea.pressed || resizeArea.containsMouse ? page.appTheme.primary : "transparent"
             MouseArea {
                 id: resizeArea
                 anchors.fill: parent
@@ -476,11 +490,13 @@ Item {
                 cursorShape: Qt.SizeHorCursor
                 property real startX: 0
                 property real startWidth: 0
-                onPressed: {
+                onPressed: function(mouse) {
                     startX = mouse.x
-                    startWidth = page.colWidth(header.column)
+                    startWidth = page.colWidth(header.column, header.tableWidth)
                 }
-                onPositionChanged: if (pressed) page.setColumnWidth(header.column, startWidth + mouse.x - startX)
+                onPositionChanged: function(mouse) {
+                    if (pressed) page.setColumnWidth(header.column, startWidth + mouse.x - startX)
+                }
             }
         }
     }
@@ -524,6 +540,56 @@ Item {
             color: page.statusColor(parent.value)
             font.pixelSize: 12
             font.weight: Font.DemiBold
+        }
+    }
+
+    component MiniTag: Rectangle {
+        id: miniTag
+        property string text: ""
+        property string type: "neutral"
+        height: 17
+        radius: 4
+        color: miniTag.type === "warning" ? page.appTheme.warningSoft
+              : miniTag.type === "danger" ? page.appTheme.dangerSoft
+              : miniTag.type === "success" ? page.appTheme.successSoft
+              : page.appTheme.panelBgAlt
+        border.color: miniTag.type === "warning" ? page.appTheme.warning
+                    : miniTag.type === "danger" ? page.appTheme.danger
+                    : miniTag.type === "success" ? page.appTheme.success
+                    : page.appTheme.textDisabled
+        Text {
+            anchors.centerIn: parent
+            text: miniTag.text
+            color: miniTag.border.color
+            font.pixelSize: 10
+            font.weight: Font.DemiBold
+            elide: Text.ElideRight
+            maximumLineCount: 1
+        }
+    }
+
+    component MarkerCell: Rectangle {
+        id: markerCell
+        property var item
+        property real tableWidth: 0
+        width: page.colWidth(6, tableWidth)
+        height: 38
+        color: "transparent"
+        border.color: page.appTheme.borderSoft
+        Column {
+            anchors.centerIn: parent
+            width: Math.max(0, parent.width - 12)
+            spacing: 2
+            MiniTag {
+                width: parent.width
+                text: page.breakpointId(markerCell.item) ? "断点已命中" : "断点未命中"
+                type: page.breakpointId(markerCell.item) ? "warning" : "neutral"
+            }
+            MiniTag {
+                width: parent.width
+                text: page.interfaceRegistered(markerCell.item) ? "接口已登记" : "接口未登记"
+                type: page.interfaceRegistered(markerCell.item) ? "success" : "danger"
+            }
         }
     }
 
@@ -714,34 +780,31 @@ Item {
                                         Flickable {
                                             id: tableFlick
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: tableContent.implicitHeight + (tableFlick.contentWidth > tableFlick.width ? 14 : 0)
+                                            Layout.preferredHeight: tableContent.implicitHeight + (page.tableHasHorizontalOverflow(tableFlick.width) ? 14 : 0)
                                             clip: true
-                                            contentWidth: tableContent.width
+                                            contentWidth: page.tableContentWidth(tableFlick.width)
                                             contentHeight: tableContent.implicitHeight
                                             flickableDirection: Flickable.HorizontalFlick
                                             boundsBehavior: Flickable.StopAtBounds
                                             interactive: false
                                             ScrollBar.horizontal: ScrollBar {
-                                                policy: tableFlick.contentWidth > tableFlick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                                policy: page.tableHasHorizontalOverflow(tableFlick.width) ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                                interactive: page.tableHasHorizontalOverflow(tableFlick.width)
                                                 contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? page.appTheme.primary : page.appTheme.textDisabled }
                                                 background: Rectangle { color: page.appTheme.panelBgAlt; radius: 4 }
                                             }
 
                                             Column {
                                                 id: tableContent
-                                                width: Math.max(tableFlick.width, page.totalColumnWidth(tableFlick.width))
+                                                width: page.tableContentWidth(tableFlick.width)
                                                 Row {
                                                     HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 0; label: "序号"; sortField: "call_index" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 1; label: "对象"; sortField: "object_name"; sortable: false }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 2; label: "命令"; sortField: "cmd_name" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 3; label: "槽位"; sortField: "slot_id" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 4; label: "参数摘要"; sortField: "params"; sortable: false }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 5; label: "状态"; sortField: "status" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "耗时(ms)"; sortField: "cost_ms" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 7; label: "线程名"; sortField: "thread_name" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 8; label: "调用时间"; sortField: "created_at" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 9; label: "接口状态"; sortField: "interface_registered" }
-                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 10; label: "断点"; sortField: "hit" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 1; label: "命令"; sortField: "cmd_name" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 2; label: "槽位"; sortField: "slot_id" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 3; label: "参数摘要"; sortField: "params"; sortable: false }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 4; label: "状态"; sortField: "status" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 5; label: "耗时"; sortField: "cost_ms" }
+                                                    HeaderCell { tableWidth: tableFlick.width; groupName: modelData.objectName; column: 6; label: "标记"; sortField: "hit" }
                                                 }
                                                 Repeater {
                                                     model: page.filteredRows(modelData)
@@ -755,32 +818,18 @@ Item {
                                                         Row {
                                                             anchors.fill: parent
                                                             DataCell { tableWidth: tableFlick.width; column: 0; label: String(modelData.call_index || modelData.callIndex || "") }
-                                                            DataCell { tableWidth: tableFlick.width; column: 1; label: page.objectName(modelData); labelColor: page.appTheme.textStrong }
-                                                            DataCell { tableWidth: tableFlick.width; column: 2; label: page.cmdName(modelData); labelColor: page.appTheme.textStrong }
-                                                            DataCell { tableWidth: tableFlick.width; column: 3; label: page.slotValue(modelData) }
-                                                            DataCell { tableWidth: tableFlick.width; column: 4; label: page.paramsSummary(modelData) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 1; label: page.cmdName(modelData); labelColor: page.appTheme.textStrong }
+                                                            DataCell { tableWidth: tableFlick.width; column: 2; label: page.slotValue(modelData) }
+                                                            DataCell { tableWidth: tableFlick.width; column: 3; label: page.paramsSummary(modelData) }
                                                             Rectangle {
-                                                                width: page.colWidth(5, tableFlick.width)
+                                                                width: page.colWidth(4, tableFlick.width)
                                                                 height: 38
                                                                 color: "transparent"
                                                                 border.color: page.appTheme.borderSoft
                                                                 StatusBadge { value: page.statusValue(modelData); anchors.centerIn: parent }
                                                             }
-                                                            DataCell { tableWidth: tableFlick.width; column: 6; label: page.costValue(modelData) }
-                                                            DataCell { tableWidth: tableFlick.width; column: 7; label: page.textOf(modelData.thread_name || modelData.threadName) }
-                                                            DataCell { tableWidth: tableFlick.width; column: 8; label: page.shortTime(modelData.created_at || modelData.createdAt) }
-                                                            DataCell {
-                                                                tableWidth: tableFlick.width
-                                                                column: 9
-                                                                label: page.interfaceRegistered(modelData) ? "已登记" : "未登记"
-                                                                labelColor: page.interfaceRegistered(modelData) ? page.appTheme.textMuted : page.appTheme.danger
-                                                            }
-                                                            DataCell {
-                                                                tableWidth: tableFlick.width
-                                                                column: 10
-                                                                label: page.breakpointId(modelData) ? "命中" : "未命中"
-                                                                labelColor: page.breakpointId(modelData) ? page.appTheme.warning : page.appTheme.textMuted
-                                                            }
+                                                            DataCell { tableWidth: tableFlick.width; column: 5; label: page.costValue(modelData) }
+                                                            MarkerCell { tableWidth: tableFlick.width; item: modelData }
                                                         }
                                                         MouseArea {
                                                             anchors.fill: parent
