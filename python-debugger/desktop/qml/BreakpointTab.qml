@@ -29,14 +29,14 @@ Item {
     }
 
     function matchModeText(mode) {
-        if (mode === "params_snapshot") return "参数快照"
-        if (mode === "params_condition") return "参数条件"
-        return "命令"
+        if (mode === "command_only") return "命令断点"
+        if (mode === "params_snapshot" || mode === "params_condition") return "条件断点"
+        return "命令断点"
     }
 
     function matchSummary(item) {
         if (!item) return "-"
-        if (item.match_mode === "params_snapshot") return "参数快照: " + JSON.stringify(item.params_snapshot || {})
+        if (item.match_mode === "params_snapshot") return "条件断点: " + JSON.stringify(item.params_snapshot || {})
         if (item.match_mode === "params_condition") return "参数条件: " + page.conditionSummary(item.condition)
         return "命令匹配: " + (item.object_name || "-") + " / " + (item.cmd_name || "-")
     }
@@ -58,7 +58,7 @@ Item {
     function sourceText(item) {
         if (!item) return "-"
         if (item.source_call_id) return "调用记录"
-        if (item.source_interface_id || item.resolved_interface_id) return "已发现接口"
+        if (item.source_interface_id || item.resolved_interface_id) return "接口列表"
         if (item.source_session_id) return "会话"
         return "手动"
     }
@@ -102,7 +102,7 @@ Item {
                         anchors.leftMargin: 16
                         anchors.rightMargin: 16
                         Text {
-                            text: "断点管理"
+                            text: "断点列表"
                             color: appTheme.textStrong
                             font.pixelSize: 16
                             font.weight: Font.DemiBold
@@ -239,7 +239,7 @@ Item {
                             font.weight: Font.DemiBold
                         }
                         Text {
-                            text: "可从已发现接口或调用记录创建断点"
+                            text: "可从接口列表或调用记录创建断点"
                             color: appTheme.textMuted
                             font.pixelSize: 13
                         }

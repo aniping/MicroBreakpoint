@@ -81,4 +81,7 @@ def continue_all():
 def breakpoint_from_call(call_id):
     body = request.get_json(silent=True) or {}
     result = create_breakpoint_from_call(call_id, body)
-    return jsonify(result), 200 if result.get("success") else 404
+    if result.get("success"):
+        return jsonify(result)
+    status = 409 if result.get("code", "").startswith("DUPLICATE_") else 404
+    return jsonify(result), status

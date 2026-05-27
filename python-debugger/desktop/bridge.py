@@ -17,6 +17,7 @@ class Bridge(QObject):
     resultChanged = Signal(str)
     themeChanged = Signal(str)
     importDuplicate = Signal(str)
+    userNotice = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -36,6 +37,18 @@ class Bridge(QObject):
 
     def _emit_result(self, value):
         self.resultChanged.emit(json.dumps(value, ensure_ascii=False, indent=2))
+        message = value.get("message") if isinstance(value, dict) else None
+        if message and (
+            value.get("code") in ("DUPLICATE_COMMAND_BREAKPOINT", "DUPLICATE_CONDITION_BREAKPOINT")
+            or message.startswith("条件断点已创建")
+            or message == "当前会话数据已清空。"
+        ):
+            self.userNotice.emit(message)
+
+    def _emit_operation_result(self, value, refresh=True):
+        self._emit_result(value)
+        if refresh:
+            self.refreshAll()
 
     @Slot(result=str)
     def getThemeMode(self):
@@ -79,8 +92,10 @@ class Bridge(QObject):
 
     @Slot()
     def clearCalls(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/sessions/current/clear"))
-        self.refreshAll()
+        result = self._request("POST", f"{self.backend}/api/sessions/current/clear")
+        if result.get("success"):
+            result["message"] = "当前会话数据已清空。"
+        self._emit_operation_result(result)
 
     @Slot()
     def clearSessions(self):
@@ -118,7 +133,7 @@ class Bridge(QObject):
             return
         archive = result.get("archive") or {}
         suggested = self._archive_filename(archive.get("archiveName") or archiveName or sessionId)
-        path, _ = QFileDialog.getSaveFileName(None, "Export MicroBreakpoint Session", suggested, "MicroBreakpoint Archive (*.mbrec)")
+        path, _ = QFileDialog.getSaveFileName(None, "导出组件化断点调试工具会话", suggested, "组件化断点调试工具归档 (*.mbrec)")
         if not path:
             self._emit_result({"success": False, "message": "export cancelled"})
             return
@@ -129,7 +144,7 @@ class Bridge(QObject):
 
     @Slot(bool)
     def importSession(self, lockInterfaces):
-        path, _ = QFileDialog.getOpenFileName(None, "Import MicroBreakpoint Session", "", "MicroBreakpoint Archive (*.mbrec)")
+        path, _ = QFileDialog.getOpenFileName(None, "导入组件化断点调试工具会话", "", "组件化断点调试工具归档 (*.mbrec)")
         if not path:
             self._emit_result({"success": False, "message": "import cancelled"})
             return
@@ -190,13 +205,11 @@ class Bridge(QObject):
 
     @Slot(str)
     def createBreakpointFromInterface(self, interfaceId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/interfaces/{interfaceId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
-        self.refreshAll()
+        self._emit_operation_result(self._request("POST", f"{self.backend}/api/interfaces/{interfaceId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
 
     @Slot(str)
     def createBreakpointFromCall(self, callId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "params_snapshot", "hitMode": "always"}))
-        self.refreshAll()
+        self._emit_operation_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "params_snapshot", "hitMode": "always"}))
 
     @Slot(str)
     def addInterfaceFromCall(self, callId):
@@ -205,8 +218,7 @@ class Bridge(QObject):
 
     @Slot(str)
     def createMethodBreakpointFromCall(self, callId):
-        self._emit_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
-        self.refreshAll()
+        self._emit_operation_result(self._request("POST", f"{self.backend}/api/calls/{callId}/breakpoint", json={"enabled": True, "matchMode": "command_only", "hitMode": "always"}))
 
     @Slot(str)
     def copyText(self, text):

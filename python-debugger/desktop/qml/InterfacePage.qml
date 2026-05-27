@@ -100,11 +100,35 @@ Item {
         if (!item) return result
         for (var i = 0; i < breakpoints.length; i++) {
             var bp = breakpoints[i]
-            var sameSource = String(bp.source_interface_id || bp.sourceInterfaceId || "") === itemId(item)
-            var sameMatch = objectName(bp) === objectName(item) && cmdName(bp) === cmdName(item)
-            if (sameSource || sameMatch) result.push(bp)
+            var bpSession = String(bp.session_id || bp.sessionId || "")
+            var itemSession = String(item.session_id || item.sessionId || "")
+            var sameSession = !bpSession || !itemSession || bpSession === itemSession
+            var sameMatch = sameSession && objectName(bp) === objectName(item) && cmdName(bp) === cmdName(item)
+            if (sameMatch) result.push(bp)
         }
+        result.sort(function(a, b) { return String(b.created_at || b.createdAt || "").localeCompare(String(a.created_at || a.createdAt || "")) })
         return result
+    }
+    function breakpointTypeLabel(item) {
+        var label = item ? (item.breakpointTypeLabel || item.breakpoint_type_label) : ""
+        if (label) return String(label)
+        var mode = item ? (item.match_mode || item.matchMode || "command_only") : "command_only"
+        return mode === "command_only" ? "命令断点" : "条件断点"
+    }
+    function conditionSummary(item) {
+        if (!item) return "-"
+        var mode = item.match_mode || item.matchMode || "command_only"
+        if (mode === "command_only") return "命中该命令即暂停"
+        var conditions = safeObject(item.conditions || item.conditions_json || [], [])
+        if (conditions.length > 0) return jsonText(conditions).replace(/\s+/g, " ")
+        var snapshot = safeObject(item.params_snapshot || item.params_snapshot_json || {}, {})
+        var summary = jsonText(snapshot).replace(/\s+/g, " ")
+        return summary === "{}" ? "按参数指纹匹配" : summary
+    }
+    function confirmDeleteBreakpoint(breakpointId, breakpointName) {
+        confirmDialog.ask("删除断点", "将删除断点 " + breakpointName + "。此操作不可撤销。", "删除", function() {
+            bridge.deleteBreakpoint(breakpointId)
+        })
     }
     function interfaceBreakpoint(interfaceId) {
         for (var i = 0; i < items.length; i++) {
@@ -142,6 +166,11 @@ Item {
     }
     onItemsChanged: Qt.callLater(ensureSelection)
     onSelectedInterfaceIdChanged: selectedSampleIndex = 0
+
+    ConfirmDialog {
+        id: confirmDialog
+        appTheme: page.appTheme
+    }
 
     function isExpanded(name) { return expandedGroups[name] !== false }
     function setExpanded(name, value) { expandedGroups = setStoreValue(expandedGroups, name, value) }
@@ -420,7 +449,7 @@ Item {
                         anchors.leftMargin: 16
                         anchors.rightMargin: 16
                         spacing: 10
-                        Text { text: "已发现接口"; color: appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                        Text { text: "接口列表"; color: appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
                         MbButton { appTheme: page.appTheme; text: "刷新"; iconText: "↻"; variant: "neutral"; Layout.preferredWidth: 92; Layout.preferredHeight: 38; onClicked: bridge.refreshAll() }
                         MbButton { appTheme: page.appTheme; text: "全部展开"; iconText: "⌄"; variant: "neutral"; Layout.preferredWidth: 106; Layout.preferredHeight: 38; onClicked: page.setAllExpanded(true) }
                         MbButton { appTheme: page.appTheme; text: "全部收起"; iconText: "⌃"; variant: "neutral"; Layout.preferredWidth: 106; Layout.preferredHeight: 38; onClicked: page.setAllExpanded(false) }
@@ -588,7 +617,7 @@ Item {
                             Column {
                                 anchors.centerIn: parent
                                 spacing: 8
-                                Text { text: "暂无已发现接口"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter }
+                                Text { text: "暂无接口"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter }
                                 Text { text: "开始调试后，Java 上报的接口会自动出现在这里。"; color: page.appTheme.textMuted; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter }
                             }
                         }
@@ -644,6 +673,60 @@ Item {
                             spacing: 10
                             MbDetailCard { appTheme: page.appTheme; title: "接口身份"; rows: page.overviewRows(page.selectedItem) }
                             MbDetailCard { appTheme: page.appTheme; title: "断点信息"; rows: page.breakpointRows(page.selectedItem) }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Repeater {
+                                    model: page.interfaceBreakpoints(page.selectedItem)
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        property string bpId: String(modelData.id || modelData.breakpointId || "")
+                                        Layout.fillWidth: true
+                                        implicitHeight: bpLayout.implicitHeight + 16
+                                        radius: 4
+                                        color: page.appTheme.panelBgAlt
+                                        border.color: page.appTheme.border
+
+                                        ColumnLayout {
+                                            id: bpLayout
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.margins: 8
+                                            spacing: 6
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                Rectangle { Layout.preferredWidth: 8; Layout.preferredHeight: 8; radius: 4; color: modelData.enabled ? page.appTheme.success : page.appTheme.textDisabled }
+                                                MbTag { appTheme: page.appTheme; text: modelData.enabled ? "已启用" : "已禁用"; type: modelData.enabled ? "success" : "neutral"; Layout.preferredWidth: 70 }
+                                                MbTag { appTheme: page.appTheme; text: page.breakpointTypeLabel(modelData); type: (modelData.match_mode || modelData.matchMode) === "command_only" ? "neutral" : "primary"; Layout.preferredWidth: 82 }
+                                                Text { text: page.objectName(modelData) + " / " + page.cmdName(modelData); color: page.appTheme.textStrong; font.pixelSize: 12; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                            }
+
+                                            Text { text: "条件: " + page.conditionSummary(modelData); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                            Text { text: "命中 " + page.textOf(modelData.hit_count || modelData.hitCount || 0) + " / 创建 " + page.shortTime(modelData.created_at || modelData.createdAt); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 6
+                                                MbButton { appTheme: page.appTheme; text: modelData.enabled ? "禁用" : "启用"; variant: modelData.enabled ? "neutral" : "success"; Layout.preferredWidth: 72; Layout.preferredHeight: 28; onClicked: bridge.setBreakpointEnabled(bpId, !modelData.enabled) }
+                                                MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.preferredWidth: 72; Layout.preferredHeight: 28; onClicked: page.confirmDeleteBreakpoint(bpId, page.objectName(modelData) + " " + page.cmdName(modelData)) }
+                                                Item { Layout.fillWidth: true }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    visible: page.interfaceBreakpoints(page.selectedItem).length === 0
+                                    text: "当前接口暂无断点"
+                                    color: page.appTheme.textMuted
+                                    font.pixelSize: 13
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                            }
                             MbDetailCard { appTheme: page.appTheme; title: "唯一性"; rows: page.uniqueRows(page.selectedItem) }
                         }
                     }
@@ -668,7 +751,7 @@ Item {
                             }
                             MbButton {
                                 appTheme: page.appTheme
-                                text: "从该样本创建断点"
+                                text: "创建条件断点"
                                 variant: "primary"
                                 Layout.preferredWidth: 150
                                 Layout.preferredHeight: 34

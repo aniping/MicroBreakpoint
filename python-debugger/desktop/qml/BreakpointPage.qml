@@ -56,7 +56,7 @@ Item {
     }
     function sourceText(item) {
         if (!item) return "手工创建"
-        if (item.source_interface_id || item.sourceInterfaceId) return "已发现接口"
+        if (item.source_interface_id || item.sourceInterfaceId) return "接口列表"
         if (item.source_call_id || item.sourceCallId) return "调用记录"
         return "手工创建"
     }
@@ -65,9 +65,9 @@ Item {
         return String(value).replace("T", " ").split("+")[0]
     }
     function matchModeText(mode) {
-        if (mode === "params_snapshot") return "参数快照"
-        if (mode === "params_condition") return "参数条件"
-        return "命令"
+        if (mode === "command_only") return "命令断点"
+        if (mode === "params_snapshot" || mode === "params_condition") return "条件断点"
+        return "命令断点"
     }
     function statusText(status) {
         if (status === "running") return "运行中"
@@ -301,10 +301,10 @@ Item {
                         anchors.leftMargin: 14
                         anchors.rightMargin: 14
                         spacing: 10
-                        Text { text: "断点管理"; color: appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.preferredWidth: 78; elide: Text.ElideRight }
+                        Text { text: "断点列表"; color: appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.preferredWidth: 78; elide: Text.ElideRight }
                         FilterCombo { Layout.preferredWidth: 100; model: page.objectOptions(); currentIndex: Math.max(0, model.indexOf(page.objectFilter)); onActivated: page.objectFilter = currentText }
                         FilterCombo { Layout.preferredWidth: 92; model: ["全部", "已启用", "已禁用"]; currentIndex: Math.max(0, model.indexOf(page.statusFilter)); onActivated: page.statusFilter = currentText }
-                        FilterCombo { Layout.preferredWidth: 108; model: ["全部", "已发现接口", "调用记录", "手工创建"]; currentIndex: Math.max(0, model.indexOf(page.sourceFilter)); onActivated: page.sourceFilter = currentText }
+                        FilterCombo { Layout.preferredWidth: 108; model: ["全部", "接口列表", "调用记录", "手工创建"]; currentIndex: Math.max(0, model.indexOf(page.sourceFilter)); onActivated: page.sourceFilter = currentText }
                         MbTextField { appTheme: page.appTheme; Layout.preferredWidth: 180; Layout.preferredHeight: 34; placeholderText: "搜索断点 / 命令 / 槽位"; text: page.searchText; onTextChanged: page.searchText = text }
                         Item { Layout.fillWidth: true }
                         MbButton { appTheme: page.appTheme; text: "新增"; iconText: "+"; enabled: false; variant: "primary"; implicitWidth: 76 }
@@ -419,7 +419,7 @@ Item {
                                                         columns: 2
                                                         rowSpacing: 8
                                                         columnSpacing: 8
-                                                        MbTag { appTheme: page.appTheme; text: "匹配 " + page.matchModeText(modelData.match_mode); type: modelData.match_mode === "params_snapshot" ? "primary" : "neutral"; Layout.preferredWidth: 108 }
+                                                        MbTag { appTheme: page.appTheme; text: page.matchModeText(modelData.match_mode); type: modelData.match_mode === "command_only" ? "neutral" : "primary"; Layout.preferredWidth: 108 }
                                                         MbTag { appTheme: page.appTheme; text: "命中 " + (modelData.hit_count || 0); type: (modelData.hit_count || 0) > 0 ? "warning" : "neutral"; Layout.preferredWidth: 108 }
                                                         MbTag { appTheme: page.appTheme; text: page.sourceText(modelData); type: "neutral"; Layout.preferredWidth: 108 }
                                                     }
@@ -450,7 +450,7 @@ Item {
                                 anchors.centerIn: parent
                                 spacing: 8
                                 Text { text: "暂无断点"; color: page.appTheme.textStrong; font.pixelSize: 16; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter }
-                                Text { text: "可以从已发现接口或调用记录创建断点。"; color: page.appTheme.textMuted; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter }
+                                Text { text: "可以从接口列表或调用记录创建断点。"; color: page.appTheme.textMuted; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter }
                             }
                         }
                     }

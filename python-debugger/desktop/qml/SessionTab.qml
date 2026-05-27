@@ -62,17 +62,17 @@ Item {
     }
 
     function currentHint() {
-        return activeSessionId ? "当前 Session: " + activeSessionId : "请先新建 Session，再开始调试"
+        return activeSessionId ? "当前会话: " + activeSessionId : "请先新建会话，再开始调试"
     }
 
     function confirmClearSessions() {
-        confirmDialog.ask("清空历史会话", "将删除全部历史 Session，以及对应的调用记录、已发现接口和断点。此操作不可撤销。", "清空历史", function() {
+        confirmDialog.ask("清空历史会话", "将删除全部历史会话，以及对应的调用记录、接口和断点。此操作不可撤销。", "清空历史", function() {
             bridge.clearSessions()
         })
     }
 
     function confirmDeleteSession(sessionId) {
-        confirmDialog.ask("删除会话", "将删除 Session " + sessionId + " 以及它的调用记录、已发现接口和断点。此操作不可撤销。", "删除", function() {
+        confirmDialog.ask("删除会话", "将删除会话 " + sessionId + " 以及它的调用记录、接口和断点。此操作不可撤销。", "删除", function() {
             bridge.deleteSession(sessionId)
         })
     }
@@ -460,7 +460,7 @@ Item {
                     }
 
                     Text {
-                        text: "点击“新建 Session”后开始调试"
+                        text: "点击“新建会话”后开始调试"
                         color: appTheme.textMuted
                         font.pixelSize: 13
                     }

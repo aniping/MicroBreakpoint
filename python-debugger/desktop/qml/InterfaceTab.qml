@@ -89,7 +89,7 @@ Item {
                         spacing: 12
 
                         Text {
-                            text: "已发现接口"
+                            text: "接口列表"
                             color: appTheme.textStrong
                             font.pixelSize: 16
                             font.weight: Font.DemiBold
@@ -296,7 +296,7 @@ Item {
                         spacing: 8
 
                         Text {
-                            text: "暂无已发现接口"
+                            text: "暂无接口"
                             color: appTheme.textStrong
                             font.pixelSize: 16
                             font.weight: Font.DemiBold

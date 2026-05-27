@@ -4,6 +4,7 @@ from app.db.database import get_db, row_to_dict
 from app.services.debug_service import (
     breakpoint_from_interface as create_breakpoint_from_interface,
     grouped_interfaces,
+    list_interface_breakpoints,
     set_interface_locked,
     list_interfaces,
     normalize,
@@ -62,6 +63,14 @@ def interface_detail(interface_id):
     return jsonify(item)
 
 
+@interface_api.get("/<interface_id>/breakpoints")
+def interface_breakpoints(interface_id):
+    items = list_interface_breakpoints(interface_id)
+    if items is None:
+        return jsonify({"success": False, "message": "not found"}), 404
+    return jsonify({"success": True, "items": items})
+
+
 @interface_api.patch("/<interface_id>/alias")
 def update_alias(interface_id):
     body = request.get_json(silent=True) or {}
@@ -73,4 +82,7 @@ def update_alias(interface_id):
 def breakpoint_from_interface(interface_id):
     body = request.get_json(silent=True) or {}
     result = create_breakpoint_from_interface(interface_id, body)
-    return jsonify(result), 200 if result.get("success") else 404
+    if result.get("success"):
+        return jsonify(result)
+    status = 409 if result.get("code", "").startswith("DUPLICATE_") else 404
+    return jsonify(result), status

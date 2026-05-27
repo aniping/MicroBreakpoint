@@ -38,7 +38,7 @@ def test_call_record_uses_business_debug_fields():
     assert "cmdName(item)" in qml
     assert "interfaceRegistered(item)" in qml
     assert "args.instType" not in qml
-    assert "加入已发现接口" in qml
+    assert "加入接口列表" in qml
     assert "bridge.addInterfaceFromCall" in qml
     assert "imported_paused" in qml
     assert "历史暂停" in qml
@@ -90,7 +90,7 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "全部展开" in qml
     assert "只看断点" in qml
     assert "查看样本" in qml
-    assert "从该样本创建断点" in qml
+    assert "创建条件断点" in qml
     assert "别名" not in qml
     assert "component MetricCell" in qml
     assert "Layout.preferredWidth: 338" in qml
@@ -109,6 +109,17 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "width: relatedCallColumn.width" in qml
     assert "RelatedCell" not in qml
     assert "原始 JSON" in qml
+
+
+def test_interface_page_shows_related_breakpoints_by_business_fields():
+    qml = (QML_ROOT / "InterfacePage.qml").read_text(encoding="utf-8")
+
+    assert "function interfaceBreakpoints" in qml
+    assert "objectName(bp) === objectName(item) && cmdName(bp) === cmdName(item)" in qml
+    assert "当前接口暂无断点" in qml
+    assert "page.breakpointTypeLabel(modelData)" in qml
+    assert "bridge.setBreakpointEnabled(bpId, !modelData.enabled)" in qml
+    assert "page.confirmDeleteBreakpoint(bpId" in qml
 
 
 def test_call_record_page_shows_breakpoint_list_in_detail_panel():
@@ -229,6 +240,19 @@ def test_main_has_persistent_interface_lock_switch():
     assert "MbSwitch" in qml
 
 
+def test_main_uses_fixed_business_pages_and_title():
+    qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+
+    assert 'title: "组件化断点调试工具"' in qml
+    assert "property int currentPage: 0" in qml
+    assert 'text: "接口列表"' in qml
+    assert 'text: "断点列表"' in qml
+    assert 'text: "调用记录"' in qml
+    assert 'text: "历史会话"' in qml
+    assert "SettingsTab" not in qml
+    assert "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。" in qml
+
+
 def test_session_tab_exposes_mbrec_import_export_controls():
     qml = (QML_ROOT / "SessionTab.qml").read_text(encoding="utf-8")
     main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
@@ -299,6 +323,24 @@ def test_breakpoint_creation_uses_explicit_match_modes():
     assert bridge.requests[2][2]["json"]["matchMode"] == "params_snapshot"
     assert all("selectedArgs" not in call[2]["json"] for call in bridge.requests)
     assert bridge.refreshed == 3
+
+
+def test_bridge_emits_user_notice_for_duplicate_and_condition_breakpoints():
+    bridge = Bridge()
+    notices = []
+    bridge.userNotice.connect(notices.append)
+
+    bridge._emit_result({
+        "success": False,
+        "code": "DUPLICATE_COMMAND_BREAKPOINT",
+        "message": "该命令断点已存在，请勿重复创建。",
+    })
+    bridge._emit_result({
+        "success": True,
+        "message": "条件断点已创建，已自动停用对应命令断点。",
+    })
+
+    assert notices == ["该命令断点已存在，请勿重复创建。", "条件断点已创建，已自动停用对应命令断点。"]
 
 
 def test_clear_sessions_calls_backend_endpoint():

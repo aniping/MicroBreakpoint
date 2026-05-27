@@ -13,8 +13,39 @@ NULL_SLOT_KEY = "__NULL__"
 MBREC_FORMAT = "MicroBreakpoint Session Archive"
 MBREC_VERSION = 1
 INTERFACE_LOCK_SETTING = "interface_locked"
+CURRENT_SESSION_ID_SETTING = "current_session_id"
+CURRENT_SESSION_OPEN_SETTING = "current_session_open"
 
 STATE = {"debugging": False, "mode": "idle", "sessionId": None}
+
+
+def restore_session_state():
+    db = get_db()
+    row = db.execute("SELECT value FROM app_setting WHERE key=?", (CURRENT_SESSION_OPEN_SETTING,)).fetchone()
+    if not row or row["value"] != "1":
+        STATE.update(debugging=False, mode="idle", sessionId=None)
+        return
+    session_row = db.execute("SELECT value FROM app_setting WHERE key=?", (CURRENT_SESSION_ID_SETTING,)).fetchone()
+    session_id = session_row["value"] if session_row else None
+    if session_id and db.execute("SELECT id FROM debug_session WHERE id=?", (session_id,)).fetchone():
+        STATE.update(debugging=False, mode="idle", sessionId=session_id)
+        return
+    STATE.update(debugging=False, mode="idle", sessionId=None)
+    save_current_session_state(None)
+
+
+def save_current_session_state(session_id):
+    now = now_iso()
+    db = get_db()
+    has_session = "1" if session_id else "0"
+    for key, value in ((CURRENT_SESSION_ID_SETTING, session_id or ""), (CURRENT_SESSION_OPEN_SETTING, has_session)):
+        db.execute(
+            """INSERT INTO app_setting (key, value, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+            (key, value, now),
+        )
+    db.commit()
 
 
 def create_session(payload):
@@ -46,6 +77,7 @@ def create_session(payload):
         ),
     )
     db.commit()
+    save_current_session_state(session_id)
     return state_response(success=True, sessionId=session_id)
 
 
@@ -55,6 +87,7 @@ def select_session(session_id):
     if not row:
         return {"success": False, "message": "session not found"}
     STATE.update(debugging=False, mode="idle", sessionId=session_id)
+    save_current_session_state(session_id)
     return state_response(success=True, sessionId=session_id)
 
 
@@ -107,9 +140,10 @@ def clear_current_session():
     if STATE["debugging"]:
         return {"success": False, "message": "请先停止调试"}
     if not STATE["sessionId"]:
-        return {"success": False, "message": "请先新建或选择 Session"}
+        return {"success": False, "message": "请先新建或选择会话"}
     db = get_db()
     session_id = STATE["sessionId"]
+    released = wait_manager.continue_all()
     counts = {
         "calls": db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0],
         "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface WHERE session_id=?", (session_id,)).fetchone()[0],
@@ -118,16 +152,18 @@ def clear_current_session():
                WHERE interface_id IN (SELECT id FROM discovered_interface WHERE session_id=?)""",
             (session_id,),
         ).fetchone()[0],
+        "breakpoints": db.execute("SELECT COUNT(*) FROM breakpoint WHERE session_id=?", (session_id,)).fetchone()[0],
     }
     db.execute(
         """DELETE FROM interface_param_sample
            WHERE interface_id IN (SELECT id FROM discovered_interface WHERE session_id=?)""",
         (session_id,),
     )
+    db.execute("DELETE FROM breakpoint WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM call_record WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM discovered_interface WHERE session_id=?", (session_id,))
     db.commit()
-    return state_response(success=True, deletedCount=counts)
+    return state_response(success=True, deletedCount=counts, releasedCount=released)
 
 
 def delete_session(session_id):
@@ -154,6 +190,7 @@ def delete_session(session_id):
     db.commit()
     if STATE["sessionId"] == session_id:
         STATE.update(debugging=False, mode="idle", sessionId=None)
+        save_current_session_state(None)
     return state_response(success=True, deletedSessionId=session_id, deletedCount=counts)
 
 
@@ -175,6 +212,7 @@ def clear_sessions():
     db.execute("DELETE FROM debug_session")
     db.commit()
     STATE.update(debugging=False, mode="idle", sessionId=None)
+    save_current_session_state(None)
     return state_response(success=True, deletedCount=counts)
 
 
@@ -426,12 +464,107 @@ def slot_key(slot_id):
     return NULL_SLOT_KEY if slot_id is None else str(slot_id)
 
 
+def normalized_slot_key(slot_id, raw_slot_key=None):
+    if raw_slot_key not in (None, ""):
+        return str(raw_slot_key)
+    return slot_key(_normalize_slot_id(slot_id))
+
+
 def params_fingerprint(params):
     return sha256(normalized_params_json(params).encode("utf-8")).hexdigest()
 
 
 def normalized_params_json(params):
     return json.dumps(params or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def is_command_breakpoint(match_mode):
+    return (match_mode or "command_only") == "command_only"
+
+
+def is_condition_breakpoint(match_mode):
+    return (match_mode or "command_only") in ("params_snapshot", "params_condition")
+
+
+def normalize_conditions_for_compare(conditions):
+    if isinstance(conditions, str):
+        conditions = loads(conditions, [])
+    if not isinstance(conditions, list):
+        conditions = []
+    normalized = []
+    for item in conditions:
+        if not isinstance(item, dict):
+            item = {}
+        normalized.append(
+            {
+                "path": str(item.get("path") or ""),
+                "operator": str(item.get("operator") or "eq"),
+                "value": item.get("value"),
+            }
+        )
+    normalized.sort(key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    return json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def breakpoint_type(match_mode):
+    mode = match_mode or "command_only"
+    if is_condition_breakpoint(mode):
+        return "condition", "条件断点"
+    return "command", "命令断点"
+
+
+def find_duplicate_breakpoint(db, data):
+    match_mode = data["matchMode"]
+    if is_command_breakpoint(match_mode):
+        return db.execute(
+            """SELECT * FROM breakpoint
+               WHERE session_id=? AND object_name=? AND cmd_name=? AND COALESCE(match_mode, 'command_only')='command_only'
+               LIMIT 1""",
+            (data["sessionId"], data["objectName"], data["cmdName"]),
+        ).fetchone()
+
+    if match_mode == "params_snapshot":
+        fingerprint = data.get("paramsFingerprint")
+        rows = db.execute(
+            """SELECT * FROM breakpoint
+               WHERE session_id=? AND object_name=? AND cmd_name=?
+                 AND COALESCE(match_mode, 'command_only')='params_snapshot'
+                 AND ((params_fingerprint IS NULL AND ? IS NULL) OR params_fingerprint=?)""",
+            (data["sessionId"], data["objectName"], data["cmdName"], fingerprint, fingerprint),
+        ).fetchall()
+        for row in rows:
+            if normalized_slot_key(row["slot_id"], row["slot_key"]) == data["slotKey"]:
+                return row
+        return None
+
+    if match_mode == "params_condition":
+        expected = normalize_conditions_for_compare(data.get("conditions", []))
+        rows = db.execute(
+            """SELECT * FROM breakpoint
+               WHERE session_id=? AND object_name=? AND cmd_name=?
+                 AND COALESCE(match_mode, 'command_only')='params_condition'""",
+            (data["sessionId"], data["objectName"], data["cmdName"]),
+        ).fetchall()
+        for row in rows:
+            if normalized_slot_key(row["slot_id"], row["slot_key"]) != data["slotKey"]:
+                continue
+            if normalize_conditions_for_compare(row["conditions_json"]) == expected:
+                return row
+    return None
+
+
+def disable_command_breakpoints_for_condition(db, session_id, object_name, cmd_name, now):
+    result = db.execute(
+        """UPDATE breakpoint
+           SET enabled=0, updated_at=?
+           WHERE session_id=?
+             AND object_name=?
+             AND cmd_name=?
+             AND COALESCE(match_mode, 'command_only')='command_only'
+             AND enabled=1""",
+        (now, session_id, object_name, cmd_name),
+    )
+    return result.rowcount
 
 
 def params_summary(params):
@@ -684,11 +817,11 @@ def match_breakpoint(call_data, session_id):
 
 def _breakpoint_matches(item, call_data):
     mode = item.get("match_mode") or "command_only"
-    bp_slot = item.get("slot_id") if mode != "command_only" else None
-    if bp_slot is not None and _normalize_slot_id(bp_slot) != call_data["slot_id"]:
-        return False
     if mode == "command_only":
         return True
+    bp_slot_key = normalized_slot_key(item.get("slot_id"), item.get("slot_key"))
+    if bp_slot_key and bp_slot_key != call_data["slot_key"]:
+        return False
     if mode == "params_snapshot":
         return item.get("params_fingerprint") == call_data["params_fingerprint"]
     if mode == "params_condition":
@@ -973,6 +1106,7 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
         raise
 
     STATE.update(debugging=False, mode="idle", sessionId=new_session_id)
+    save_current_session_state(new_session_id)
     return state_response(
         success=True,
         sessionId=new_session_id,
@@ -1281,6 +1415,19 @@ def list_breakpoints(session_id=None):
     return [normalize(row_to_dict(row)) for row in rows]
 
 
+def list_interface_breakpoints(interface_id):
+    row = get_db().execute("SELECT session_id, object_name, cmd_name FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
+    if not row:
+        return None
+    rows = get_db().execute(
+        """SELECT * FROM breakpoint
+           WHERE session_id=? AND object_name=? AND cmd_name=?
+           ORDER BY created_at DESC""",
+        (row["session_id"], row["object_name"], row["cmd_name"]),
+    ).fetchall()
+    return [normalize(row_to_dict(item)) for item in rows]
+
+
 def update_interface_alias(interface_id, alias):
     db = get_db()
     row = db.execute("SELECT id FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
@@ -1298,7 +1445,7 @@ def update_interface_alias(interface_id, alias):
 def create_breakpoint(data):
     session_id = data.get("sessionId") or STATE["sessionId"]
     if not session_id:
-        return {"success": False, "message": "请先新建或选择 Session"}
+        return {"success": False, "message": "请先新建或选择会话"}
     now = now_iso()
     bp_id = f"bp-{uuid.uuid4().hex[:10]}"
     object_name = data.get("objectName") or UNCATEGORIZED_OBJECT
@@ -1306,8 +1453,38 @@ def create_breakpoint(data):
     match_mode = data.get("matchMode") or "command_only"
     requested_slot_id = _normalize_slot_id(data.get("slotId"))
     slot_id = None if match_mode == "command_only" else requested_slot_id
-    slot = None if match_mode == "command_only" else (data.get("slotKey") or slot_key(slot_id))
-    get_db().execute(
+    slot = None if match_mode == "command_only" else normalized_slot_key(slot_id, data.get("slotKey"))
+    params_fingerprint_value = data.get("paramsFingerprint", data.get("params_fingerprint"))
+    params_snapshot_value = data.get("paramsSnapshot", data.get("params_snapshot"))
+    conditions = data.get("conditions", data.get("conditions_json", []))
+    db = get_db()
+    normalized_data = dict(data)
+    normalized_data.update(
+        {
+            "sessionId": session_id,
+            "objectName": object_name,
+            "cmdName": cmd_name,
+            "matchMode": match_mode,
+            "slotId": slot_id,
+            "slotKey": slot,
+            "paramsFingerprint": params_fingerprint_value,
+            "conditions": conditions,
+        }
+    )
+    duplicate = find_duplicate_breakpoint(db, normalized_data)
+    if duplicate:
+        if is_command_breakpoint(match_mode):
+            return {
+                "success": False,
+                "code": "DUPLICATE_COMMAND_BREAKPOINT",
+                "message": "该命令断点已存在，请勿重复创建。",
+            }
+        return {
+            "success": False,
+            "code": "DUPLICATE_CONDITION_BREAKPOINT",
+            "message": "相同条件断点已存在，请勿重复创建。",
+        }
+    db.execute(
         """INSERT INTO breakpoint
         (id, name, enabled, scope, session_id, object_name, cmd_name, slot_id, slot_key, match_mode,
          params_fingerprint, params_snapshot_json, conditions_json, condition_json, hit_mode, hit_count,
@@ -1324,9 +1501,9 @@ def create_breakpoint(data):
             slot_id,
             slot,
             match_mode,
-            data.get("paramsFingerprint"),
-            dumps(data.get("paramsSnapshot")),
-            dumps(data.get("conditions", [])),
+            params_fingerprint_value,
+            dumps(params_snapshot_value),
+            dumps(conditions),
             dumps(breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode)),
             data.get("hitMode", "always"),
             data.get("hitLimit"),
@@ -1342,8 +1519,22 @@ def create_breakpoint(data):
             now,
         ),
     )
-    get_db().commit()
-    return {"success": True, "breakpointId": bp_id}
+    disabled_count = 0
+    if is_condition_breakpoint(match_mode):
+        disabled_count = disable_command_breakpoints_for_condition(db, session_id, object_name, cmd_name, now)
+    db.commit()
+    result = {
+        "success": True,
+        "breakpointId": bp_id,
+        "disabledCommandBreakpointCount": disabled_count,
+    }
+    if is_condition_breakpoint(match_mode):
+        result["message"] = (
+            "条件断点已创建，已自动停用对应命令断点。"
+            if disabled_count
+            else "条件断点已创建。"
+        )
+    return result
 
 
 def breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode):
@@ -1422,6 +1613,20 @@ def normalize(row):
     for key in list(row.keys()):
         if key.endswith("_json"):
             row[key[:-5]] = loads(row[key], None)
+    if "object_name" in row and not row.get("object_name"):
+        row["object_name"] = UNCATEGORIZED_OBJECT
+    if "cmd_name" in row and not row.get("cmd_name"):
+        row["cmd_name"] = UNKNOWN_COMMAND
+    if "match_mode" in row and not row.get("match_mode"):
+        row["match_mode"] = "command_only"
+    if "slot_key" in row and not row.get("slot_key") and row.get("slot_id") is not None:
+        row["slot_key"] = normalized_slot_key(row.get("slot_id"))
+    if "match_mode" in row:
+        bp_type, bp_label = breakpoint_type(row.get("match_mode"))
+        row["breakpointType"] = bp_type
+        row["breakpoint_type"] = bp_type
+        row["breakpointTypeLabel"] = bp_label
+        row["breakpoint_type_label"] = bp_label
     return row
 
 

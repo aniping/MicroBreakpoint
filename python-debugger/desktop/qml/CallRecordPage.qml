@@ -131,9 +131,9 @@ Item {
     }
 
     function matchModeText(mode) {
-        if (mode === "params_snapshot") return "参数快照"
-        if (mode === "params_condition") return "参数条件"
-        return "命令"
+        if (mode === "command_only") return "命令断点"
+        if (mode === "params_snapshot" || mode === "params_condition") return "条件断点"
+        return "命令断点"
     }
 
     function breakpointTitle(item) {
@@ -399,7 +399,7 @@ Item {
     }
 
     function confirmClearRecords() {
-        confirmDialog.ask("清空调用记录", "将删除当前 Session 的调用记录和已发现接口数据，断点会保留。此操作不可撤销。", "清空", function() {
+        confirmDialog.ask("清空当前会话", "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。", "清空", function() {
             bridge.clearCalls()
         })
     }
@@ -1012,8 +1012,8 @@ Item {
                         MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: page.selectedPausedCount() > 0 ? "success" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueAll() }
                         MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "参数快照"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: page.interfaceRegistered(page.selectedItem) ? "已登记接口" : "加入已发现接口"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: page.interfaceRegistered(page.selectedItem) ? "neutral" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
+                        MbButton { appTheme: page.appTheme; text: "创建条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
+                        MbButton { appTheme: page.appTheme; text: page.interfaceRegistered(page.selectedItem) ? "已登记接口" : "加入接口列表"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: page.interfaceRegistered(page.selectedItem) ? "neutral" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: "复制参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.paramsValue(page.selectedItem))) }
                         MbButton { appTheme: page.appTheme; text: "复制返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {})) }
                     }

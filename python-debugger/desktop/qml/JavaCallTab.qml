@@ -22,7 +22,7 @@ Item {
         if (stateData && stateData.hasSession) {
             return "请先点击“开始调试”，否则 Java 调用不会被记录"
         }
-        return "请先新建 Session 并开始调试，否则 Java 调用不会被记录"
+        return "请先新建会话并开始调试，否则 Java 调用不会被记录"
     }
 
     function connectionLabel() {

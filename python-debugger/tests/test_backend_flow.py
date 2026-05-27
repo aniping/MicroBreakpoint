@@ -264,6 +264,123 @@ def test_command_and_params_snapshot_breakpoints(tmp_path):
     assert missed["action"] == "continue"
 
 
+def test_breakpoint_dedup_uses_business_identity_and_disables_command_breakpoint(tmp_path):
+    client = make_client(tmp_path)
+    create_and_start(client)
+
+    command = client.post(
+        "/api/breakpoints",
+        json={"objectName": "VNA", "cmdName": "create", "matchMode": "command_only"},
+    ).get_json()
+    assert command["success"] is True
+    duplicate_command = client.post(
+        "/api/breakpoints",
+        json={"objectName": "VNA", "cmdName": "create", "matchMode": "command_only", "methodName": "otherMethod"},
+    ).get_json()
+    assert duplicate_command == {
+        "success": False,
+        "code": "DUPLICATE_COMMAND_BREAKPOINT",
+        "message": "该命令断点已存在，请勿重复创建。",
+    }
+
+    condition = client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotId": "1",
+            "matchMode": "params_snapshot",
+            "paramsFingerprint": "fp-a",
+        },
+    ).get_json()
+    assert condition["success"] is True
+    assert condition["disabledCommandBreakpointCount"] == 1
+    assert condition["message"] == "条件断点已创建，已自动停用对应命令断点。"
+
+    breakpoints = client.get("/api/breakpoints").get_json()["items"]
+    by_mode = {item["match_mode"]: item for item in breakpoints}
+    assert by_mode["command_only"]["enabled"] == 0
+    assert by_mode["command_only"]["breakpointTypeLabel"] == "命令断点"
+    assert by_mode["params_snapshot"]["slot_key"] == "1"
+    assert by_mode["params_snapshot"]["breakpointTypeLabel"] == "条件断点"
+
+    duplicate_snapshot = client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotKey": "1",
+            "matchMode": "params_snapshot",
+            "paramsFingerprint": "fp-a",
+        },
+    ).get_json()
+    assert duplicate_snapshot == {
+        "success": False,
+        "code": "DUPLICATE_CONDITION_BREAKPOINT",
+        "message": "相同条件断点已存在，请勿重复创建。",
+    }
+
+    assert client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotId": 2,
+            "matchMode": "params_snapshot",
+            "paramsFingerprint": "fp-a",
+        },
+    ).get_json()["success"] is True
+    assert client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotId": 1,
+            "matchMode": "params_snapshot",
+            "paramsFingerprint": "fp-b",
+        },
+    ).get_json()["success"] is True
+
+
+def test_params_condition_dedup_normalizes_condition_order(tmp_path):
+    client = make_client(tmp_path)
+    create_and_start(client)
+
+    first = client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "start",
+            "slotId": 1,
+            "matchMode": "params_condition",
+            "conditions": [
+                {"path": "params.mode", "operator": "eq", "value": "A"},
+                {"path": "slotId", "operator": "eq", "value": 1},
+            ],
+        },
+    ).get_json()
+    assert first["success"] is True
+
+    duplicate = client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "start",
+            "slotKey": "1",
+            "matchMode": "params_condition",
+            "conditions": [
+                {"value": 1, "operator": "eq", "path": "slotId"},
+                {"value": "A", "path": "params.mode"},
+            ],
+        },
+    ).get_json()
+    assert duplicate == {
+        "success": False,
+        "code": "DUPLICATE_CONDITION_BREAKPOINT",
+        "message": "相同条件断点已存在，请勿重复创建。",
+    }
+
+
 def test_command_breakpoint_ignores_slot_id(tmp_path):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
     client = app.test_client()
@@ -351,9 +468,10 @@ def test_clear_and_delete_session_respect_session_boundaries(tmp_path):
 
     cleared = client.post("/api/sessions/current/clear")
     assert cleared.status_code == 200
+    assert cleared.get_json()["deletedCount"]["breakpoints"] == 1
     assert client.get("/api/calls").get_json()["items"] == []
     assert client.get("/api/interfaces").get_json()["items"] == []
-    assert len(client.get("/api/breakpoints").get_json()["items"]) == 1
+    assert client.get("/api/breakpoints").get_json()["items"] == []
 
     second_session = client.post("/api/sessions", json={}).get_json()["sessionId"]
     deleted = client.delete(f"/api/sessions/{first_session}")
@@ -418,6 +536,26 @@ def test_create_session_assigns_incrementing_display_names(tmp_path):
     assert session_by_id(client, second)["display_name"] == "未命名 2"
     assert session_by_id(client, custom)["display_name"] == "手工命名"
     assert session_by_id(client, third)["display_name"] == "未命名 3"
+
+
+def test_startup_restores_last_open_session_and_ignores_deleted_session(tmp_path):
+    db_path = tmp_path / "debugger.sqlite3"
+    app = create_app({"TESTING": True, "DATABASE": str(db_path)})
+    client = app.test_client()
+
+    session_id = client.post("/api/sessions", json={}).get_json()["sessionId"]
+    assert client.get("/api/debug/state").get_json()["sessionId"] == session_id
+
+    restarted = create_app({"TESTING": True, "DATABASE": str(db_path)})
+    restarted_client = restarted.test_client()
+    assert restarted_client.get("/api/debug/state").get_json()["sessionId"] == session_id
+
+    restarted_client.delete(f"/api/sessions/{session_id}")
+    clean_restart = create_app({"TESTING": True, "DATABASE": str(db_path)})
+    clean_client = clean_restart.test_client()
+    state = clean_client.get("/api/debug/state").get_json()
+    assert state["hasSession"] is False
+    assert state["sessionId"] is None
 
 
 def test_interface_lock_marks_unregistered_calls_and_allows_manual_registration(tmp_path):

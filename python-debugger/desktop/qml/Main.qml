@@ -11,7 +11,7 @@ ApplicationWindow {
     height: 980
     minimumWidth: 1100
     minimumHeight: 760
-    title: "MicroBreakpoint - Java 微服务接口断点调试器"
+    title: "组件化断点调试工具"
     color: theme.windowBg
 
     property string themeMode: "dark"
@@ -27,7 +27,7 @@ ApplicationWindow {
     property color red: theme.danger
     property color amber: theme.warning
 
-    property int currentPage: 3
+    property int currentPage: 0
     property var stateData: ({state: "NO_SESSION", mode: "idle", debugging: false, callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0, interfaceLocked: false})
     property var callItems: []
     property var interfaceItems: []
@@ -50,7 +50,7 @@ ApplicationWindow {
     }
 
     function confirmClearCurrentSession() {
-        confirmDialog.ask("清空当前会话", "将删除当前 Session 的调用记录和已发现接口数据，断点会保留。此操作不可撤销。", "清空", function() {
+        confirmDialog.ask("清空当前会话", "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。", "清空", function() {
             bridge.clearCalls()
         })
     }
@@ -63,7 +63,7 @@ ApplicationWindow {
     function modeText(mode) {
         if (stateData.state === "DEBUGGING_PAUSED") return "已暂停"
         if (mode === "debug") return "调试中"
-        if (stateData.state === "NO_SESSION") return "无 Session"
+        if (stateData.state === "NO_SESSION") return "无会话"
         return "空闲"
     }
 
@@ -86,6 +86,10 @@ ApplicationWindow {
         function onSessionsChanged(payload) { sessionItems = JSON.parse(payload).items || [] }
         function onResultChanged(payload) { resultText = payload }
         function onThemeChanged(mode) { root.themeMode = mode }
+        function onUserNotice(message) {
+            noticeDialog.message = message
+            noticeDialog.open()
+        }
     }
 
     Timer {
@@ -98,6 +102,28 @@ ApplicationWindow {
     ConfirmDialog {
         id: confirmDialog
         appTheme: theme
+    }
+
+    Popup {
+        id: noticeDialog
+        property string message: ""
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape
+        width: Math.min(420, parent ? parent.width - 32 : 420)
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round((parent.height - height) / 2) : 0
+        background: Rectangle { radius: 6; color: theme.panelBg; border.color: theme.border }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text { text: "提示"; color: theme.textStrong; font.pixelSize: 17; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
+            Text { text: noticeDialog.message; color: theme.textNormal; font.pixelSize: 14; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                MbButton { appTheme: theme; text: "确定"; variant: "primary"; Layout.preferredWidth: 92; Layout.preferredHeight: 36; onClicked: noticeDialog.close() }
+            }
+        }
     }
 
     component ToolbarGroup: ColumnLayout {
@@ -192,7 +218,7 @@ ApplicationWindow {
                 spacing: 14
                 ToolbarGroup {
                     title: "会话"
-                    MbButton { appTheme: theme; text: "新建 Session"; iconText: "+"; variant: "primary"; implicitWidth: 134; enabled: !stateData.debugging; onClicked: { bridge.createSession(); currentPage = 3 } }
+                    MbButton { appTheme: theme; text: "新建会话"; iconText: "+"; variant: "primary"; implicitWidth: 118; enabled: !stateData.debugging; onClicked: { bridge.createSession(); currentPage = 0 } }
                     MbButton { appTheme: theme; text: "清空当前"; iconText: "×"; variant: "danger"; implicitWidth: 118; enabled: !stateData.debugging && stateData.hasSession; onClicked: root.confirmClearCurrentSession() }
                 }
                 Rectangle { width: 1; Layout.preferredHeight: 36; color: root.border }
@@ -310,13 +336,11 @@ ApplicationWindow {
                     anchors.fill: parent
                     spacing: 0
                     Item { Layout.preferredHeight: 8 }
-                    MbNavButton { appTheme: theme; text: "调用记录"; iconText: "☷"; selected: currentPage === 0; onClicked: currentPage = 0 }
-                    MbNavButton { appTheme: theme; text: "已发现接口"; iconText: "◇"; selected: currentPage === 1; onClicked: currentPage = 1 }
-                    MbNavButton { appTheme: theme; text: "断点管理"; iconText: "◎"; selected: currentPage === 2; onClicked: currentPage = 2 }
+                    MbNavButton { appTheme: theme; text: "接口列表"; iconText: "◇"; selected: currentPage === 0; onClicked: currentPage = 0 }
+                    MbNavButton { appTheme: theme; text: "断点列表"; iconText: "◎"; selected: currentPage === 1; onClicked: currentPage = 1 }
+                    MbNavButton { appTheme: theme; text: "调用记录"; iconText: "☷"; selected: currentPage === 2; onClicked: currentPage = 2 }
                     MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 3; onClicked: currentPage = 3 }
                     Item { Layout.fillHeight: true }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.border }
-                    MbNavButton { appTheme: theme; text: "设置"; iconText: "⚙"; selected: currentPage === 4; onClicked: currentPage = 4 }
                 }
             }
 
@@ -325,6 +349,16 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 currentIndex: currentPage
 
+                InterfacePage { appTheme: theme; items: interfaceItems; calls: callItems; breakpoints: breakpointItems }
+                BreakpointPage {
+                    appTheme: theme
+                    items: breakpointItems
+                    calls: callItems
+                    onRequestCallFilter: function(breakpointId) {
+                        root.callBreakpointFilter = breakpointId
+                        root.currentPage = 2
+                    }
+                }
                 CallRecordPage {
                     appTheme: theme
                     items: callItems
@@ -337,16 +371,6 @@ ApplicationWindow {
                         root.selectedCallStatus = status
                     }
                 }
-                InterfacePage { appTheme: theme; items: interfaceItems; calls: callItems; breakpoints: breakpointItems }
-                BreakpointPage {
-                    appTheme: theme
-                    items: breakpointItems
-                    calls: callItems
-                    onRequestCallFilter: function(breakpointId) {
-                        root.callBreakpointFilter = breakpointId
-                        root.currentPage = 0
-                    }
-                }
                 SessionTab {
                     appTheme: theme
                     items: sessionItems
@@ -354,15 +378,6 @@ ApplicationWindow {
                     canClearSessions: !stateData.debugging
                     debugging: !!stateData.debugging
                     pausedCount: Number(stateData.pausedCount || 0)
-                }
-                SettingsTab {
-                    appTheme: theme
-                    themeMode: root.themeMode
-                    backendUrl: backendApiUrl
-                    onThemeModeRequested: function(mode) {
-                        root.themeMode = mode
-                        bridge.setThemeMode(mode)
-                    }
                 }
             }
         }
