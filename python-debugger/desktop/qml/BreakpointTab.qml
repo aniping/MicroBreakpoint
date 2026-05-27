@@ -38,7 +38,21 @@ Item {
         if (!item) return "-"
         if (item.match_mode === "params_snapshot") return "参数快照: " + JSON.stringify(item.params_snapshot || {})
         if (item.match_mode === "params_condition") return "参数条件: " + page.conditionSummary(item.condition)
-        return "命令匹配: " + (item.object_name || "-") + " / " + (item.cmd_name || "-") + " / 槽位 " + page.slotText(item)
+        return "命令匹配: " + (item.object_name || "-") + " / " + (item.cmd_name || "-")
+    }
+
+    function breakpointScopeText(item) {
+        if (!item) return "-"
+        var text = (item.object_name || "-") + " / " + (item.cmd_name || "-")
+        if ((item.match_mode || "command_only") !== "command_only") text += " / 槽位 " + page.slotText(item)
+        return text
+    }
+
+    function breakpointName(item) {
+        if (!item) return "-"
+        var name = item.name || ((item.object_name || "-") + " / " + (item.cmd_name || "-"))
+        if (String(name).toLowerCase().endsWith(" breakpoint")) name = String(name).slice(0, -11)
+        return name
     }
 
     function sourceText(item) {
@@ -51,7 +65,7 @@ Item {
 
     function confirmDeleteBreakpoint(item) {
         var breakpointId = item ? item.id : ""
-        var breakpointName = item ? (item.name || item.object_name || breakpointId) : breakpointId
+        var breakpointName = item ? page.breakpointName(item) : breakpointId
         confirmDialog.ask("删除断点", "将删除断点 " + breakpointName + "。此操作不可撤销。", "删除", function() {
             bridge.deleteBreakpoint(breakpointId)
         })
@@ -148,7 +162,7 @@ Item {
                                         spacing: 8
                                         MbTag { appTheme: page.appTheme; text: modelData.enabled ? "启用" : "禁用"; type: modelData.enabled ? "success" : "neutral"; Layout.preferredWidth: 60 }
                                         Text {
-                                            text: modelData.name || ((modelData.object_name || "-") + " / " + (modelData.cmd_name || "-"))
+                                            text: page.breakpointName(modelData)
                                             color: appTheme.textStrong
                                             font.pixelSize: 16
                                             font.weight: Font.DemiBold
@@ -158,7 +172,7 @@ Item {
                                     }
 
                                     Text {
-                                        text: (modelData.object_name || "-") + " / " + (modelData.cmd_name || "-") + " / 槽位 " + page.slotText(modelData) + " / Session " + (modelData.session_id || "-")
+                                        text: page.breakpointScopeText(modelData) + " / Session " + (modelData.session_id || "-")
                                         color: appTheme.textNormal
                                         font.pixelSize: 13
                                         Layout.fillWidth: true

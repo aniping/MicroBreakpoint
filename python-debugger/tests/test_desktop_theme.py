@@ -117,6 +117,8 @@ def test_call_record_page_shows_breakpoint_list_in_detail_panel():
     assert "断点列表 (\" + breakpoints.length + \")" in qml
     assert "当前 Session" in qml
     assert "page.breakpointTitle(modelData)" in qml
+    assert "endsWith(\" breakpoint\")" in qml
+    assert "if (mode !== \"command_only\") text += \" / 槽位 \"" in qml
     assert "bridge.setBreakpointEnabled(modelData.id, value)" in qml
     assert "signal selectedCallChanged" in qml
     assert "notifySelectedCallChanged()" in qml
@@ -131,6 +133,11 @@ def test_breakpoint_page_uses_grouped_cards_filters_and_hit_jump():
     assert "搜索断点 / 命令 / 槽位" in qml
     assert "function groups" in qml
     assert "命中范围" in qml
+    assert "function breakpointName" in qml
+    assert "endsWith(\" breakpoint\")" in qml
+    assert "page.breakpointName(modelData)" in qml
+    assert "Text { text: page.shortTime(modelData.created_at || modelData.createdAt)" in qml
+    assert "page.objectName(modelData) + \" / \" + page.cmdName(modelData) + \" / 槽位 \" + page.slotText(modelData) + \" / Session \"" not in qml
     assert "无附加参数条件，命中该命令即暂停。" in qml
     assert "requestCallFilter" in qml
     assert "root.callBreakpointFilter = breakpointId" in main

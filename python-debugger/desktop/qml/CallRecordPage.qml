@@ -138,12 +138,17 @@ Item {
 
     function breakpointTitle(item) {
         if (!item) return "-"
-        return item.name || ((item.object_name || item.objectName || "-") + " / " + (item.cmd_name || item.cmdName || "-"))
+        var name = item.name || ((item.object_name || item.objectName || "-") + " / " + (item.cmd_name || item.cmdName || "-"))
+        if (String(name).toLowerCase().endsWith(" breakpoint")) name = String(name).slice(0, -11)
+        return name
     }
 
     function breakpointSubtitle(item) {
         if (!item) return "-"
-        return (item.object_name || item.objectName || "-") + " / " + (item.cmd_name || item.cmdName || "-") + " / 槽位 " + breakpointSlotText(item) + " / " + matchModeText(item.match_mode || item.matchMode)
+        var mode = item.match_mode || item.matchMode || "command_only"
+        var text = (item.object_name || item.objectName || "-") + " / " + (item.cmd_name || item.cmdName || "-")
+        if (mode !== "command_only") text += " / 槽位 " + breakpointSlotText(item) + " / " + matchModeText(mode)
+        return text
     }
 
     function selectedItemForId(id) {

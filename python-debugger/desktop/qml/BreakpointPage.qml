@@ -43,6 +43,11 @@ Item {
         return String(value)
     }
     function itemId(item) { return item ? String(item.id || item.breakpoint_id || item.breakpointId || "") : "" }
+    function breakpointName(item) {
+        var name = textOf(item ? item.name : "")
+        if (name.toLowerCase().endsWith(" breakpoint")) name = name.slice(0, -11)
+        return name === "-" ? objectName(item) + " " + cmdName(item) : name
+    }
     function objectName(item) { return String(item ? (item.object_name || item.objectName || "未分类") : "未分类") }
     function cmdName(item) { return String(item ? (item.cmd_name || item.cmdName || item.method_name || item.methodName || "-") : "-") }
     function slotText(item) {
@@ -82,7 +87,18 @@ Item {
         return "neutral"
     }
     function rangeText(item) {
-        return objectName(item) + " / " + cmdName(item) + " / 槽位 " + slotText(item) + " / " + matchModeText(item ? item.match_mode : "")
+        var text = breakpointScopeText(item)
+        if (breakpointShowsSlot(item)) text += " / " + matchModeText(item ? item.match_mode : "")
+        return text
+    }
+    function breakpointShowsSlot(item) {
+        var mode = item ? (item.match_mode || item.matchMode || "command_only") : "command_only"
+        return mode !== "command_only"
+    }
+    function breakpointScopeText(item) {
+        var text = objectName(item) + " / " + cmdName(item)
+        if (breakpointShowsSlot(item)) text += " / 槽位 " + slotText(item)
+        return text
     }
     function selectedItemForId(id) {
         if (items.length === 0) return null
@@ -184,7 +200,7 @@ Item {
 
     function overviewRows(item) {
         return [
-            ["断点名称", textOf(item ? item.name : "")],
+            ["断点名称", breakpointName(item)],
             ["objectName", objectName(item)],
             ["cmdName", cmdName(item)],
             ["slotId", slotText(item)],
@@ -200,7 +216,7 @@ Item {
 
     function overviewIdentityRows(item) {
         return [
-            ["断点名称", textOf(item ? item.name : "")],
+            ["断点名称", breakpointName(item)],
             ["objectName", objectName(item)],
             ["cmdName", cmdName(item)],
             ["slotId", slotText(item)],
@@ -389,9 +405,10 @@ Item {
                                                             Layout.minimumWidth: 0
                                                             Layout.fillHeight: true
                                                             spacing: 8
-                                                            Text { text: modelData.name || (page.objectName(modelData) + " " + page.cmdName(modelData) + " breakpoint"); color: page.appTheme.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                                            Text { text: page.objectName(modelData) + " / " + page.cmdName(modelData) + " / 槽位 " + page.slotText(modelData) + " / Session " + page.textOf(modelData.session_id || modelData.sessionId); color: page.appTheme.textNormal; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                            Text { text: page.breakpointName(modelData); color: page.appTheme.textStrong; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                            Text { text: page.breakpointScopeText(modelData) + " / Session " + page.textOf(modelData.session_id || modelData.sessionId); color: page.appTheme.textNormal; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                             Text { text: "命中范围: " + page.rangeText(modelData); color: page.appTheme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                            Text { text: page.shortTime(modelData.created_at || modelData.createdAt); color: page.appTheme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                         }
                                                     }
 
@@ -405,7 +422,6 @@ Item {
                                                         MbTag { appTheme: page.appTheme; text: "匹配 " + page.matchModeText(modelData.match_mode); type: modelData.match_mode === "params_snapshot" ? "primary" : "neutral"; Layout.preferredWidth: 108 }
                                                         MbTag { appTheme: page.appTheme; text: "命中 " + (modelData.hit_count || 0); type: (modelData.hit_count || 0) > 0 ? "warning" : "neutral"; Layout.preferredWidth: 108 }
                                                         MbTag { appTheme: page.appTheme; text: page.sourceText(modelData); type: "neutral"; Layout.preferredWidth: 108 }
-                                                        Text { text: page.shortTime(modelData.created_at || modelData.createdAt); color: page.appTheme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                                                     }
 
                                                     ColumnLayout {
@@ -416,7 +432,7 @@ Item {
                                                         MbButton { appTheme: page.appTheme; text: "编辑条件"; enabled: false; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 30 }
                                                         MbButton { appTheme: page.appTheme; text: "命中记录"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: page.requestCallFilter(idValue) }
                                                         MbButton { appTheme: page.appTheme; text: "复制规则"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: bridge.copyText(page.jsonText(modelData)) }
-                                                        MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: page.confirmDeleteBreakpoint(idValue, modelData.name || page.rangeText(modelData)) }
+                                                        MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 30; onClicked: page.confirmDeleteBreakpoint(idValue, page.breakpointName(modelData)) }
                                                     }
                                                 }
                                             }

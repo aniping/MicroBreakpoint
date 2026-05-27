@@ -275,6 +275,7 @@ def test_command_breakpoint_ignores_slot_id(tmp_path):
     ).get_json()
     assert created["success"] is True
     breakpoint = client.get("/api/breakpoints").get_json()["items"][0]
+    assert breakpoint["name"] == "VNA create"
     assert breakpoint["slot_id"] is None
     assert breakpoint["condition"] == {"objectName": "VNA", "cmdName": "create"}
 
@@ -322,6 +323,7 @@ def test_interface_breakpoint_matches_all_slots_for_object_and_command(tmp_path)
     created = client.post(f"/api/interfaces/{interface['id']}/breakpoint", json={}).get_json()
     assert created["success"] is True
     breakpoint = client.get("/api/breakpoints").get_json()["items"][0]
+    assert breakpoint["name"] == "VNA create"
     assert breakpoint["slot_id"] is None
     assert breakpoint["condition"] == {"objectName": "VNA", "cmdName": "create"}
 

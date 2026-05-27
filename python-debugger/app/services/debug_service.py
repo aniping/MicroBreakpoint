@@ -1316,7 +1316,7 @@ def create_breakpoint(data):
         VALUES (?, ?, ?, 'session', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             bp_id,
-            data.get("name") or f"{object_name} {cmd_name} breakpoint",
+            data.get("name") or f"{object_name} {cmd_name}",
             1 if data.get("enabled", True) else 0,
             session_id,
             object_name,
@@ -1365,7 +1365,7 @@ def breakpoint_from_interface(interface_id, body):
     match_mode = body.get("matchMode", "command_only")
     return create_breakpoint(
         {
-            "name": body.get("name") or f"{item.get('interface_alias') or item['object_name'] + ' ' + item['cmd_name']} breakpoint",
+            "name": body.get("name") or f"{item.get('interface_alias') or item['object_name'] + ' ' + item['cmd_name']}",
             "enabled": body.get("enabled", True),
             "sessionId": item["session_id"],
             "objectName": item["object_name"],
@@ -1393,7 +1393,7 @@ def breakpoint_from_call(call_id, body):
     match_mode = body.get("matchMode", "command_only")
     return create_breakpoint(
         {
-            "name": body.get("name") or f"{call['object_name']} {call['cmd_name']} breakpoint",
+            "name": body.get("name") or f"{call['object_name']} {call['cmd_name']}",
             "enabled": body.get("enabled", True),
             "sessionId": call["session_id"],
             "objectName": call["object_name"],
