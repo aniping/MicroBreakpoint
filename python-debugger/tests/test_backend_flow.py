@@ -264,6 +264,54 @@ def test_command_and_params_snapshot_breakpoints(tmp_path):
     assert missed["action"] == "continue"
 
 
+def test_command_breakpoint_ignores_slot_id(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    create_and_start(client)
+    created = client.post(
+        "/api/breakpoints",
+        json={"objectName": "VNA", "cmdName": "create", "slotId": 1, "matchMode": "command_only"},
+    ).get_json()
+    assert created["success"] is True
+    breakpoint = client.get("/api/breakpoints").get_json()["items"][0]
+    assert breakpoint["slot_id"] is None
+    assert breakpoint["condition"] == {"objectName": "VNA", "cmdName": "create"}
+
+    with app.app_context():
+        db = get_db()
+        db.execute("UPDATE breakpoint SET slot_id=1, slot_key='1' WHERE id=?", (created["breakpointId"],))
+        db.commit()
+
+    hit_slot_2 = client.post("/api/calls/before", json=make_before("command-hit-slot-2", object_name="VNA", cmd="create", slot_id=2)).get_json()
+    assert hit_slot_2["action"] == "pause"
+    client.post("/api/calls/command-hit-slot-2/continue")
+
+
+def test_slot_id_can_match_as_params_condition(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    created = client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotId": 1,
+            "matchMode": "params_condition",
+            "conditions": [{"path": "slotId", "operator": "eq", "value": 1}],
+        },
+    ).get_json()
+    assert created["success"] is True
+
+    missed_slot = client.post("/api/calls/before", json=make_before("condition-miss-slot-2", object_name="VNA", cmd="create", slot_id=2)).get_json()
+    assert missed_slot["action"] == "continue"
+
+    hit_slot = client.post("/api/calls/before", json=make_before("condition-hit-slot-1", object_name="VNA", cmd="create", slot_id=1)).get_json()
+    assert hit_slot["action"] == "pause"
+    client.post("/api/calls/condition-hit-slot-1/continue")
+
+
 def test_interface_breakpoint_matches_all_slots_for_object_and_command(tmp_path):
     client = make_client(tmp_path)
 

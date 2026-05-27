@@ -684,7 +684,7 @@ def match_breakpoint(call_data, session_id):
 
 def _breakpoint_matches(item, call_data):
     mode = item.get("match_mode") or "command_only"
-    bp_slot = item.get("slot_id")
+    bp_slot = item.get("slot_id") if mode != "command_only" else None
     if bp_slot is not None and _normalize_slot_id(bp_slot) != call_data["slot_id"]:
         return False
     if mode == "command_only":
@@ -692,8 +692,15 @@ def _breakpoint_matches(item, call_data):
     if mode == "params_snapshot":
         return item.get("params_fingerprint") == call_data["params_fingerprint"]
     if mode == "params_condition":
-        return _conditions_match(item.get("conditions") or [], call_data["params"])
+        return _conditions_match(item.get("conditions") or [], breakpoint_match_params(call_data))
     return False
+
+
+def breakpoint_match_params(call_data):
+    params = dict(call_data["params"] or {})
+    params["slotId"] = call_data["slot_id"]
+    params["slotKey"] = call_data["slot_key"]
+    return params
 
 
 def _conditions_match(conditions, params):
@@ -1294,11 +1301,12 @@ def create_breakpoint(data):
         return {"success": False, "message": "请先新建或选择 Session"}
     now = now_iso()
     bp_id = f"bp-{uuid.uuid4().hex[:10]}"
-    slot_id = _normalize_slot_id(data.get("slotId"))
-    slot = data.get("slotKey") or slot_key(slot_id)
     object_name = data.get("objectName") or UNCATEGORIZED_OBJECT
     cmd_name = data.get("cmdName") or UNKNOWN_COMMAND
     match_mode = data.get("matchMode") or "command_only"
+    requested_slot_id = _normalize_slot_id(data.get("slotId"))
+    slot_id = None if match_mode == "command_only" else requested_slot_id
+    slot = None if match_mode == "command_only" else (data.get("slotKey") or slot_key(slot_id))
     get_db().execute(
         """INSERT INTO breakpoint
         (id, name, enabled, scope, session_id, object_name, cmd_name, slot_id, slot_key, match_mode,
@@ -1319,7 +1327,7 @@ def create_breakpoint(data):
             data.get("paramsFingerprint"),
             dumps(data.get("paramsSnapshot")),
             dumps(data.get("conditions", [])),
-            dumps(breakpoint_condition(data, object_name, cmd_name, slot_id)),
+            dumps(breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode)),
             data.get("hitMode", "always"),
             data.get("hitLimit"),
             data.get("sourceType"),
@@ -1338,11 +1346,11 @@ def create_breakpoint(data):
     return {"success": True, "breakpointId": bp_id}
 
 
-def breakpoint_condition(data, object_name, cmd_name, slot_id):
+def breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode):
     condition = {}
     condition["objectName"] = object_name
     condition["cmdName"] = cmd_name
-    if slot_id is not None:
+    if match_mode != "command_only" and slot_id is not None:
         condition["slotId"] = slot_id
     else:
         condition.pop("slotId", None)
