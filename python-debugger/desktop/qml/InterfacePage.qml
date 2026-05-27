@@ -323,16 +323,12 @@ Item {
 
     function overviewRows(item) {
         return [
-            ["objectName", objectName(item)],
-            ["cmdName", cmdName(item)],
-            ["serviceName", textOf(item ? (item.service_name || item.serviceName) : "")],
-            ["sessionId", textOf(item ? (item.session_id || item.sessionId) : "")],
-            ["调用次数", textOf(item ? (item.call_count || item.callCount || 0) : 0)],
-            ["参数样本", textOf(sampleCount(item))],
-            ["异常数", textOf(item ? (item.exception_count || item.exceptionCount || 0) : 0)],
-            ["平均耗时", avgCostText(item) + " ms"],
-            ["最大耗时", textOf(item ? (item.max_cost_ms || item.maxCostMs || 0) : 0) + " ms"],
-            ["首次发现", shortTime(item ? (item.first_seen_at || item.firstSeenAt) : "")],
+            ["对象", objectName(item)],
+            ["命令", cmdName(item)],
+            ["服务", textOf(item ? (item.service_name || item.serviceName) : "")],
+            ["会话", textOf(item ? (item.session_id || item.sessionId) : "")],
+            ["调用/样本", textOf(item ? (item.call_count || item.callCount || 0) : 0) + " / " + textOf(sampleCount(item))],
+            ["异常/平均", textOf(item ? (item.exception_count || item.exceptionCount || 0) : 0) + " / " + avgCostText(item) + " ms"],
             ["最近调用", shortTime(item ? (item.last_seen_at || item.lastSeenAt) : "")]
         ]
     }
@@ -347,9 +343,9 @@ Item {
 
     function uniqueRows(item) {
         return [
-            ["唯一规则", "sessionId + objectName + cmdName"],
+            ["规则", "sessionId + objectName + cmdName"],
             ["唯一键", uniqueKey(item)],
-            ["paramsFingerprint", fingerprint(item)]
+            ["参数指纹", fingerprint(item)]
         ]
     }
 
@@ -627,9 +623,9 @@ Item {
         }
 
         Rectangle {
-            Layout.preferredWidth: 460
-            Layout.minimumWidth: 440
-            Layout.maximumWidth: 500
+            Layout.preferredWidth: 520
+            Layout.minimumWidth: 500
+            Layout.maximumWidth: 560
             Layout.fillHeight: true
             color: appTheme.panelBg
             border.color: appTheme.border
@@ -671,63 +667,72 @@ Item {
                             y: 12
                             width: Math.max(0, (parent ? parent.width : 430) - 24)
                             spacing: 10
-                            MbDetailCard { appTheme: page.appTheme; title: "接口身份"; rows: page.overviewRows(page.selectedItem) }
-                            MbDetailCard { appTheme: page.appTheme; title: "断点信息"; rows: page.breakpointRows(page.selectedItem) }
-                            ColumnLayout {
+                            MbDetailCard { appTheme: page.appTheme; title: "接口身份"; labelWidth: 72; rows: page.overviewRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "断点信息"; labelWidth: 72; rows: page.breakpointRows(page.selectedItem) }
+                            Rectangle {
                                 Layout.fillWidth: true
-                                spacing: 8
+                                implicitHeight: breakpointInfoColumn.implicitHeight + 24
+                                radius: 5
+                                color: page.appTheme.panelBgAlt
+                                border.color: page.appTheme.borderSoft
 
-                                Repeater {
-                                    model: page.interfaceBreakpoints(page.selectedItem)
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        property string bpId: String(modelData.id || modelData.breakpointId || "")
-                                        Layout.fillWidth: true
-                                        implicitHeight: bpLayout.implicitHeight + 16
-                                        radius: 4
-                                        color: page.appTheme.panelBgAlt
-                                        border.color: page.appTheme.border
+                                ColumnLayout {
+                                    id: breakpointInfoColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 8
 
-                                        ColumnLayout {
-                                            id: bpLayout
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.margins: 8
-                                            spacing: 6
+                                    Repeater {
+                                        model: page.interfaceBreakpoints(page.selectedItem)
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            property string bpId: String(modelData.id || modelData.breakpointId || "")
+                                            Layout.fillWidth: true
+                                            implicitHeight: bpLayout.implicitHeight + 14
+                                            radius: 4
+                                            color: page.appTheme.panelBg
+                                            border.color: page.appTheme.border
 
-                                            RowLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 8
-                                                Rectangle { Layout.preferredWidth: 8; Layout.preferredHeight: 8; radius: 4; color: modelData.enabled ? page.appTheme.success : page.appTheme.textDisabled }
-                                                MbTag { appTheme: page.appTheme; text: modelData.enabled ? "已启用" : "已禁用"; type: modelData.enabled ? "success" : "neutral"; Layout.preferredWidth: 70 }
-                                                MbTag { appTheme: page.appTheme; text: page.breakpointTypeLabel(modelData); type: (modelData.match_mode || modelData.matchMode) === "command_only" ? "neutral" : "primary"; Layout.preferredWidth: 82 }
-                                                Text { text: page.objectName(modelData) + " / " + page.cmdName(modelData); color: page.appTheme.textStrong; font.pixelSize: 12; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                            }
+                                            ColumnLayout {
+                                                id: bpLayout
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.margins: 7
+                                                spacing: 5
 
-                                            Text { text: "条件: " + page.conditionSummary(modelData); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                            Text { text: "命中 " + page.textOf(modelData.hit_count || modelData.hitCount || 0) + " / 创建 " + page.shortTime(modelData.created_at || modelData.createdAt); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 8
+                                                    Rectangle { Layout.preferredWidth: 8; Layout.preferredHeight: 8; radius: 4; color: modelData.enabled ? page.appTheme.success : page.appTheme.textDisabled }
+                                                    MbTag { appTheme: page.appTheme; text: modelData.enabled ? "已启用" : "已禁用"; type: modelData.enabled ? "success" : "neutral"; Layout.preferredWidth: 68 }
+                                                    MbTag { appTheme: page.appTheme; text: page.breakpointTypeLabel(modelData); type: (modelData.match_mode || modelData.matchMode) === "command_only" ? "neutral" : "primary"; Layout.preferredWidth: 78 }
+                                                    Text { text: page.objectName(modelData) + " / " + page.cmdName(modelData); color: page.appTheme.textStrong; font.pixelSize: 12; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                }
 
-                                            RowLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 6
-                                                MbButton { appTheme: page.appTheme; text: modelData.enabled ? "禁用" : "启用"; variant: modelData.enabled ? "neutral" : "success"; Layout.preferredWidth: 72; Layout.preferredHeight: 28; onClicked: bridge.setBreakpointEnabled(bpId, !modelData.enabled) }
-                                                MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.preferredWidth: 72; Layout.preferredHeight: 28; onClicked: page.confirmDeleteBreakpoint(bpId, page.objectName(modelData) + " " + page.cmdName(modelData)) }
-                                                Item { Layout.fillWidth: true }
+                                                Text { text: page.conditionSummary(modelData); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 6
+                                                    Text { text: "命中 " + page.textOf(modelData.hit_count || modelData.hitCount || 0) + " / " + page.shortTime(modelData.created_at || modelData.createdAt); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                                    MbButton { appTheme: page.appTheme; text: modelData.enabled ? "禁用" : "启用"; variant: modelData.enabled ? "neutral" : "success"; Layout.preferredWidth: 64; Layout.preferredHeight: 28; onClicked: bridge.setBreakpointEnabled(bpId, !modelData.enabled) }
+                                                    MbButton { appTheme: page.appTheme; text: "删除"; variant: "danger"; Layout.preferredWidth: 64; Layout.preferredHeight: 28; onClicked: page.confirmDeleteBreakpoint(bpId, page.objectName(modelData) + " " + page.cmdName(modelData)) }
+                                                }
                                             }
                                         }
                                     }
-                                }
 
-                                Text {
-                                    visible: page.interfaceBreakpoints(page.selectedItem).length === 0
-                                    text: "当前接口暂无断点"
-                                    color: page.appTheme.textMuted
-                                    font.pixelSize: 13
-                                    Layout.fillWidth: true
-                                    horizontalAlignment: Text.AlignHCenter
+                                    Text {
+                                        visible: page.interfaceBreakpoints(page.selectedItem).length === 0
+                                        text: "当前接口暂无断点"
+                                        color: page.appTheme.textMuted
+                                        font.pixelSize: 13
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
                                 }
                             }
-                            MbDetailCard { appTheme: page.appTheme; title: "唯一性"; rows: page.uniqueRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "唯一性"; labelWidth: 72; rows: page.uniqueRows(page.selectedItem) }
                         }
                     }
 
