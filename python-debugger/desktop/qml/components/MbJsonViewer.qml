@@ -57,7 +57,7 @@ Rectangle {
                 clip: true
 
                 ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AlwaysOff
+                    policy: ScrollBar.AsNeeded
                     contentItem: Rectangle {
                         implicitWidth: 8
                         radius: 4
@@ -67,7 +67,7 @@ Rectangle {
                 }
 
                 ScrollBar.horizontal: ScrollBar {
-                    policy: ScrollBar.AlwaysOff
+                    policy: ScrollBar.AsNeeded
                     contentItem: Rectangle {
                         implicitHeight: 8
                         radius: 4

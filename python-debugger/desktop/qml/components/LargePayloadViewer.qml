@@ -121,6 +121,9 @@ Item {
         implicitHeight: 34
         leftPadding: 30
         rightPadding: 8
+        topPadding: 0
+        bottomPadding: 0
+        verticalAlignment: TextInput.AlignVCenter
         selectByMouse: true
         color: viewer.appTheme.textNormal
         placeholderTextColor: viewer.appTheme.textDisabled
@@ -192,13 +195,33 @@ Item {
             radius: 4
             clip: true
 
-            RowLayout {
+            Flickable {
+                id: payloadFlick
                 anchors.fill: parent
-                spacing: 0
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                contentWidth: Math.max(width, lineNumberColumn.width + codeText.implicitWidth + 28)
+                contentHeight: Math.max(height, codeText.implicitHeight + 16)
+                flickableDirection: Flickable.HorizontalAndVerticalFlick
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                    contentItem: Rectangle { implicitWidth: 8; radius: 4; color: parent.pressed ? viewer.appTheme.primary : viewer.appTheme.textDisabled }
+                    background: Rectangle { color: "transparent" }
+                }
+                ScrollBar.horizontal: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                    contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? viewer.appTheme.primary : viewer.appTheme.textDisabled }
+                    background: Rectangle { color: "transparent" }
+                }
 
+                Row {
+                    width: payloadFlick.contentWidth
+                    height: payloadFlick.contentHeight
+                    spacing: 0
                 Rectangle {
-                    Layout.preferredWidth: 44
-                    Layout.fillHeight: true
+                    id: lineNumberColumn
+                    width: 44
+                    height: parent.height
                     color: viewer.appTheme.panelBgAlt
                     border.color: viewer.appTheme.border
                     Text {
@@ -211,8 +234,6 @@ Item {
                         font.family: "Consolas"
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignRight
-                        lineHeightMode: Text.FixedHeight
-                        lineHeight: 17
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -223,19 +244,22 @@ Item {
                     }
                 }
 
-                TextArea {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    text: viewer.displayText
-                    readOnly: true
-                    selectByMouse: true
-                    wrapMode: TextEdit.NoWrap
-                    color: viewer.appTheme.textNormal
-                    font.family: "Consolas"
-                    font.pixelSize: 12
-                    leftPadding: 10
-                    topPadding: 8
-                    background: Rectangle { color: "transparent" }
+                    Item {
+                        width: Math.max(payloadFlick.width - lineNumberColumn.width, codeText.implicitWidth + 20)
+                        height: parent.height
+                        TextEdit {
+                            id: codeText
+                            x: 10
+                            y: 8
+                            text: viewer.displayText
+                            readOnly: true
+                            selectByMouse: true
+                            color: viewer.appTheme.textNormal
+                            font.family: "Consolas"
+                            font.pixelSize: 12
+                            wrapMode: TextEdit.NoWrap
+                        }
+                    }
                 }
             }
         }

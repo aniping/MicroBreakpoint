@@ -92,6 +92,9 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "acceptedButtons: Qt.AllButtons" in viewer
     assert "onPressed: function(mouse) { mouse.accepted = true }" in viewer
     assert "wrapMode: TextEdit.NoWrap" in viewer
+    assert "selectByMouse: true" in viewer
+    assert "flickableDirection: Flickable.HorizontalAndVerticalFlick" in viewer
+    assert "verticalAlignment: TextInput.AlignVCenter" in viewer
     assert "component SearchField" in viewer
     assert "搜索完整 payload" in viewer
     assert "function searchSummary" in viewer
@@ -266,7 +269,7 @@ def test_right_detail_scrollbars_are_hidden():
     assert interface_page.count("ScrollBar.vertical.policy: ScrollBar.AlwaysOff") >= 2
     assert breakpoint_page.count("ScrollBar.vertical.policy: ScrollBar.AlwaysOff") >= 3
     assert detail_panel.count("policy: ScrollBar.AlwaysOff") >= 2
-    assert viewer.count("policy: ScrollBar.AlwaysOff") >= 2
+    assert viewer.count("policy: ScrollBar.AsNeeded") >= 2
 
 
 def test_main_has_paused_request_banner():
