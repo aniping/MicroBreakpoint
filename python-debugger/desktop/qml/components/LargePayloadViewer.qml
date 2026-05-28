@@ -15,6 +15,7 @@ Item {
     property bool truncated: false
     property int nextOffset: 0
     property bool hasMore: false
+    property bool loadedFromChunks: false
     property string currentText: preview || ""
     property string displayText: formatJsonPreview(currentText)
     property string searchText: ""
@@ -30,7 +31,8 @@ Item {
 
     function resetContent() {
         currentText = preview || ""
-        nextOffset = truncated ? Math.min(payloadSize, 8192) : payloadSize
+        nextOffset = 0
+        loadedFromChunks = false
         hasMore = !!truncated
         searchMatches = []
         selectedSearchIndex = -1
@@ -57,10 +59,18 @@ Item {
 
     function loadMore() {
         if (!callId || !hasMore) return
-        var data = JSON.parse(bridge.loadPayloadChunk(callId, payloadType, nextOffset, 8192))
+        var offset = loadedFromChunks ? nextOffset : 0
+        var limit = loadedFromChunks ? 8192 : Math.min(Math.max(payloadSize, 8192), 262144)
+        var data = JSON.parse(bridge.loadPayloadChunk(callId, payloadType, offset, limit))
         if (data.success === false) return
-        if ((currentText.length + String(data.content || "").length) > 262144) currentText = String(data.content || "")
-        else currentText += String(data.content || "")
+        if (!loadedFromChunks) {
+            currentText = String(data.content || "")
+            loadedFromChunks = true
+        } else if ((currentText.length + String(data.content || "").length) > 262144) {
+            currentText = String(data.content || "")
+        } else {
+            currentText += String(data.content || "")
+        }
         nextOffset = Number(data.nextOffset || nextOffset)
         hasMore = !!data.hasMore
     }
@@ -146,6 +156,8 @@ Item {
     onCallIdChanged: resetContent()
     onPayloadTypeChanged: resetContent()
     onPreviewChanged: resetContent()
+    onPayloadSizeChanged: resetContent()
+    onTruncatedChanged: resetContent()
 
     ColumnLayout {
         anchors.fill: parent

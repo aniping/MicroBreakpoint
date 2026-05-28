@@ -95,6 +95,9 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "selectByMouse: true" in viewer
     assert "flickableDirection: Flickable.HorizontalAndVerticalFlick" in viewer
     assert "verticalAlignment: TextInput.AlignVCenter" in viewer
+    assert "property bool loadedFromChunks" in viewer
+    assert "onTruncatedChanged: resetContent()" in viewer
+    assert "var offset = loadedFromChunks ? nextOffset : 0" in viewer
     assert "component SearchField" in viewer
     assert "搜索完整 payload" in viewer
     assert "function searchSummary" in viewer

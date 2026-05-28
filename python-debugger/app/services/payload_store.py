@@ -14,6 +14,8 @@ SUMMARY_LIMIT_CHARS = 260
 MAX_CHUNK_BYTES = 1024 * 1024
 SEARCH_CHUNK_BYTES = 1024 * 1024
 SEARCH_PREVIEW_CHARS = 100
+PREVIEW_STRING_CHARS = 480
+PREVIEW_COLLECTION_ITEMS = 16
 SAFE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -36,14 +38,15 @@ def serialize_payload(value):
 def payload_meta(value):
     text, content_format = serialize_payload(value)
     data = text.encode("utf-8")
+    truncated = len(data) > PREVIEW_LIMIT_BYTES
     return {
         "content_text": text,
         "content_format": content_format,
         "summary": summarize_payload(value, text),
-        "preview": data[:PREVIEW_LIMIT_BYTES].decode("utf-8", errors="replace"),
+        "preview": preview_payload(value, text, content_format, truncated, len(data)),
         "size": len(data),
         "hash": sha256(data).hexdigest(),
-        "truncated": len(data) > PREVIEW_LIMIT_BYTES,
+        "truncated": truncated,
     }
 
 
@@ -296,6 +299,61 @@ def _file_payload_preview(path, encoding, offset, query_size):
     match = data[prefix_size:prefix_size + query_size].decode(encoding, errors="replace")
     suffix = data[prefix_size + query_size:].decode(encoding, errors="replace")
     return prefix[-SEARCH_PREVIEW_CHARS:] + match + suffix[:SEARCH_PREVIEW_CHARS]
+
+
+def preview_payload(value, serialized_text, content_format, truncated, content_size):
+    if not truncated:
+        return serialized_text
+    if content_format != "json":
+        return serialized_text.encode("utf-8")[:PREVIEW_LIMIT_BYTES].decode("utf-8", errors="replace")
+    return json_preview_text(value, content_size)
+
+
+def json_preview_text(value, content_size):
+    for string_limit in (PREVIEW_STRING_CHARS, 240, 120, 60):
+        for item_limit in (PREVIEW_COLLECTION_ITEMS, 8, 4, 2):
+            preview = preview_json_value(value, string_limit, item_limit)
+            text = dumps(preview)
+            if len(text.encode("utf-8")) <= PREVIEW_LIMIT_BYTES:
+                return text
+    return dumps({
+        "__preview__": "payload truncated",
+        "contentSize": content_size,
+        "message": "Full payload is available via load more or export.",
+    })
+
+
+def preview_json_value(value, string_limit, item_limit, depth=0):
+    if depth >= 6:
+        return preview_marker(value)
+    if isinstance(value, str):
+        if len(value) <= string_limit:
+            return value
+        return value[:string_limit] + f"... [truncated {len(value) - string_limit} chars]"
+    if isinstance(value, list):
+        items = [preview_json_value(item, string_limit, item_limit, depth + 1) for item in value[:item_limit]]
+        if len(value) > item_limit:
+            items.append({"__preview__": "items truncated", "omittedItems": len(value) - item_limit})
+        return items
+    if isinstance(value, dict):
+        result = {}
+        keys = list(value.keys())
+        for key in keys[:item_limit]:
+            result[key] = preview_json_value(value[key], string_limit, item_limit, depth + 1)
+        if len(keys) > item_limit:
+            result["__preview__"] = {"omittedKeys": len(keys) - item_limit}
+        return result
+    return value
+
+
+def preview_marker(value):
+    if isinstance(value, dict):
+        return {"__preview__": "object truncated", "keyCount": len(value)}
+    if isinstance(value, list):
+        return {"__preview__": "array truncated", "itemCount": len(value)}
+    if isinstance(value, str):
+        return value[:80] + ("..." if len(value) > 80 else "")
+    return value
 
 
 def summarize_payload(value, serialized_text=None):

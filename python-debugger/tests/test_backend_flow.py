@@ -113,6 +113,10 @@ def test_call_list_is_lightweight_and_payload_is_chunked(tmp_path):
 
     detail = client.get("/api/calls/large-call").get_json()
     assert detail["params_preview"].startswith("{")
+    parsed_params_preview = json.loads(detail["params_preview"])
+    parsed_result_preview = json.loads(detail["result_preview"])
+    assert isinstance(parsed_params_preview, dict)
+    assert isinstance(parsed_result_preview, dict)
     assert len(detail["params_preview"].encode("utf-8")) <= 8192 * 2
     assert "params" not in detail
     assert "result" not in detail
@@ -135,6 +139,31 @@ def test_call_list_is_lightweight_and_payload_is_chunked(tmp_path):
         assert record["params_json"] is None
         assert record["result_json"] is None
         assert "data" not in record["raw_args_json"]
+
+
+def test_large_text_payload_preview_is_valid_json(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    large_text = "micro-breakpoint-large-text-" * 4096
+    client.post(
+        "/api/calls/before",
+        json=make_before(
+            "large-text-call",
+            object_name="VNA",
+            cmd="largeText",
+            params={"scenario": "large-text-payload", "text": large_text, "expectedChars": len(large_text)},
+        ),
+    )
+    finish(client, "large-text-call")
+
+    detail = client.get("/api/calls/large-text-call").get_json()
+    preview = json.loads(detail["params_preview"])
+    assert preview["scenario"] == "large-text-payload"
+    assert preview["expectedChars"] == len(large_text)
+    assert preview["text"].startswith("micro-breakpoint-large-text-")
+    assert "truncated" in preview["text"]
+    assert len(preview["text"]) < len(large_text)
 
 
 def test_payload_search_streaming_file(tmp_path, monkeypatch):
