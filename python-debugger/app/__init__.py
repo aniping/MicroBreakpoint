@@ -13,10 +13,16 @@ from app.services.wait_manager import wait_manager
 
 def create_app(test_config=None):
     app = Flask(__name__)
+    database = (test_config or {}).get("DATABASE", "data/debugger.sqlite3")
     app.config.update(
-        DATABASE=(test_config or {}).get("DATABASE", "data/debugger.sqlite3"),
+        DATABASE=database,
+        PAYLOAD_ROOT=(test_config or {}).get("PAYLOAD_ROOT") if test_config else None,
         TESTING=bool(test_config and test_config.get("TESTING")),
     )
+    if app.config["PAYLOAD_ROOT"] is None and database != ":memory:":
+        from pathlib import Path
+
+        app.config["PAYLOAD_ROOT"] = str(Path(database).resolve().parent / "payloads")
     CORS(app)
     init_db(app)
     wait_manager.continue_all()

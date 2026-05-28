@@ -25,6 +25,8 @@ def interfaces():
             request.args.get("status"),
             request.args.get("sortBy"),
             request.args.get("sortOrder"),
+            request.args.get("page"),
+            request.args.get("pageSize"),
         )
     })
 
@@ -48,19 +50,60 @@ def update_interface_lock():
 
 @interface_api.get("/<interface_id>")
 def interface_detail(interface_id):
-    row = get_db().execute("SELECT * FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
+    row = get_db().execute(
+        """SELECT id, session_id, object_name, cmd_name, slot_id, slot_key, service_name,
+                  class_name, method_name, interface_alias, display_name, description,
+                  latest_params_fingerprint, params_sample_count, params_summary,
+                  first_seen_at, last_seen_at, call_count, success_count, exception_count,
+                  avg_cost_ms, max_cost_ms, min_cost_ms, created_at, updated_at
+           FROM discovered_interface
+           WHERE id=?""",
+        (interface_id,),
+    ).fetchone()
     if not row:
         return jsonify({"success": False, "message": "not found"}), 404
     item = normalize(row_to_dict(row))
     samples = get_db().execute(
-        """SELECT * FROM interface_param_sample
-           WHERE interface_id=?
-           ORDER BY last_seen_at DESC, created_at DESC
-           LIMIT 50""",
+        """SELECT s.id, s.interface_id, s.call_id, s.object_name, s.cmd_name, s.slot_id, s.slot_key,
+                  s.params_fingerprint, s.params_hash, s.params_summary, s.params_size, s.params_payload_id,
+                  c.params_preview, c.params_truncated,
+                  s.result_summary, s.result_size, s.result_payload_id, s.success, s.cost_ms,
+                  s.first_seen_at, s.last_seen_at, s.created_at, s.updated_at, s.seen_count
+           FROM interface_param_sample s
+           LEFT JOIN call_record c ON s.call_id=c.call_id
+           WHERE s.interface_id=?
+           ORDER BY s.last_seen_at DESC, s.created_at DESC
+           LIMIT 10""",
         (interface_id,),
     ).fetchall()
     item["samples"] = [normalize(row_to_dict(sample)) for sample in samples]
     return jsonify(item)
+
+
+@interface_api.get("/<interface_id>/samples")
+def interface_samples(interface_id):
+    limit = request.args.get("limit", 10)
+    offset = request.args.get("offset", 0)
+    try:
+        limit = min(max(int(limit), 1), 50)
+        offset = max(int(offset), 0)
+    except (TypeError, ValueError):
+        limit = 10
+        offset = 0
+    rows = get_db().execute(
+        """SELECT s.id, s.interface_id, s.call_id, s.object_name, s.cmd_name, s.slot_id, s.slot_key,
+                  s.params_fingerprint, s.params_hash, s.params_summary, s.params_size, s.params_payload_id,
+                  c.params_preview, c.params_truncated,
+                  s.result_summary, s.result_size, s.result_payload_id, s.success, s.cost_ms,
+                  s.first_seen_at, s.last_seen_at, s.created_at, s.updated_at, s.seen_count
+           FROM interface_param_sample s
+           LEFT JOIN call_record c ON s.call_id=c.call_id
+           WHERE s.interface_id=?
+           ORDER BY s.last_seen_at DESC, s.created_at DESC
+           LIMIT ? OFFSET ?""",
+        (interface_id, limit, offset),
+    ).fetchall()
+    return jsonify({"success": True, "items": [normalize(row_to_dict(row)) for row in rows], "limit": limit, "offset": offset})
 
 
 @interface_api.get("/<interface_id>/breakpoints")

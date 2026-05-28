@@ -1,8 +1,19 @@
 import json
 import uuid
 from hashlib import sha256
+from pathlib import Path
 
 from app.db.database import get_db, row_to_dict
+from app.services.payload_store import (
+    export_payload_target,
+    payload_by_call,
+    payload_chunk,
+    payload_meta,
+    read_payload_text,
+    read_payload_value,
+    save_payload,
+    search_payload,
+)
 from app.services.wait_manager import wait_manager
 from app.utils.json_utils import dumps, loads
 from app.utils.time_utils import now_iso
@@ -15,6 +26,8 @@ MBREC_VERSION = 1
 INTERFACE_LOCK_SETTING = "interface_locked"
 CURRENT_SESSION_ID_SETTING = "current_session_id"
 CURRENT_SESSION_OPEN_SETTING = "current_session_open"
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 100
 
 STATE = {"debugging": False, "mode": "idle", "sessionId": None}
 
@@ -146,6 +159,7 @@ def clear_current_session():
     released = wait_manager.continue_all()
     counts = {
         "calls": db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0],
+        "payloads": db.execute("SELECT COUNT(*) FROM call_payloads WHERE session_id=?", (session_id,)).fetchone()[0],
         "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface WHERE session_id=?", (session_id,)).fetchone()[0],
         "samples": db.execute(
             """SELECT COUNT(*) FROM interface_param_sample
@@ -160,9 +174,11 @@ def clear_current_session():
         (session_id,),
     )
     db.execute("DELETE FROM breakpoint WHERE session_id=?", (session_id,))
+    db.execute("DELETE FROM call_payloads WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM call_record WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM discovered_interface WHERE session_id=?", (session_id,))
     db.commit()
+    delete_session_payload_files(session_id)
     return state_response(success=True, deletedCount=counts, releasedCount=released)
 
 
@@ -175,6 +191,7 @@ def delete_session(session_id):
         return {"success": False, "message": "session not found"}
     counts = {
         "calls": db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0],
+        "payloads": db.execute("SELECT COUNT(*) FROM call_payloads WHERE session_id=?", (session_id,)).fetchone()[0],
         "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface WHERE session_id=?", (session_id,)).fetchone()[0],
         "breakpoints": db.execute("SELECT COUNT(*) FROM breakpoint WHERE session_id=?", (session_id,)).fetchone()[0],
     }
@@ -184,10 +201,12 @@ def delete_session(session_id):
         (session_id,),
     )
     db.execute("DELETE FROM breakpoint WHERE session_id=?", (session_id,))
+    db.execute("DELETE FROM call_payloads WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM call_record WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM discovered_interface WHERE session_id=?", (session_id,))
     db.execute("DELETE FROM debug_session WHERE id=?", (session_id,))
     db.commit()
+    delete_session_payload_files(session_id)
     if STATE["sessionId"] == session_id:
         STATE.update(debugging=False, mode="idle", sessionId=None)
         save_current_session_state(None)
@@ -201,19 +220,53 @@ def clear_sessions():
     counts = {
         "sessions": db.execute("SELECT COUNT(*) FROM debug_session").fetchone()[0],
         "calls": db.execute("SELECT COUNT(*) FROM call_record").fetchone()[0],
+        "payloads": db.execute("SELECT COUNT(*) FROM call_payloads").fetchone()[0],
         "interfaces": db.execute("SELECT COUNT(*) FROM discovered_interface").fetchone()[0],
         "breakpoints": db.execute("SELECT COUNT(*) FROM breakpoint").fetchone()[0],
         "samples": db.execute("SELECT COUNT(*) FROM interface_param_sample").fetchone()[0],
     }
     db.execute("DELETE FROM interface_param_sample")
     db.execute("DELETE FROM breakpoint")
+    db.execute("DELETE FROM call_payloads")
     db.execute("DELETE FROM call_record")
     db.execute("DELETE FROM discovered_interface")
     db.execute("DELETE FROM debug_session")
     db.commit()
+    delete_all_payload_files()
     STATE.update(debugging=False, mode="idle", sessionId=None)
     save_current_session_state(None)
     return state_response(success=True, deletedCount=counts)
+
+
+def delete_session_payload_files(session_id):
+    from app.services.payload_store import payload_root
+
+    target = payload_root() / safe_payload_segment(session_id)
+    delete_tree_one_path_at_a_time(target)
+
+
+def delete_all_payload_files():
+    from app.services.payload_store import payload_root
+
+    delete_tree_one_path_at_a_time(payload_root())
+
+
+def delete_tree_one_path_at_a_time(target):
+    target = Path(target)
+    if not target.exists():
+        return
+    if target.is_file():
+        target.unlink()
+        return
+    for child in sorted(target.iterdir(), key=lambda item: len(item.parts), reverse=True):
+        delete_tree_one_path_at_a_time(child)
+    target.rmdir()
+
+
+def safe_payload_segment(value):
+    from app.services.payload_store import _safe_segment
+
+    return _safe_segment(value)
 
 
 def state_response(**extra):
@@ -307,6 +360,17 @@ def before_call(payload):
     now = now_iso()
     session_id = STATE["sessionId"]
     call_data = call_business_data(payload)
+    params_payload = save_payload(db, session_id, payload["callId"], "params", call_data["params"], now)
+    call_data.update(
+        {
+            "params_summary": params_payload["summary"],
+            "params_preview": params_payload["preview"],
+            "params_size": params_payload["size"],
+            "params_hash": call_data["params_fingerprint"],
+            "params_truncated": 1 if params_payload["truncated"] else 0,
+            "params_payload_id": params_payload["payload_id"],
+        }
+    )
     interface_id, interface_registered, discovery_enabled = resolve_interface_for_call(call_data, session_id, now)
     call_index = db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0] + 1
     db.execute(
@@ -314,8 +378,10 @@ def before_call(payload):
         (call_id, session_id, call_index, object_name, cmd_name, slot_id, slot_key,
          service_name, class_name, method_name, display_name, description, thread_name,
          args_json, raw_args_json, parameter_meta_json, params_json, params_fingerprint, params_summary,
+         params_preview, params_size, params_hash, params_truncated, params_payload_id, payload_status,
          status, interface_id, discovery_enabled, interface_registered, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)""",
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready',
+                'running', ?, ?, ?, ?, ?)""",
         (
             payload["callId"],
             session_id,
@@ -333,9 +399,14 @@ def before_call(payload):
             dumps(call_data["raw_args"]),
             dumps(call_data["raw_args"]),
             dumps(payload.get("parameterMeta", [])),
-            dumps(call_data["params"]),
+            None,
             call_data["params_fingerprint"],
             call_data["params_summary"],
+            call_data["params_preview"],
+            call_data["params_size"],
+            call_data["params_hash"],
+            call_data["params_truncated"],
+            call_data["params_payload_id"],
             interface_id,
             discovery_enabled,
             interface_registered,
@@ -375,11 +446,21 @@ def after_call(payload):
     if not row:
         return {"success": True, "ignored": True}
     status = "finished" if payload.get("success") else "exception"
+    result_payload = save_payload(db, row["session_id"], payload.get("callId"), "result", payload.get("result"), now)
     db.execute(
-        """UPDATE call_record SET result_json=?, success=?, exception_type=?, exception_message=?,
-           cost_ms=?, status=?, finished_at=?, updated_at=? WHERE call_id=?""",
+        """UPDATE call_record
+           SET result_json=NULL, result_summary=?, result_preview=?, result_size=?, result_hash=?,
+               result_truncated=?, result_payload_id=?, payload_status='ready',
+               success=?, exception_type=?, exception_message=?,
+               cost_ms=?, status=?, finished_at=?, updated_at=?
+           WHERE call_id=?""",
         (
-            dumps(payload.get("result")),
+            result_payload["summary"],
+            result_payload["preview"],
+            result_payload["size"],
+            result_payload["hash"],
+            1 if result_payload["truncated"] else 0,
+            result_payload["payload_id"],
             1 if payload.get("success") else 0,
             payload.get("exceptionType"),
             payload.get("exceptionMessage"),
@@ -391,7 +472,7 @@ def after_call(payload):
         ),
     )
     if row["discovery_enabled"] and row["interface_id"]:
-        update_param_sample_result(row, payload, now)
+        update_param_sample_result(row, payload, now, result_payload["payload_id"])
         update_interface_stats(row, payload, now)
     db.commit()
     return {"success": True}
@@ -440,7 +521,6 @@ def normalized_business_args(raw_args, object_name, cmd_name, slot_id, params):
         "objectName": object_name,
         "cmdName": cmd_name,
         "slotId": slot_id,
-        "params": params,
     }
 
 
@@ -568,21 +648,7 @@ def disable_command_breakpoints_for_condition(db, session_id, object_name, cmd_n
 
 
 def params_summary(params):
-    if not params:
-        return "{}"
-    parts = []
-    for key in sorted(params.keys())[:4]:
-        value = params[key]
-        if isinstance(value, (dict, list)):
-            rendered = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        else:
-            rendered = str(value)
-        if len(rendered) > 32:
-            rendered = rendered[:29] + "..."
-        parts.append(f"{key}={rendered}")
-    if len(params) > 4:
-        parts.append("...")
-    return ", ".join(parts)
+    return payload_meta(params)["summary"]
 
 
 def resolve_interface_for_call(call_data, session_id, now):
@@ -620,7 +686,7 @@ def upsert_interface(call_data, session_id, now):
     if existing:
         db.execute(
             """UPDATE discovered_interface
-               SET description=?, latest_params_json=?, latest_params_fingerprint=?, params_schema_json=?,
+               SET description=?, latest_params_json=NULL, latest_params_fingerprint=?, params_schema_json=?,
                    parameter_schema_json=?, sample_args_json=?, params_summary=?,
                    service_name=?, class_name=?, method_name=?, display_name=?,
                    last_seen_at=?, call_count=call_count+1,
@@ -628,7 +694,6 @@ def upsert_interface(call_data, session_id, now):
                WHERE id=?""",
             (
                 call_data["description"],
-                dumps(call_data["params"]),
                 call_data["params_fingerprint"],
                 dumps(schema),
                 dumps(schema),
@@ -675,7 +740,7 @@ def upsert_interface(call_data, session_id, now):
             dumps(schema),
             dumps(schema),
             dumps(sample_args_payload(call_data, now)),
-            dumps(call_data["params"]),
+            None,
             call_data["params_fingerprint"],
             call_data["params_summary"],
             now,
@@ -697,7 +762,8 @@ def upsert_param_sample(interface_id, call_data, now):
     if existing:
         db.execute(
             """UPDATE interface_param_sample
-               SET call_id=?, object_name=?, cmd_name=?, slot_id=?, args_json=?, params_json=?,
+               SET call_id=?, object_name=?, cmd_name=?, slot_id=?, args_json=?, params_json=NULL,
+                   params_hash=?, params_summary=?, params_size=?, params_payload_id=?,
                    last_seen_at=?, updated_at=?, seen_count=seen_count+1
                WHERE id=?""",
             (
@@ -706,7 +772,10 @@ def upsert_param_sample(interface_id, call_data, now):
                 call_data["cmd_name"],
                 call_data["slot_id"],
                 dumps(call_data["raw_args"]),
-                dumps(call_data["params"]),
+                call_data["params_hash"],
+                call_data["params_summary"],
+                call_data["params_size"],
+                call_data["params_payload_id"],
                 now,
                 now,
                 existing["id"],
@@ -716,8 +785,9 @@ def upsert_param_sample(interface_id, call_data, now):
     db.execute(
         """INSERT INTO interface_param_sample
            (id, interface_id, call_id, object_name, cmd_name, slot_id, slot_key, args_json,
-            params_fingerprint, params_json, first_seen_at, last_seen_at, created_at, updated_at, seen_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+            params_fingerprint, params_hash, params_summary, params_size, params_payload_id, params_json,
+            first_seen_at, last_seen_at, created_at, updated_at, seen_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)""",
         (
             sample_id,
             interface_id,
@@ -728,7 +798,10 @@ def upsert_param_sample(interface_id, call_data, now):
             call_data["slot_key"],
             dumps(call_data["raw_args"]),
             call_data["params_fingerprint"],
-            dumps(call_data["params"]),
+            call_data["params_hash"],
+            call_data["params_summary"],
+            call_data["params_size"],
+            call_data["params_payload_id"],
             now,
             now,
             now,
@@ -744,8 +817,10 @@ def sample_args_payload(call_data, created_at):
         "objectName": call_data["object_name"],
         "cmdName": call_data["cmd_name"],
         "slotId": call_data["slot_id"],
-        "args": call_data["raw_args"],
-        "params": call_data["params"],
+        "paramsSummary": call_data["params_summary"],
+        "paramsSize": call_data["params_size"],
+        "paramsHash": call_data["params_hash"],
+        "paramsPayloadId": call_data["params_payload_id"],
         "success": call_data.get("success"),
         "costMs": call_data.get("cost_ms"),
         "createdAt": created_at,
@@ -755,7 +830,7 @@ def sample_args_payload(call_data, created_at):
 def params_schema(params):
     schema = {}
     for key, value in (params or {}).items():
-        schema[key] = {"name": key, "type": type(value).__name__, "sample": value}
+        schema[key] = {"name": key, "type": type(value).__name__, "sample": payload_meta(value)["summary"]}
     return schema
 
 
@@ -780,13 +855,17 @@ def update_interface_stats(call_row, payload, now):
     )
 
 
-def update_param_sample_result(call_row, payload, now):
+def update_param_sample_result(call_row, payload, now, result_payload_id=None):
+    result_meta = payload_meta(payload.get("result"))
     get_db().execute(
         """UPDATE interface_param_sample
-           SET result_json=?, success=?, cost_ms=?, last_seen_at=?, updated_at=?
+           SET result_json=NULL, result_summary=?, result_size=?, result_payload_id=?,
+               success=?, cost_ms=?, last_seen_at=?, updated_at=?
            WHERE interface_id=? AND slot_key=? AND params_fingerprint=?""",
         (
-            dumps(payload.get("result")),
+            result_meta["summary"],
+            result_meta["size"],
+            result_payload_id,
             1 if payload.get("success") else 0,
             payload.get("costMs"),
             now,
@@ -936,6 +1015,7 @@ def export_session_archive(session_id, payload=None):
         "sourceSessionId": session_id,
         "session": row_to_dict(session),
         "calls": _archive_rows("SELECT * FROM call_record WHERE session_id=? ORDER BY call_index ASC, id ASC", (session_id,)),
+        "callPayloads": _archive_payload_rows(session_id),
         "interfaces": _archive_rows("SELECT * FROM discovered_interface WHERE session_id=? ORDER BY first_seen_at ASC", (session_id,)),
         "interfaceParamSamples": _archive_rows(
             """SELECT s.* FROM interface_param_sample s
@@ -1073,6 +1153,19 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
                 omit=("id",),
             )
 
+        for item in archive.get("callPayloads") or []:
+            old_call_id = item.get("call_id")
+            new_call_id = call_ids.get(old_call_id)
+            if not new_call_id:
+                continue
+            text = item.get("export_content_text")
+            if text is None:
+                text = item.get("content_text")
+            if text is None:
+                continue
+            value = loads(text, text) if (item.get("content_format") or "json") == "json" else text
+            save_payload(db, new_session_id, new_call_id, item.get("payload_type") or "params", value, item.get("created_at") or now)
+
         for item in archive.get("breakpoints") or []:
             old_id = item.get("id") or uuid.uuid4().hex
             _insert_archive_row(
@@ -1119,6 +1212,18 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
 
 def _archive_rows(sql, args):
     return [row_to_dict(row) for row in get_db().execute(sql, args).fetchall()]
+
+
+def _archive_payload_rows(session_id):
+    rows = []
+    for row in get_db().execute(
+        "SELECT * FROM call_payloads WHERE session_id=? ORDER BY created_at ASC",
+        (session_id,),
+    ).fetchall():
+        item = row_to_dict(row)
+        item["export_content_text"] = read_payload_text(row)
+        rows.append(item)
+    return rows
 
 
 def _insert_archive_row(db, table, row, overrides=None, omit=()):
@@ -1169,12 +1274,18 @@ def list_sessions():
     return [row_to_dict(row) for row in rows]
 
 
-def list_calls(session_id=None, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None):
+def list_calls(session_id=None, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None, page=1, page_size=DEFAULT_PAGE_SIZE):
     sid = session_id or STATE["sessionId"]
     if not sid:
         return []
     rows = get_db().execute(
-        """SELECT c.*, i.interface_alias
+        """SELECT c.id, c.call_id, c.session_id, c.call_index, c.object_name, c.cmd_name,
+                  c.slot_id, c.slot_key, c.status, c.breakpoint_id, c.breakpoint_name,
+                  c.cost_ms, c.created_at, c.created_at AS started_at, c.finished_at, c.updated_at,
+                  c.interface_id, c.discovery_enabled, c.interface_registered,
+                  c.params_summary, c.result_summary, c.params_size, c.result_size,
+                  c.params_hash, c.result_hash, c.params_truncated, c.result_truncated,
+                  c.payload_status, i.interface_alias
            FROM call_record c
            LEFT JOIN discovered_interface i ON c.interface_id=i.id
            WHERE c.session_id=?
@@ -1182,19 +1293,46 @@ def list_calls(session_id=None, object_name=None, keyword=None, status=None, sor
         (sid,),
     ).fetchall()
     items = [normalize(row_to_dict(row)) for row in rows]
-    return filter_items(items, object_name, keyword, status, sort_by, sort_order)
+    return paginate(filter_items(items, object_name, keyword, status, sort_by, sort_order), page, page_size)
 
 
-def list_interfaces(session_id=None, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None):
+def list_interfaces(session_id=None, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None, page=1, page_size=DEFAULT_PAGE_SIZE):
     sid = session_id or STATE["sessionId"]
     if not sid:
         return []
     rows = get_db().execute(
-        "SELECT * FROM discovered_interface WHERE session_id=? ORDER BY last_seen_at DESC",
+        """SELECT id, session_id, object_name, cmd_name, slot_id, slot_key, service_name,
+                  class_name, method_name, interface_alias, display_name, description,
+                  latest_params_fingerprint, params_sample_count, params_summary,
+                  first_seen_at, last_seen_at, call_count, success_count, exception_count,
+                  avg_cost_ms, max_cost_ms, min_cost_ms, created_at, updated_at
+           FROM discovered_interface
+           WHERE session_id=?
+           ORDER BY last_seen_at DESC""",
         (sid,),
     ).fetchall()
     items = [normalize(row_to_dict(row)) for row in rows]
-    return filter_items(items, object_name, keyword, status, sort_by, sort_order)
+    return paginate(filter_items(items, object_name, keyword, status, sort_by, sort_order), page, page_size)
+
+
+def paginate(items, page=1, page_size=DEFAULT_PAGE_SIZE):
+    page_size = page_size_value(page_size)
+    try:
+        page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page = 1
+    start = (page - 1) * page_size
+    return items[start:start + page_size]
+
+
+def page_size_value(value):
+    try:
+        size = int(value or DEFAULT_PAGE_SIZE)
+    except (TypeError, ValueError):
+        size = DEFAULT_PAGE_SIZE
+    if size not in (20, 50, 100):
+        size = DEFAULT_PAGE_SIZE
+    return min(size, MAX_PAGE_SIZE)
 
 
 def register_interface_from_call(call_id):
@@ -1242,6 +1380,23 @@ def register_interface_from_call(call_id):
         "updatedCallCount": len(rows),
         "totalInterfaceCallCount": total,
     }
+
+
+def call_detail(call_id):
+    row = get_db().execute(
+        """SELECT id, call_id, session_id, call_index, object_name, cmd_name, slot_id, slot_key,
+                  service_name, class_name, method_name, display_name, description, thread_name,
+                  parameter_meta_json, params_fingerprint, params_summary, params_preview, params_size,
+                  params_hash, params_truncated, params_payload_id,
+                  result_summary, result_preview, result_size, result_hash, result_truncated,
+                  result_payload_id, payload_status, success, exception_type, exception_message,
+                  cost_ms, status, breakpoint_id, breakpoint_name, interface_id, discovery_enabled,
+                  interface_registered, continued_at, finished_at, created_at, updated_at
+           FROM call_record
+           WHERE call_id=?""",
+        (call_id,),
+    ).fetchone()
+    return normalize(row_to_dict(row)) if row else None
 
 
 def recalculate_interface_stats(interface_id, now):
@@ -1326,6 +1481,10 @@ def imported_display_name(db, import_file_name, archive_name):
 
 def call_data_from_record(call):
     params = call.get("params") or {}
+    if not params:
+        row = payload_by_call(get_db(), call.get("call_id"), "params")
+        loaded = read_payload_value(row)
+        params = loaded if isinstance(loaded, dict) else {}
     raw_args = call.get("raw_args") or call.get("args") or {}
     fingerprint = call.get("params_fingerprint") or params_fingerprint(params)
     slot_id = _normalize_slot_id(call.get("slot_id"))
@@ -1342,6 +1501,11 @@ def call_data_from_record(call):
         "params": params,
         "params_fingerprint": fingerprint,
         "params_summary": call.get("params_summary") or params_summary(params),
+        "params_preview": call.get("params_preview"),
+        "params_size": call.get("params_size") or payload_meta(params)["size"],
+        "params_hash": call.get("params_hash") or fingerprint,
+        "params_truncated": call.get("params_truncated") or 0,
+        "params_payload_id": call.get("params_payload_id"),
         "raw_args": raw_args,
         "parameter_meta": call.get("parameter_meta") or [],
         "service_name": call.get("service_name"),
@@ -1403,7 +1567,13 @@ def list_breakpoints(session_id=None):
     if not sid:
         return []
     rows = get_db().execute(
-        """SELECT b.*, COALESCE(i.interface_alias, ci.interface_alias) AS interface_alias
+        """SELECT b.id, b.name, b.enabled, b.scope, b.session_id, b.object_name, b.cmd_name,
+                  b.slot_id, b.slot_key, b.match_mode, b.params_fingerprint, b.params_hash,
+                  b.params_summary, b.params_payload_id, b.condition_fields_json, b.conditions_json,
+                  b.condition_json, b.hit_limit, b.source_type, b.service_name, b.class_name,
+                  b.method_name, b.display_name, b.hit_mode, b.hit_count, b.source_session_id,
+                  b.source_interface_id, b.source_call_id, b.created_at, b.updated_at,
+                  COALESCE(i.interface_alias, ci.interface_alias) AS interface_alias
            FROM breakpoint b
            LEFT JOIN discovered_interface i ON b.source_interface_id=i.id
            LEFT JOIN call_record c ON b.source_call_id=c.call_id
@@ -1420,7 +1590,13 @@ def list_interface_breakpoints(interface_id):
     if not row:
         return None
     rows = get_db().execute(
-        """SELECT * FROM breakpoint
+        """SELECT id, name, enabled, scope, session_id, object_name, cmd_name,
+                  slot_id, slot_key, match_mode, params_fingerprint, params_hash,
+                  params_summary, params_payload_id, condition_fields_json, conditions_json,
+                  condition_json, hit_limit, source_type, service_name, class_name,
+                  method_name, display_name, hit_mode, hit_count, source_session_id,
+                  source_interface_id, source_call_id, created_at, updated_at
+           FROM breakpoint
            WHERE session_id=? AND object_name=? AND cmd_name=?
            ORDER BY created_at DESC""",
         (row["session_id"], row["object_name"], row["cmd_name"]),
@@ -1456,7 +1632,12 @@ def create_breakpoint(data):
     slot = None if match_mode == "command_only" else normalized_slot_key(slot_id, data.get("slotKey"))
     params_fingerprint_value = data.get("paramsFingerprint", data.get("params_fingerprint"))
     params_snapshot_value = data.get("paramsSnapshot", data.get("params_snapshot"))
+    params_summary_value = data.get("paramsSummary", data.get("params_summary"))
+    params_payload_id = data.get("paramsPayloadId", data.get("params_payload_id"))
+    if not params_summary_value and params_snapshot_value is not None:
+        params_summary_value = params_summary(params_snapshot_value if isinstance(params_snapshot_value, dict) else {})
     conditions = data.get("conditions", data.get("conditions_json", []))
+    condition_fields = data.get("conditionFields", data.get("condition_fields")) or extract_condition_fields(params_snapshot_value)
     db = get_db()
     normalized_data = dict(data)
     normalized_data.update(
@@ -1468,6 +1649,8 @@ def create_breakpoint(data):
             "slotId": slot_id,
             "slotKey": slot,
             "paramsFingerprint": params_fingerprint_value,
+            "paramsSummary": params_summary_value,
+            "paramsPayloadId": params_payload_id,
             "conditions": conditions,
         }
     )
@@ -1487,10 +1670,11 @@ def create_breakpoint(data):
     db.execute(
         """INSERT INTO breakpoint
         (id, name, enabled, scope, session_id, object_name, cmd_name, slot_id, slot_key, match_mode,
-         params_fingerprint, params_snapshot_json, conditions_json, condition_json, hit_mode, hit_count,
+         params_fingerprint, params_hash, params_summary, params_payload_id, params_snapshot_json,
+         condition_fields_json, conditions_json, condition_json, hit_mode, hit_count,
          hit_limit, source_type, source_session_id, source_interface_id, source_call_id,
          service_name, class_name, method_name, display_name, created_at, updated_at)
-        VALUES (?, ?, ?, 'session', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        VALUES (?, ?, ?, 'session', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             bp_id,
             data.get("name") or f"{object_name} {cmd_name}",
@@ -1502,7 +1686,10 @@ def create_breakpoint(data):
             slot,
             match_mode,
             params_fingerprint_value,
-            dumps(params_snapshot_value),
+            params_fingerprint_value,
+            params_summary_value,
+            params_payload_id,
+            dumps(condition_fields),
             dumps(conditions),
             dumps(breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode)),
             data.get("hitMode", "always"),
@@ -1548,6 +1735,13 @@ def breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode):
     return condition
 
 
+def extract_condition_fields(params):
+    if not isinstance(params, dict):
+        return {}
+    keys = ("slotId", "startFreq", "stopFreq", "points", "instrumentMode", "channel", "port")
+    return {key: params[key] for key in keys if key in params}
+
+
 def breakpoint_from_interface(interface_id, body):
     row = get_db().execute("SELECT * FROM discovered_interface WHERE id=?", (interface_id,)).fetchone()
     if not row:
@@ -1563,7 +1757,7 @@ def breakpoint_from_interface(interface_id, body):
             "cmdName": item["cmd_name"],
             "matchMode": match_mode,
             "paramsFingerprint": item["latest_params_fingerprint"] if match_mode == "params_snapshot" else None,
-            "paramsSnapshot": item.get("latest_params") if match_mode == "params_snapshot" else None,
+            "paramsSummary": item.get("params_summary") if match_mode == "params_snapshot" else None,
             "hitMode": body.get("hitMode", "always"),
             "sourceType": "interface",
             "sourceSessionId": item["session_id"],
@@ -1593,7 +1787,9 @@ def breakpoint_from_call(call_id, body):
             "slotKey": call["slot_key"],
             "matchMode": match_mode,
             "paramsFingerprint": call["params_fingerprint"] if match_mode == "params_snapshot" else None,
-            "paramsSnapshot": call.get("params") if match_mode == "params_snapshot" else None,
+            "paramsSummary": call.get("params_summary") if match_mode == "params_snapshot" else None,
+            "paramsPayloadId": call.get("params_payload_id") if match_mode == "params_snapshot" else None,
+            "conditionFields": extract_condition_fields(read_payload_value(payload_by_call(get_db(), call_id, "params"))) if match_mode == "params_snapshot" else {},
             "hitMode": body.get("hitMode", "always"),
             "sourceType": "call",
             "sourceSessionId": call["session_id"],
@@ -1627,7 +1823,49 @@ def normalize(row):
         row["breakpoint_type"] = bp_type
         row["breakpointTypeLabel"] = bp_label
         row["breakpoint_type_label"] = bp_label
+    add_camel_aliases(row)
+    if "breakpoint_id" in row:
+        row["hitBreakpoint"] = bool(row.get("breakpoint_id"))
     return row
+
+
+def add_camel_aliases(row):
+    aliases = {
+        "call_id": "callId",
+        "call_index": "callIndex",
+        "session_id": "sessionId",
+        "object_name": "objectName",
+        "cmd_name": "cmdName",
+        "slot_id": "slotId",
+        "breakpoint_id": "breakpointId",
+        "cost_ms": "durationMs",
+        "created_at": "createdAt",
+        "started_at": "startedAt",
+        "finished_at": "finishedAt",
+        "params_summary": "paramsSummary",
+        "result_summary": "resultSummary",
+        "params_preview": "paramsPreview",
+        "result_preview": "resultPreview",
+        "params_size": "paramsSize",
+        "result_size": "resultSize",
+        "params_hash": "paramsHash",
+        "result_hash": "resultHash",
+        "params_truncated": "paramsTruncated",
+        "result_truncated": "resultTruncated",
+        "params_payload_id": "paramsPayloadId",
+        "result_payload_id": "resultPayloadId",
+        "payload_status": "payloadStatus",
+        "params_fingerprint": "paramsFingerprint",
+        "params_sample_count": "paramsSampleCount",
+        "seen_count": "sampleCount",
+        "first_seen_at": "firstSeenAt",
+        "last_seen_at": "lastSeenAt",
+        "source_call_id": "sourceCallId",
+        "params_payload_id": "paramsPayloadId",
+    }
+    for source, target in aliases.items():
+        if source in row and target not in row:
+            row[target] = row[source]
 
 
 def snake_case(value):

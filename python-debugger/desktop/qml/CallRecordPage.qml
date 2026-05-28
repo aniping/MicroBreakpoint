@@ -23,6 +23,7 @@ Item {
     property var columnMinWidths: [64, 120, 64, 240, 82, 76, 88, 88]
     property bool columnsWereResized: false
     property var selectedItem: selectedItemForId(selectedCallId)
+    property var selectedDetail: selectedItem
     signal clearBreakpointFilterRequested()
     signal selectedCallChanged(string callId, string status)
 
@@ -49,7 +50,7 @@ Item {
     }
 
     function callId(item) { return item ? String(item.call_id || item.callId || "") : "" }
-    function rawArgs(item) { return safeObject(item ? (item.raw_args || item.rawArgs || item.args || {}) : {}, {}) }
+    function rawArgs(item) { return safeObject(item ? (item.raw_args || item.rawArgs || {}) : {}, {}) }
     function objectName(item) {
         var args = rawArgs(item)
         return String((item && (item.object_name || item.objectName)) || args.objectName || "未分类")
@@ -64,14 +65,20 @@ Item {
         if (value === undefined || value === null) value = args.slotId
         return value === undefined || value === null || value === "" ? "-" : String(value)
     }
-    function paramsValue(item) {
-        var args = rawArgs(item)
-        return safeObject(item ? (item.params || item.params_json || args.params || {}) : {}, {})
-    }
     function paramsSummary(item) {
         var value = item ? (item.params_summary || item.paramsSummary) : ""
         if (value) return String(value)
-        return jsonText(paramsValue(item)).replace(/\s+/g, " ")
+        return "-"
+    }
+    function resultSummary(item) {
+        var value = item ? (item.result_summary || item.resultSummary) : ""
+        return value ? String(value) : "-"
+    }
+    function sizeText(bytes) {
+        var value = Number(bytes || 0)
+        if (value >= 1024 * 1024) return (value / 1024 / 1024).toFixed(1) + "MB"
+        if (value >= 1024) return (value / 1024).toFixed(1) + "KB"
+        return value + "B"
     }
     function statusValue(item) {
         if (!item) return "-"
@@ -188,10 +195,12 @@ Item {
 
     onItemsChanged: Qt.callLater(function() {
         ensureSelection()
+        selectedDetail = selectedCallId ? JSON.parse(bridge.callDetail(selectedCallId)) : selectedItem
         notifySelectedCallChanged()
     })
     onSelectedCallIdChanged: {
         detailTabIndex = 0
+        selectedDetail = selectedCallId ? JSON.parse(bridge.callDetail(selectedCallId)) : selectedItem
         notifySelectedCallChanged()
     }
 
@@ -368,6 +377,17 @@ Item {
             ["costMs", costValue(item)],
             ["命中断点", breakpointId(item) ? "是" : "否"],
             ["breakpointId", breakpointId(item) || "-"]
+        ]
+    }
+
+    function payloadRows(item) {
+        return [
+            ["paramsSize", sizeText(item ? (item.params_size || item.paramsSize || 0) : 0)],
+            ["paramsHash", textOf(item ? (item.params_hash || item.paramsHash || item.params_fingerprint || item.paramsFingerprint) : "")],
+            ["paramsPreview", textOf(item ? (item.params_preview || item.paramsPreview || item.params_summary || item.paramsSummary) : "")],
+            ["resultSize", sizeText(item ? (item.result_size || item.resultSize || 0) : 0)],
+            ["resultHash", textOf(item ? (item.result_hash || item.resultHash) : "")],
+            ["resultPreview", textOf(item ? (item.result_preview || item.resultPreview || item.result_summary || item.resultSummary) : "")]
         ]
     }
 
@@ -953,9 +973,9 @@ Item {
                     Layout.preferredHeight: 38
                     spacing: 0
                     TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 64; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "业务参数"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "原始入参"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 2 }
-                    TabButton { text: "返回值"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 62; onClicked: page.detailTabIndex = 3 }
+                    TabButton { text: "入参"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 1 }
+                    TabButton { text: "返回"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 2 }
+                    TabButton { text: "Payload"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 3 }
                     TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 4 }
                     TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.fillWidth: true; onClicked: page.detailTabIndex = 5 }
                 }
@@ -983,9 +1003,40 @@ Item {
                             MbDetailCard { appTheme: page.appTheme; title: "线程与时间"; rows: page.overviewTimeRows(page.selectedItem) }
                         }
                     }
-                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.paramsValue(page.selectedItem)) }
-                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.rawArgs(page.selectedItem)) }
-                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {}) }
+                    LargePayloadViewer {
+                        appTheme: page.appTheme
+                        callId: page.callId(page.selectedDetail)
+                        payloadType: "params"
+                        title: "入参 params"
+                        preview: page.selectedDetail ? (page.selectedDetail.params_preview || page.selectedDetail.paramsPreview || "") : ""
+                        payloadSize: page.selectedDetail ? Number(page.selectedDetail.params_size || page.selectedDetail.paramsSize || 0) : 0
+                        payloadHash: page.selectedDetail ? String(page.selectedDetail.params_hash || page.selectedDetail.paramsHash || page.selectedDetail.params_fingerprint || page.selectedDetail.paramsFingerprint || "") : ""
+                        truncated: page.selectedDetail ? !!(page.selectedDetail.params_truncated || page.selectedDetail.paramsTruncated) : false
+                    }
+                    LargePayloadViewer {
+                        appTheme: page.appTheme
+                        callId: page.callId(page.selectedDetail)
+                        payloadType: "result"
+                        title: "返回 result"
+                        preview: page.selectedDetail ? (page.selectedDetail.result_preview || page.selectedDetail.resultPreview || "") : ""
+                        payloadSize: page.selectedDetail ? Number(page.selectedDetail.result_size || page.selectedDetail.resultSize || 0) : 0
+                        payloadHash: page.selectedDetail ? String(page.selectedDetail.result_hash || page.selectedDetail.resultHash || "") : ""
+                        truncated: page.selectedDetail ? !!(page.selectedDetail.result_truncated || page.selectedDetail.resultTruncated) : false
+                    }
+                    ScrollView {
+                        clip: true
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AlwaysOff
+                        }
+                        ColumnLayout {
+                            x: 12
+                            y: 12
+                            width: Math.max(0, (parent ? parent.width : 380) - 24)
+                            spacing: 10
+                            MbDetailCard { appTheme: page.appTheme; title: "Payload 摘要"; rows: page.payloadRows(page.selectedDetail) }
+                        }
+                    }
                     MbJsonViewer { appTheme: page.appTheme; text: page.jsonText({
                         serviceName: page.selectedItem ? (page.selectedItem.service_name || page.selectedItem.serviceName) : "",
                         className: page.selectedItem ? (page.selectedItem.class_name || page.selectedItem.className) : "",
@@ -995,7 +1046,15 @@ Item {
                         exceptionType: page.selectedItem ? (page.selectedItem.exception_type || page.selectedItem.exceptionType) : "",
                         exceptionMessage: page.selectedItem ? (page.selectedItem.exception_message || page.selectedItem.exceptionMessage) : ""
                     }) }
-                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem || {}) }
+                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem ? {
+                        callId: page.callId(page.selectedItem),
+                        objectName: page.objectName(page.selectedItem),
+                        cmdName: page.cmdName(page.selectedItem),
+                        slotId: page.slotValue(page.selectedItem),
+                        status: page.statusValue(page.selectedItem),
+                        paramsSummary: page.paramsSummary(page.selectedItem),
+                        resultSummary: page.resultSummary(page.selectedItem)
+                    } : {}) }
                 }
 
                 Rectangle {
@@ -1014,8 +1073,8 @@ Item {
                         MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: "创建条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
                         MbButton { appTheme: page.appTheme; text: page.interfaceRegistered(page.selectedItem) ? "已登记接口" : "加入接口列表"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: page.interfaceRegistered(page.selectedItem) ? "neutral" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "复制参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.paramsValue(page.selectedItem))) }
-                        MbButton { appTheme: page.appTheme; text: "复制返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.copyText(page.jsonText(page.selectedItem ? (page.selectedItem.result || page.selectedItem.result_json) : {})) }
+                        MbButton { appTheme: page.appTheme; text: "导出参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "params") }
+                        MbButton { appTheme: page.appTheme; text: "导出返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "result") }
                     }
                 }
 

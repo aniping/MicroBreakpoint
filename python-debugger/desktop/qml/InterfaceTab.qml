@@ -35,7 +35,7 @@ Item {
 
     function paramsSummary(item) {
         if (!item) return "-"
-        return item.params_summary || JSON.stringify(item.latest_params || {})
+        return item.params_summary || "-"
     }
 
     function displayItems() {

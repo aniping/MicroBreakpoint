@@ -36,7 +36,7 @@ Item {
 
     function matchSummary(item) {
         if (!item) return "-"
-        if (item.match_mode === "params_snapshot") return "条件断点: " + JSON.stringify(item.params_snapshot || {})
+        if (item.match_mode === "params_snapshot") return "条件断点: " + (item.params_summary || item.params_hash || item.params_fingerprint || "")
         if (item.match_mode === "params_condition") return "参数条件: " + page.conditionSummary(item.condition)
         return "命令匹配: " + (item.object_name || "-") + " / " + (item.cmd_name || "-")
     }

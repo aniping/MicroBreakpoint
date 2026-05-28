@@ -74,7 +74,9 @@ def test_debug_records_and_discovers_by_business_identity(tmp_path):
     assert len(calls) == 3
     assert {item["object_name"] for item in calls} == {"SA"}
     assert {item["cmd_name"] for item in calls} == {"start", "stop"}
-    assert calls[0]["params"] == {"mode": "A"}
+    assert "params" not in calls[0]
+    assert "result" not in calls[0]
+    assert calls[0]["params_summary"] == "mode=A"
 
     interfaces = client.get("/api/interfaces").get_json()["items"]
     by_cmd = {item["cmd_name"]: item for item in interfaces}
@@ -83,6 +85,65 @@ def test_debug_records_and_discovers_by_business_identity(tmp_path):
     assert by_cmd["start"]["call_count"] == 2
     assert by_cmd["start"]["params_sample_count"] == 2
     assert by_cmd["stop"]["call_count"] == 1
+
+
+def test_call_list_is_lightweight_and_payload_is_chunked(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    create_and_start(client)
+    big_params = {"points": 1601, "data": ["x" * 1024] * 80}
+    big_result = {"trace": ["y" * 1024] * 90}
+    client.post("/api/calls/before", json=make_before("large-call", object_name="VNA", cmd="acquire", params=big_params))
+    client.post("/api/calls/after", json={"callId": "large-call", "success": True, "costMs": 283, "result": big_result})
+
+    item = client.get("/api/calls").get_json()["items"][0]
+    assert "params" not in item
+    assert "result" not in item
+    assert "params_json" not in item
+    assert "result_json" not in item
+    assert item["params_size"] > 64 * 1024
+    assert item["result_size"] > 64 * 1024
+    assert item["params_truncated"] == 1
+    assert item["result_truncated"] == 1
+
+    detail = client.get("/api/calls/large-call").get_json()
+    assert detail["params_preview"].startswith("{")
+    assert len(detail["params_preview"].encode("utf-8")) <= 8192 * 2
+    assert "params" not in detail
+    assert "result" not in detail
+
+    chunk = client.get("/api/calls/large-call/payload", query_string={"type": "result", "offset": 0, "limit": 4096}).get_json()
+    assert chunk["size"] == item["result_size"]
+    assert chunk["hasMore"] is True
+    assert len(chunk["content"].encode("utf-8")) <= 4096 * 2
+
+    exported = client.get("/api/calls/large-call/payload/export", query_string={"type": "result"})
+    assert exported.status_code == 200
+    assert b"trace" in exported.data[:128]
+
+    with app.app_context():
+        db = get_db()
+        payload_rows = db.execute("SELECT storage_type, content_text, content_path FROM call_payloads WHERE call_id='large-call'").fetchall()
+        assert {row["storage_type"] for row in payload_rows} == {"file"}
+        assert all(row["content_text"] is None for row in payload_rows)
+        record = db.execute("SELECT params_json, result_json, raw_args_json FROM call_record WHERE call_id='large-call'").fetchone()
+        assert record["params_json"] is None
+        assert record["result_json"] is None
+        assert "data" not in record["raw_args_json"]
+
+
+def test_call_list_defaults_to_first_50_records(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    for index in range(60):
+        call_id = f"page-{index}"
+        client.post("/api/calls/before", json=make_before(call_id, params={"index": index}))
+        finish(client, call_id)
+
+    assert len(client.get("/api/calls").get_json()["items"]) == 50
+    assert len(client.get("/api/calls", query_string={"pageSize": 100}).get_json()["items"]) == 60
 
 
 def test_interface_identity_ignores_slot_and_service_name(tmp_path):
@@ -112,11 +173,12 @@ def test_interface_identity_ignores_slot_and_service_name(tmp_path):
     calls = client.get("/api/calls").get_json()["items"]
     assert {item["slot_id"] for item in calls} == {1, 2, 3}
     assert {item["interface_id"] for item in calls} == {interfaces[0]["id"]}
-    assert all("instType" not in item["raw_args"] for item in calls)
+    assert all("raw_args" not in item for item in calls)
 
     detail = client.get(f"/api/interfaces/{interfaces[0]['id']}").get_json()
     assert {item["slot_id"] for item in detail["samples"]} == {1, 2, 3}
     assert all(item["object_name"] == "VNA" and item["cmd_name"] == "create" for item in detail["samples"])
+    assert all("params" not in item and "params_json" not in item for item in detail["samples"])
 
 
 def test_upsert_interface_uses_existing_interface_id_for_samples(tmp_path):
@@ -832,7 +894,8 @@ def test_session_archive_import_converts_historical_paused_calls(tmp_path):
     imported_calls = client.get("/api/calls").get_json()["items"]
     assert len(imported_calls) == 1
     assert imported_calls[0]["status"] == "imported_paused"
-    assert imported_calls[0]["continued_at"] is None
+    detail = client.get(f"/api/calls/{imported_calls[0]['call_id']}").get_json()
+    assert detail["continued_at"] is None
     assert client.get("/api/debug/state").get_json()["pausedCount"] == 0
     continued = client.post(f"/api/calls/{imported_calls[0]['call_id']}/continue").get_json()
     assert continued["success"] is False

@@ -51,6 +51,37 @@ def test_call_record_uses_business_debug_fields():
     assert 'label: "调用时间"' not in qml
 
 
+def test_qml_does_not_render_full_payloads_in_lists_or_logs():
+    qml_text = "\n".join(
+        (QML_ROOT / name).read_text(encoding="utf-8")
+        for name in ("CallRecordPage.qml", "InterfacePage.qml", "BreakpointPage.qml", "InterfaceTab.qml", "BreakpointTab.qml")
+    )
+    bridge = (QML_ROOT.parent / "bridge.py").read_text(encoding="utf-8")
+
+    forbidden = [
+        "model.params",
+        "model.result",
+        "modelData.params ||",
+        "modelData.params_json",
+        "selectedItem.result",
+        "params_json",
+        "result_json",
+        "latest_params ||",
+        "latest_params_json",
+        "sample_args ||",
+        "sample_args_json",
+        "JSON.stringify(item.latest_params",
+        "JSON.stringify(modelData.params",
+        "JSON.stringify(modelData.result",
+    ]
+    for pattern in forbidden:
+        assert pattern not in qml_text
+    assert "LargePayloadViewer" in qml_text
+    assert "_log_safe_value" in bridge
+    assert "loadPayloadChunk" in bridge
+    assert "exportPayload" in bridge
+
+
 def test_call_record_page_keeps_filters_inside_groups():
     qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
     main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
@@ -74,7 +105,7 @@ def test_call_record_page_keeps_filters_inside_groups():
     assert "Flickable {" in qml
     assert "flickableDirection: Flickable.HorizontalFlick" in qml
     assert "interactive: false" in qml
-    assert "ScrollBar.vertical.policy" not in qml
+    assert "function pagedRows" not in qml
     assert "onSelectedCallIdChanged" in qml
     assert "detailTabIndex = 0" in qml
     assert "selectedCallChanged" in qml
@@ -100,7 +131,8 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "MbDetailCard" in qml
     assert "接口身份" in qml
     assert "sessionId + objectName + cmdName" in qml
-    assert "objectName: page.selectedSample().objectName" in qml
+    assert "LargePayloadViewer" in qml
+    assert "page.selectedSample().paramsPreview" in qml
     assert "参数样本" in qml
     assert "相关调用" in qml
     assert '"调用 #"' in qml

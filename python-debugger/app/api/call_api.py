@@ -1,16 +1,20 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, send_file
 
 from app.db.database import get_db, row_to_dict
 from app.services.debug_service import (
     after_call,
     before_call,
     breakpoint_from_call as create_breakpoint_from_call,
+    call_detail as call_detail_payload,
     continue_all_calls,
     continue_call as continue_one_call,
+    export_payload_target,
     grouped_calls,
     list_calls,
     normalize,
+    payload_chunk,
     register_interface_from_call,
+    search_payload,
 )
 from app.services.wait_manager import wait_manager
 
@@ -37,6 +41,8 @@ def calls():
             request.args.get("status"),
             request.args.get("sortBy"),
             request.args.get("sortOrder"),
+            request.args.get("page"),
+            request.args.get("pageSize"),
         )
     })
 
@@ -48,8 +54,42 @@ def calls_grouped():
 
 @call_api.get("/<call_id>")
 def call_detail(call_id):
-    row = get_db().execute("SELECT * FROM call_record WHERE call_id=?", (call_id,)).fetchone()
-    return jsonify(normalize(row_to_dict(row)) if row else {"success": False, "message": "not found"}), 200 if row else 404
+    item = call_detail_payload(call_id)
+    return jsonify(item if item else {"success": False, "message": "not found"}), 200 if item else 404
+
+
+@call_api.get("/<call_id>/payload")
+def call_payload(call_id):
+    item = payload_chunk(
+        get_db(),
+        call_id,
+        request.args.get("type", "params"),
+        request.args.get("offset", 0),
+        request.args.get("limit", 8192),
+    )
+    return jsonify(item if item else {"success": False, "message": "payload not found"}), 200 if item else 404
+
+
+@call_api.get("/<call_id>/payload/export")
+def export_call_payload(call_id):
+    payload_type = request.args.get("type", "params")
+    row, target = export_payload_target(get_db(), call_id, payload_type)
+    if not row or not target:
+        return jsonify({"success": False, "message": "payload not found"}), 404
+    filename = f"{payload_type}.json" if (row["content_format"] or "json") == "json" else f"{payload_type}.txt"
+    if hasattr(target, "exists"):
+        return send_file(target, as_attachment=True, download_name=filename)
+    return Response(
+        row["content_text"] or "",
+        mimetype="application/json" if filename.endswith(".json") else "text/plain",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@call_api.get("/<call_id>/payload/search")
+def search_call_payload(call_id):
+    item = search_payload(get_db(), call_id, request.args.get("type", "params"), request.args.get("q", ""))
+    return jsonify(item if item else {"success": False, "message": "payload not found"}), 200 if item else 404
 
 
 @call_api.get("/<call_id>/wait")

@@ -83,6 +83,14 @@ cd java-demo
 
 断点唯一性以业务属性为准：命令断点按 `session_id + object_name + cmd_name + match_mode` 去重；条件断点按 `session_id + object_name + cmd_name + slot_key + match_mode` 继续比较 `params_fingerprint` 或规范化后的 `conditions_json`。`method_name`、`class_name`、`service_name` 只作为 Java 上报辅助信息保存和展示。
 
+## 大 Payload 存储与查看
+
+Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收并保存，但列表和日志只进入轻量摘要链路。`call_record` 只保留 `params_summary/result_summary`、前 8KB `preview`、大小、hash、截断标识和 payload 引用；`/api/calls` 默认只返回 50 条轻量调用记录，可通过 `pageSize=20/50/100` 分页浏览，不返回完整 `params/result/rawArgs`。
+
+完整内容保存在 `call_payloads`：小于等于 64KB 的 payload 内联到 `content_text`，大于 64KB 的 payload 写入 `python-debugger/data/payloads/{session_id}/{bucket}/{call_id}/{params|result}.json`，SQLite 只保存路径、大小、hash 和编码信息。调用详情页默认只展示 preview；完整内容通过 `/api/calls/{callId}/payload?type=params|result&offset=0&limit=8192` 分块读取，通过 `/api/calls/{callId}/payload/export?type=params|result` 导出，通过 `/api/calls/{callId}/payload/search?type=result&q=xxx` 后端搜索。
+
+接口参数样本按 `interface_id + slot_key + params_hash` 去重，只保存摘要、大小、hash、payload 引用、样本次数和首末次时间；已发现接口页和断点页不直接渲染完整参数或命中 payload。参数快照断点优先使用 `session_id + object_name + cmd_name + slot_key + params_fingerprint` 命中，不会为了匹配而从数据库或文件读取完整大 JSON。
+
 ## 验收流程
 
 1. 桌面端默认进入“接口列表”，点击“新建会话”或在“历史会话”选择已有会话。

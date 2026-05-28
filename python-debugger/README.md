@@ -43,6 +43,14 @@ python run_desktop.py
 
 从接口列表创建命令断点时只包含 `objectName + cmdName`，会命中该接口下所有 `slotId`；从调用记录或样本创建条件断点时使用 `slot_key` 和参数指纹或条件表达式，用于命中指定槽位样本。命令断点按 `session_id + object_name + cmd_name` 去重，条件断点按 `session_id + object_name + cmd_name + slot_key + match_mode` 继续比较参数指纹或规范化后的条件 JSON。
 
+## 大 Payload 机制
+
+后端完整接收 Java 上报的 `params/result`，但列表接口只返回摘要字段。`/api/calls` 默认 `pageSize=50`，仅包含调用身份、状态、耗时、断点、`paramsSummary/resultSummary`、大小和截断标识，不返回完整 JSON。
+
+完整 payload 进入 `call_payloads`：不超过 64KB 的内容保存在 `content_text`，超过 64KB 的内容写入 `data/payloads/{session_id}/{bucket}/{call_id}/params.json` 或 `result.json`。详情页默认显示前 8KB preview；需要完整内容时使用分块接口 `/api/calls/{callId}/payload`、导出接口 `/api/calls/{callId}/payload/export`，或后端搜索接口 `/api/calls/{callId}/payload/search`。
+
+参数样本按 `interface_id + slot_key + params_hash` 去重，样本列表和断点页只展示摘要、大小、hash 和命中次数；参数快照断点使用参数 hash/指纹优先匹配，不读取完整大 JSON 做字符串比较。
+
 ## 验收主链路
 
 1. 启动 Java Demo。

@@ -185,7 +185,6 @@ Item {
         if (!item) return ["无附加参数条件，命中该命令即暂停。"]
         var condition = safeObject(item.condition || item.condition_json || {}, {})
         var conditions = safeObject(item.conditions || item.conditions_json || [], [])
-        var snapshot = safeObject(item.params_snapshot || item.params_snapshot_json || {}, {})
         var lines = []
         if (Object.keys(condition).length > 0) {
             for (var key in condition) lines.push(key + " = " + condition[key])
@@ -193,7 +192,8 @@ Item {
         if (conditions.length > 0) {
             for (var i = 0; i < conditions.length; i++) lines.push(jsonText(conditions[i]).replace(/\s+/g, " "))
         }
-        if (Object.keys(snapshot).length > 0) lines.push("params = " + jsonText(snapshot).replace(/\s+/g, " "))
+        if (item.params_summary || item.paramsSummary) lines.push("paramsSummary = " + (item.params_summary || item.paramsSummary))
+        if (item.params_hash || item.paramsHash || item.params_fingerprint || item.paramsFingerprint) lines.push("paramsHash = " + (item.params_hash || item.paramsHash || item.params_fingerprint || item.paramsFingerprint))
         if (lines.length === 0) lines.push("无附加参数条件，命中该命令即暂停。")
         return lines
     }

@@ -40,7 +40,19 @@ CREATE TABLE IF NOT EXISTS call_record (
   params_json TEXT,
   params_fingerprint TEXT,
   params_summary TEXT,
+  params_preview TEXT,
+  params_size INTEGER DEFAULT 0,
+  params_hash TEXT,
+  params_truncated INTEGER DEFAULT 0,
+  params_payload_id TEXT,
   result_json TEXT,
+  result_summary TEXT,
+  result_preview TEXT,
+  result_size INTEGER DEFAULT 0,
+  result_hash TEXT,
+  result_truncated INTEGER DEFAULT 0,
+  result_payload_id TEXT,
+  payload_status TEXT DEFAULT 'ready',
   success INTEGER,
   exception_type TEXT,
   exception_message TEXT,
@@ -55,6 +67,22 @@ CREATE TABLE IF NOT EXISTS call_record (
   finished_at TEXT,
   created_at TEXT,
   updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS call_payloads (
+  id TEXT PRIMARY KEY,
+  call_id TEXT,
+  session_id TEXT,
+  payload_type TEXT,
+  storage_type TEXT,
+  content_text TEXT,
+  content_path TEXT,
+  content_size INTEGER,
+  content_hash TEXT,
+  content_encoding TEXT,
+  content_format TEXT,
+  created_at TEXT,
+  UNIQUE(call_id, payload_type)
 );
 
 CREATE TABLE IF NOT EXISTS discovered_interface (
@@ -106,8 +134,15 @@ CREATE TABLE IF NOT EXISTS interface_param_sample (
   slot_key TEXT,
   args_json TEXT,
   params_fingerprint TEXT,
+  params_hash TEXT,
+  params_summary TEXT,
+  params_size INTEGER DEFAULT 0,
+  params_payload_id TEXT,
   params_json TEXT,
   result_json TEXT,
+  result_summary TEXT,
+  result_size INTEGER DEFAULT 0,
+  result_payload_id TEXT,
   success INTEGER,
   cost_ms INTEGER,
   first_seen_at TEXT,
@@ -130,7 +165,11 @@ CREATE TABLE IF NOT EXISTS breakpoint (
   slot_key TEXT,
   match_mode TEXT,
   params_fingerprint TEXT,
+  params_hash TEXT,
+  params_summary TEXT,
+  params_payload_id TEXT,
   params_snapshot_json TEXT,
+  condition_fields_json TEXT,
   conditions_json TEXT,
   hit_limit INTEGER,
   source_type TEXT,
@@ -147,6 +186,27 @@ CREATE TABLE IF NOT EXISTS breakpoint (
   created_at TEXT,
   updated_at TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_calls_session_object_time
+ON call_record(session_id, object_name, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_calls_session_object_cmd
+ON call_record(session_id, object_name, cmd_name);
+
+CREATE INDEX IF NOT EXISTS idx_calls_session_status
+ON call_record(session_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_calls_session_hit
+ON call_record(session_id, breakpoint_id);
+
+CREATE INDEX IF NOT EXISTS idx_payload_call_type
+ON call_payloads(call_id, payload_type);
+
+CREATE INDEX IF NOT EXISTS idx_samples_interface_hash
+ON interface_param_sample(interface_id, slot_key, params_hash);
+
+CREATE INDEX IF NOT EXISTS idx_breakpoints_session_object_cmd
+ON breakpoint(session_id, object_name, cmd_name, enabled);
 
 CREATE TABLE IF NOT EXISTS app_setting (
   key TEXT PRIMARY KEY,

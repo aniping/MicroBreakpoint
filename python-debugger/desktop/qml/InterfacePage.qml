@@ -18,6 +18,8 @@ Item {
     property var groupSearches: ({})
     property var groupSorts: ({})
     property var selectedItem: selectedItemForId(selectedInterfaceId)
+    property var selectedDetail: selectedItem
+    property int sampleLimit: 10
 
     function cloneObject(value) {
         var next = {}
@@ -55,16 +57,10 @@ Item {
         var value = item ? (item.slot_id !== undefined ? item.slot_id : item.slotId) : undefined
         return value === undefined || value === null || value === "" ? "无槽位" : String(value)
     }
-    function latestParams(item) {
-        return safeObject(item ? (item.latest_params || item.latestParams || item.latest_params_json || item.sample_args || item.sample_args_json || {}) : {}, {})
-    }
-    function callParams(item) {
-        return safeObject(item ? (item.params || item.params_json || {}) : {}, {})
-    }
     function paramsSummary(item) {
         var summary = item ? (item.params_summary || item.paramsSummary) : ""
         if (summary) return String(summary)
-        return jsonText(latestParams(item)).replace(/\s+/g, " ")
+        return "-"
     }
     function shortTime(value) {
         if (!value) return "-"
@@ -83,10 +79,7 @@ Item {
     function fingerprint(item) {
         var fp = item ? (item.latest_params_fingerprint || item.params_fingerprint || item.paramsFingerprint || "") : ""
         if (fp) return String(fp)
-        var text = jsonText(latestParams(item))
-        var hash = 0
-        for (var i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0
-        return Math.abs(hash).toString(16)
+        return ""
     }
     function shortFingerprint(value) {
         var text = String(value || "")
@@ -121,9 +114,8 @@ Item {
         if (mode === "command_only") return "命中该命令即暂停"
         var conditions = safeObject(item.conditions || item.conditions_json || [], [])
         if (conditions.length > 0) return jsonText(conditions).replace(/\s+/g, " ")
-        var snapshot = safeObject(item.params_snapshot || item.params_snapshot_json || {}, {})
-        var summary = jsonText(snapshot).replace(/\s+/g, " ")
-        return summary === "{}" ? "按参数指纹匹配" : summary
+        var summary = item.params_summary || item.paramsSummary || item.params_hash || item.paramsHash || ""
+        return summary ? String(summary) : "按参数指纹匹配"
     }
     function confirmDeleteBreakpoint(breakpointId, breakpointName) {
         confirmDialog.ask("删除断点", "将删除断点 " + breakpointName + "。此操作不可撤销。", "删除", function() {
@@ -164,8 +156,15 @@ Item {
         if (selectedInterfaceId && selectedItemForId(selectedInterfaceId) && itemId(selectedItemForId(selectedInterfaceId)) === selectedInterfaceId) return
         selectedInterfaceId = itemId(items[0])
     }
-    onItemsChanged: Qt.callLater(ensureSelection)
-    onSelectedInterfaceIdChanged: selectedSampleIndex = 0
+    onItemsChanged: Qt.callLater(function() {
+        ensureSelection()
+        selectedDetail = selectedInterfaceId ? JSON.parse(bridge.interfaceDetail(selectedInterfaceId)) : selectedItem
+    })
+    onSelectedInterfaceIdChanged: {
+        selectedSampleIndex = 0
+        sampleLimit = 10
+        selectedDetail = selectedInterfaceId ? JSON.parse(bridge.interfaceDetail(selectedInterfaceId)) : selectedItem
+    }
 
     ConfirmDialog {
         id: confirmDialog
@@ -234,6 +233,32 @@ Item {
     }
 
     function sampleRows(item) {
+        var detailSamples = selectedDetail ? (selectedDetail.samples || []) : []
+        if (detailSamples.length > 0) {
+            var mapped = []
+            for (var ds = 0; ds < detailSamples.length; ds++) {
+                var sample = detailSamples[ds]
+                mapped.push({
+                    index: ds + 1,
+                    fingerprint: sample.params_hash || sample.paramsHash || sample.params_fingerprint || sample.paramsFingerprint || "",
+                    callId: callId(sample),
+                    objectName: objectName(sample),
+                    cmdName: cmdName(sample),
+                    slotId: slotText(sample),
+                    paramsSummary: sample.params_summary || sample.paramsSummary || "-",
+                    paramsPreview: sample.params_preview || sample.paramsPreview || "",
+                    paramsSize: Number(sample.params_size || sample.paramsSize || 0),
+                    paramsHash: sample.params_hash || sample.paramsHash || sample.params_fingerprint || sample.paramsFingerprint || "",
+                    paramsTruncated: !!(sample.params_truncated || sample.paramsTruncated),
+                    firstSeenAt: sample.first_seen_at || sample.firstSeenAt || "",
+                    lastSeenAt: sample.last_seen_at || sample.lastSeenAt || "",
+                    seenCount: sample.seen_count || sample.sampleCount || 1,
+                    status: "",
+                    costMs: sample.cost_ms || sample.costMs || ""
+                })
+            }
+            return mapped
+        }
         var rows = relatedCalls(item)
         var byFingerprint = {}
         var result = []
@@ -241,10 +266,7 @@ Item {
             var call = rows[i]
             var fp = String(call.params_fingerprint || call.paramsFingerprint || "")
             if (!fp) {
-                var text = jsonText(callParams(call))
-                var hash = 0
-                for (var j = 0; j < text.length; j++) hash = ((hash << 5) - hash + text.charCodeAt(j)) | 0
-                fp = Math.abs(hash).toString(16)
+                fp = ""
             }
             var sampleKey = slotText(call) + "|" + fp
             if (!byFingerprint[sampleKey]) {
@@ -254,8 +276,11 @@ Item {
                     objectName: objectName(call),
                     cmdName: cmdName(call),
                     slotId: slotText(call),
-                    params: callParams(call),
                     paramsSummary: call.params_summary || call.paramsSummary || paramsSummary(call),
+                    paramsPreview: call.params_preview || call.paramsPreview || "",
+                    paramsSize: Number(call.params_size || call.paramsSize || 0),
+                    paramsHash: call.params_hash || call.paramsHash || fp,
+                    paramsTruncated: !!(call.params_truncated || call.paramsTruncated),
                     firstSeenAt: call.created_at || call.createdAt || "",
                     lastSeenAt: call.created_at || call.createdAt || "",
                     seenCount: 1,
@@ -275,15 +300,17 @@ Item {
             }
         }
         if (result.length === 0 && item) {
-            var sampleArgs = safeObject(item.sample_args || item.sampleArgs || item.sample_args_json || {}, {})
             result.push({
                 fingerprint: fingerprint(item),
                 callId: "",
-                objectName: sampleArgs.objectName || objectName(item),
-                cmdName: sampleArgs.cmdName || cmdName(item),
-                slotId: sampleArgs.slotId !== undefined && sampleArgs.slotId !== null && sampleArgs.slotId !== "" ? String(sampleArgs.slotId) : "无槽位",
-                params: sampleArgs.params || latestParams(item),
+                objectName: objectName(item),
+                cmdName: cmdName(item),
+                slotId: slotText(item),
                 paramsSummary: paramsSummary(item),
+                paramsPreview: "",
+                paramsSize: 0,
+                paramsHash: fingerprint(item),
+                paramsTruncated: false,
                 firstSeenAt: item.first_seen_at || item.firstSeenAt || "",
                 lastSeenAt: item.last_seen_at || item.lastSeenAt || "",
                 seenCount: Math.max(1, sampleCount(item)),
@@ -297,9 +324,18 @@ Item {
     }
 
     function selectedSample() {
-        var rows = sampleRows(selectedItem)
+        var rows = sampleRows(selectedDetail || selectedItem)
         if (rows.length === 0) return null
         return rows[Math.max(0, Math.min(selectedSampleIndex, rows.length - 1))]
+    }
+
+    function loadMoreSamples() {
+        if (!selectedInterfaceId) return
+        sampleLimit += 10
+        var data = JSON.parse(bridge.interfaceSamples(selectedInterfaceId, 0, sampleLimit))
+        var next = cloneObject(selectedDetail || {})
+        next.samples = data.items || []
+        selectedDetail = next
     }
 
     function statusText(status) {
@@ -588,7 +624,7 @@ Item {
                                                         MbButton { appTheme: page.appTheme; text: "查看样本"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: { page.selectedInterfaceId = idValue; page.selectedSampleIndex = 0; page.detailTabIndex = 1 } }
                                                         MbButton { appTheme: page.appTheme; text: "相关调用"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: { page.selectedInterfaceId = idValue; page.detailTabIndex = 2 } }
                                                         MbButton { appTheme: page.appTheme; text: enabledBps > 0 ? "已启用断点" : "创建断点"; variant: enabledBps > 0 ? "success" : "primary"; enabled: enabledBps === 0; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: bridge.createBreakpointFromInterface(idValue) }
-                                                        MbButton { appTheme: page.appTheme; text: "复制请求"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: bridge.copyText(page.jsonText({objectName: page.objectName(modelData), cmdName: page.cmdName(modelData), params: page.latestParams(modelData)})) }
+                                                        MbButton { appTheme: page.appTheme; text: "复制摘要"; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 26; onClicked: bridge.copyText(page.paramsSummary(modelData)) }
                                                     }
                                                 }
                                             }
@@ -747,7 +783,7 @@ Item {
                             Layout.preferredHeight: 36
                             spacing: 8
                             Text {
-                                text: "参数样本 " + page.sampleRows(page.selectedItem).length + " 个"
+                                text: "参数样本 " + page.sampleRows(page.selectedDetail || page.selectedItem).length + " 个"
                                 color: page.appTheme.textStrong
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
@@ -763,6 +799,15 @@ Item {
                                 enabled: page.selectedSample() !== null && page.selectedSample().callId !== ""
                                 onClicked: bridge.createBreakpointFromCall(page.selectedSample().callId)
                             }
+                            MbButton {
+                                appTheme: page.appTheme
+                                text: "加载更多"
+                                variant: "neutral"
+                                Layout.preferredWidth: 96
+                                Layout.preferredHeight: 34
+                                enabled: page.selectedItem && page.sampleRows(page.selectedDetail || page.selectedItem).length < page.sampleCount(page.selectedItem)
+                                onClicked: page.loadMoreSamples()
+                            }
                         }
 
                         RowLayout {
@@ -775,7 +820,7 @@ Item {
                                 Layout.preferredWidth: 150
                                 Layout.fillHeight: true
                                 clip: true
-                                model: page.sampleRows(page.selectedItem)
+                                model: page.sampleRows(page.selectedDetail || page.selectedItem)
                                 delegate: Rectangle {
                                     required property var modelData
                                     required property int index
@@ -796,11 +841,17 @@ Item {
                                 }
                             }
 
-                            MbJsonViewer {
+                            LargePayloadViewer {
                                 appTheme: page.appTheme
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                text: page.jsonText(page.selectedSample() ? {objectName: page.selectedSample().objectName, cmdName: page.selectedSample().cmdName, slotId: page.selectedSample().slotId, params: page.selectedSample().params} : {})
+                                callId: page.selectedSample() ? page.selectedSample().callId : ""
+                                payloadType: "params"
+                                title: "参数样本"
+                                preview: page.selectedSample() ? page.selectedSample().paramsPreview : ""
+                                payloadSize: page.selectedSample() ? page.selectedSample().paramsSize : 0
+                                payloadHash: page.selectedSample() ? page.selectedSample().paramsHash : ""
+                                truncated: page.selectedSample() ? page.selectedSample().paramsTruncated : false
                             }
                         }
                     }
@@ -883,7 +934,12 @@ Item {
                         }
                     }
 
-                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem || {}) }
+                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem ? {
+                        objectName: page.objectName(page.selectedItem),
+                        cmdName: page.cmdName(page.selectedItem),
+                        paramsSummary: page.paramsSummary(page.selectedItem),
+                        sampleCount: page.sampleCount(page.selectedItem)
+                    } : {}) }
                 }
             }
         }

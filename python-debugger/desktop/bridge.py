@@ -36,7 +36,7 @@ class Bridge(QObject):
             return {"success": False, "error": str(exc)}
 
     def _emit_result(self, value):
-        self.resultChanged.emit(json.dumps(value, ensure_ascii=False, indent=2))
+        self.resultChanged.emit(json.dumps(self._log_safe_value(value), ensure_ascii=False, indent=2))
         message = value.get("message") if isinstance(value, dict) else None
         if message and (
             value.get("code") in ("DUPLICATE_COMMAND_BREAKPOINT", "DUPLICATE_CONDITION_BREAKPOINT")
@@ -44,6 +44,30 @@ class Bridge(QObject):
             or message == "当前会话数据已清空。"
         ):
             self.userNotice.emit(message)
+
+    def _log_safe_value(self, value):
+        if isinstance(value, list):
+            return [self._log_safe_value(item) for item in value[:20]]
+        if not isinstance(value, dict):
+            return value
+        result = {}
+        for key, item in value.items():
+            if key in ("params", "result", "rawArgs", "args", "params_json", "result_json", "latest_params", "sample_args", "params_snapshot"):
+                result[key] = self._payload_log_summary(item)
+            else:
+                result[key] = self._log_safe_value(item)
+        return result
+
+    def _payload_log_summary(self, value):
+        try:
+            text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except Exception:
+            text = str(value)
+        return {
+            "payloadSaved": True,
+            "size": len(text.encode("utf-8")),
+            "summary": text[:180] + ("..." if len(text) > 180 else ""),
+        }
 
     def _emit_operation_result(self, value, refresh=True):
         self._emit_result(value)
@@ -188,11 +212,11 @@ class Bridge(QObject):
 
     @Slot()
     def loadCalls(self):
-        self.callsChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/calls"), ensure_ascii=False))
+        self.callsChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/calls", params={"pageSize": 50}), ensure_ascii=False))
 
     @Slot()
     def loadInterfaces(self):
-        self.interfacesChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/interfaces"), ensure_ascii=False))
+        self.interfacesChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/interfaces", params={"pageSize": 50}), ensure_ascii=False))
 
     @Slot()
     def loadBreakpoints(self):
@@ -226,6 +250,65 @@ class Bridge(QObject):
         if clipboard:
             clipboard.setText(text)
             self._emit_result({"success": True, "message": "已复制到剪贴板"})
+
+    @Slot(str, str, int, int, result=str)
+    def loadPayloadChunk(self, callId, payloadType, offset, limit):
+        result = self._request(
+            "GET",
+            f"{self.backend}/api/calls/{callId}/payload",
+            params={"type": payloadType, "offset": offset, "limit": limit},
+        )
+        return json.dumps(result, ensure_ascii=False)
+
+    @Slot(str, result=str)
+    def callDetail(self, callId):
+        if not callId:
+            return "{}"
+        return json.dumps(self._request("GET", f"{self.backend}/api/calls/{callId}"), ensure_ascii=False)
+
+    @Slot(str, result=str)
+    def interfaceDetail(self, interfaceId):
+        if not interfaceId:
+            return "{}"
+        return json.dumps(self._request("GET", f"{self.backend}/api/interfaces/{interfaceId}"), ensure_ascii=False)
+
+    @Slot(str, int, int, result=str)
+    def interfaceSamples(self, interfaceId, offset, limit):
+        if not interfaceId:
+            return '{"items":[]}'
+        result = self._request(
+            "GET",
+            f"{self.backend}/api/interfaces/{interfaceId}/samples",
+            params={"offset": offset, "limit": limit},
+        )
+        return json.dumps(result, ensure_ascii=False)
+
+    @Slot(str, str, str, result=str)
+    def searchPayload(self, callId, payloadType, query):
+        result = self._request(
+            "GET",
+            f"{self.backend}/api/calls/{callId}/payload/search",
+            params={"type": payloadType, "q": query},
+        )
+        return json.dumps(result, ensure_ascii=False)
+
+    @Slot(str, str)
+    def exportPayload(self, callId, payloadType):
+        suggested = f"{payloadType}.json"
+        path, _ = QFileDialog.getSaveFileName(None, "导出完整 payload", suggested, "JSON (*.json);;Text (*.txt);;All Files (*)")
+        if not path:
+            self._emit_result({"success": False, "message": "export cancelled"})
+            return
+        response = requests.get(
+            f"{self.backend}/api/calls/{callId}/payload/export",
+            params={"type": payloadType},
+            timeout=30,
+        )
+        if not response.ok:
+            self._emit_result({"success": False, "message": "payload export failed", "status": response.status_code})
+            return
+        Path(path).write_bytes(response.content)
+        self._emit_result({"success": True, "message": "payload exported", "path": path})
 
     @Slot(str, str)
     def setInterfaceAlias(self, interfaceId, alias):
