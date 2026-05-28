@@ -82,6 +82,18 @@ def test_qml_does_not_render_full_payloads_in_lists_or_logs():
     assert "exportPayload" in bridge
 
 
+def test_large_payload_viewer_formats_json_and_shows_line_numbers():
+    viewer = (QML_ROOT / "components" / "LargePayloadViewer.qml").read_text(encoding="utf-8")
+
+    assert "function formatJsonPreview" in viewer
+    assert "JSON.stringify(JSON.parse(trimmed), null, 2)" in viewer
+    assert "function lineNumbers" in viewer
+    assert "text: viewer.lineNumbers(viewer.displayText)" in viewer
+    assert "acceptedButtons: Qt.AllButtons" in viewer
+    assert "onPressed: function(mouse) { mouse.accepted = true }" in viewer
+    assert "wrapMode: TextEdit.NoWrap" in viewer
+
+
 def test_call_record_page_keeps_filters_inside_groups():
     qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
     main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")

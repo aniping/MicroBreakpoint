@@ -16,6 +16,7 @@ Item {
     property int nextOffset: 0
     property bool hasMore: false
     property string currentText: preview || ""
+    property string displayText: formatJsonPreview(currentText)
     property string searchText: ""
     property var searchMatches: []
 
@@ -31,6 +32,25 @@ Item {
         nextOffset = truncated ? Math.min(payloadSize, 8192) : payloadSize
         hasMore = !!truncated
         searchMatches = []
+    }
+
+    function formatJsonPreview(text) {
+        var value = String(text || "")
+        if (value.length === 0 || value.length > 262144) return value
+        var trimmed = value.trim()
+        if (!(trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[")) return value
+        try {
+            return JSON.stringify(JSON.parse(trimmed), null, 2)
+        } catch (e) {
+            return value
+        }
+    }
+
+    function lineNumbers(text) {
+        var lines = Math.max(1, String(text || "").split("\n").length)
+        var result = []
+        for (var i = 1; i <= lines; i++) result.push(String(i))
+        return result.join("\n")
     }
 
     function loadMore() {
@@ -96,20 +116,59 @@ Item {
             wrapMode: Text.Wrap
         }
 
-        TextArea {
+        Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: viewer.currentText
-            readOnly: true
-            selectByMouse: true
-            wrapMode: TextEdit.Wrap
-            color: viewer.appTheme.textNormal
-            font.family: "Consolas"
-            font.pixelSize: 12
-            background: Rectangle {
-                color: viewer.appTheme.inputBg
-                border.color: viewer.appTheme.border
-                radius: 4
+            color: viewer.appTheme.inputBg
+            border.color: viewer.appTheme.border
+            radius: 4
+            clip: true
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Rectangle {
+                    Layout.preferredWidth: 44
+                    Layout.fillHeight: true
+                    color: viewer.appTheme.panelBgAlt
+                    border.color: viewer.appTheme.border
+                    Text {
+                        anchors.fill: parent
+                        anchors.topMargin: 8
+                        anchors.leftMargin: 6
+                        anchors.rightMargin: 8
+                        text: viewer.lineNumbers(viewer.displayText)
+                        color: viewer.appTheme.textDisabled
+                        font.family: "Consolas"
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        lineHeightMode: Text.FixedHeight
+                        lineHeight: 17
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.AllButtons
+                        cursorShape: Qt.ArrowCursor
+                        onPressed: function(mouse) { mouse.accepted = true }
+                        onPositionChanged: function(mouse) { mouse.accepted = true }
+                    }
+                }
+
+                TextArea {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: viewer.displayText
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.NoWrap
+                    color: viewer.appTheme.textNormal
+                    font.family: "Consolas"
+                    font.pixelSize: 12
+                    leftPadding: 10
+                    topPadding: 8
+                    background: Rectangle { color: "transparent" }
+                }
             }
         }
 
@@ -118,7 +177,7 @@ Item {
             spacing: 8
             Button { text: "加载更多"; enabled: viewer.hasMore; onClicked: viewer.loadMore() }
             Button { text: "导出完整"; enabled: !!viewer.callId; onClicked: bridge.exportPayload(viewer.callId, viewer.payloadType) }
-            Button { text: "复制当前预览"; enabled: viewer.currentText.length > 0; onClicked: bridge.copyText(viewer.currentText) }
+            Button { text: "复制当前预览"; enabled: viewer.displayText.length > 0; onClicked: bridge.copyText(viewer.displayText) }
         }
 
         RowLayout {
