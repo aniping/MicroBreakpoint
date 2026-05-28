@@ -287,8 +287,9 @@ def test_large_text_payload_preview_is_valid_json(tmp_path):
     assert preview["scenario"] == "large-text-payload"
     assert preview["expectedChars"] == len(large_text)
     assert preview["text"].startswith("micro-breakpoint-large-text-")
-    assert "truncated" in preview["text"]
+    assert preview["text"].endswith("…")
     assert len(preview["text"]) < len(large_text)
+    assert len(preview["text"]) <= 181
 
 
 def test_large_top_level_string_result_preview_is_valid_json(tmp_path):
@@ -305,8 +306,9 @@ def test_large_top_level_string_result_preview_is_valid_json(tmp_path):
     detail = client.get("/api/calls/top-level-string-call").get_json()
     preview = json.loads(detail["result_preview"])
     assert preview.startswith("micro-breakpoint-top-level-string-")
-    assert "truncated" in preview
+    assert preview.endswith("…")
     assert len(preview) < len(large_text)
+    assert len(preview) <= 181
 
 
 def test_large_object_key_payload_preview_is_valid_bounded_json(tmp_path):
@@ -326,6 +328,9 @@ def test_large_object_key_payload_preview_is_valid_bounded_json(tmp_path):
     preview = json.loads(preview_text)
     assert isinstance(preview, dict)
     assert "__preview__" in preview
+    assert preview["__preview__"]["keyCount"] == 30
+    assert preview["__preview__"]["shownKeys"] == 6
+    assert preview["__preview__"]["omittedKeys"] == 24
     assert all(len(key) < 180 for key in preview if key != "__preview__")
     assert len(preview_text.encode("utf-8")) <= 8192
 

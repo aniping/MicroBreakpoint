@@ -1043,28 +1043,38 @@ Item {
                     }
                 }
 
-                ColumnLayout {
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 76
+                    Layout.preferredHeight: 92
                     Layout.leftMargin: 10
                     Layout.rightMargin: 10
-                    spacing: 6
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueAll() }
-                        MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
-                        Item { Layout.fillWidth: true }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        MbButton { appTheme: page.appTheme; text: "导出入参"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "params") }
-                        MbButton { appTheme: page.appTheme; text: "导出返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "result") }
-                        MbButton { appTheme: page.appTheme; text: "登记接口"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: "success"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
-                        Item { Layout.fillWidth: true }
+                    Layout.topMargin: 10
+                    Layout.bottomMargin: 10
+                    radius: 4
+                    color: page.appTheme.panelBgAlt
+                    border.color: page.appTheme.borderSoft
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 8
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
+                            MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueAll() }
+                            MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
+                            MbButton { appTheme: page.appTheme; text: "条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
+                            Item { Layout.fillWidth: true }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            MbButton { appTheme: page.appTheme; text: "导出入参"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "params") }
+                            MbButton { appTheme: page.appTheme; text: "导出返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "result") }
+                            MbButton { appTheme: page.appTheme; text: "登记接口"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: "success"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
+                            Item { Layout.fillWidth: true }
+                        }
                     }
                 }
 

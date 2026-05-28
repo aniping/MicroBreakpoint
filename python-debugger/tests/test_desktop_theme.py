@@ -88,7 +88,10 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     viewer = (QML_ROOT / "components" / "LargePayloadViewer.qml").read_text(encoding="utf-8")
 
     assert "function formatJsonPreview" in viewer
-    assert "JSON.stringify(JSON.parse(trimmed), null, 2)" in viewer
+    assert "var parsed = JSON.parse(trimmed)" in viewer
+    assert "JSON.stringify(parsed, null, 2)" in viewer
+    assert "function compactJsonValue" in viewer
+    assert "value.slice(0, stringLimit) + \"…\"" in viewer
     assert "function lineNumbers" in viewer
     assert "text: viewer.lineNumbers(viewer.displayText)" in viewer
     assert "acceptedButtons: Qt.AllButtons" in viewer
@@ -117,6 +120,8 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "Layout.preferredHeight: 32" in viewer
     assert "viewer.searchMatches.length * 42 + 14" in viewer
     assert "viewer.selectedSearchIndex === index" in viewer
+    assert "property string extraActionText" in viewer
+    assert "signal extraActionRequested()" in viewer
 
 
 def test_interface_samples_use_payload_id_viewer():
@@ -165,7 +170,8 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "全部展开" in qml
     assert "只看断点" in qml
     assert "查看样本" in qml
-    assert "创建条件断点" in qml
+    assert "extraActionText: \"条件断点\"" in qml
+    assert "onExtraActionRequested: bridge.createBreakpointFromCall(page.selectedSample().callId)" in qml
     assert "别名" not in qml
     assert "component MetricCell" in qml
     assert "Layout.preferredWidth: 338" in qml

@@ -89,7 +89,7 @@ Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收�
 
 完整内容保存在 `call_payloads`：小于等于 64KB 的 payload 内联到 `content_text`，大于 64KB 的 payload 写入 `python-debugger/data/payloads/{session_id}/{bucket}/{call_id}/{params|result}.json`，SQLite 只保存路径、大小、hash 和编码信息。调用详情通过 `/api/calls/{callId}/payload?type=params|result` 分块读取、导出和搜索；接口样本、断点快照等没有稳定 `callId` 的场景通过 `/api/payloads/{payloadId}`、`/api/payloads/{payloadId}/export`、`/api/payloads/{payloadId}/search?q=...` 读取同一份 payload。文件型 payload 搜索按 1MB 分块流式扫描并保留跨块 overlap，不会一次性读取完整大文件。
 
-桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，列表、对象键名和大字符串都会保留可解析的截断标记，避免直接截断字符串导致无法格式化。`LargePayloadViewer` 同时支持 `callId+type` 和 `payloadId` 两种读取来源，“加载全部”会从 offset 0 拼接完整内容到界面，只有 preview 覆盖完整 payload 时才显示已加载全部，大文件建议直接导出查看。搜索框独立成行并只触发后端完整 payload 搜索，结果在预览区内联显示。
+桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，大字符串会替换为短摘要加省略号，大对象只展示前几个键值并标记总键数、展示数和省略数，避免直接截断字符串导致无法格式化。`LargePayloadViewer` 同时支持 `callId+type` 和 `payloadId` 两种读取来源，“加载全部”会从 offset 0 拼接完整内容到界面，只有 preview 覆盖完整 payload 时才显示已加载全部，大文件建议直接导出查看。搜索框独立成行并只触发后端完整 payload 搜索，结果在预览区内联显示。
 
 `/api/calls/grouped` 和 `/api/interfaces/grouped` 使用全量 SQL 聚合统计整个 Session，不依赖列表第一页。`.mbrec` 桌面导入导出使用 zip 格式：`db.json` 保存数据库记录和 payload 元信息，大 payload 作为 `payloads/...` zip entry 单独存放；导入时会校验大小和 hash，并把 payload 文件恢复到新 Session 的 payload 目录。旧 JSON 归档接口仍保留兼容，但不会把文件型大 payload 内联到 JSON。
 

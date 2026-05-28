@@ -26,6 +26,10 @@ Item {
     property int selectedSearchIndex: -1
     property string searchError: ""
     property string loadError: ""
+    property string extraActionText: ""
+    property bool extraActionEnabled: false
+
+    signal extraActionRequested()
 
     function hasPayloadSource() {
         return (payloadId && payloadId.length > 0) || (callId && callId.length > 0)
@@ -64,14 +68,50 @@ Item {
 
     function formatJsonPreview(text) {
         var value = String(text || "")
-        if (value.length === 0 || value.length > 262144) return value
+        if (value.length === 0) return value
         var trimmed = value.trim()
-        if (!(trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[")) return value
+        var first = trimmed.charAt(0)
+        if (!(first === "{" || first === "[" || first === "\"")) return value
         try {
-            return JSON.stringify(JSON.parse(trimmed), null, 2)
+            var parsed = JSON.parse(trimmed)
+            if (viewer.truncated && !viewer.loadedAll) parsed = compactJsonValue(parsed, 180, 6, 0)
+            return JSON.stringify(parsed, null, 2)
         } catch (e) {
             return value
         }
+    }
+
+    function compactJsonValue(value, stringLimit, itemLimit, depth) {
+        if (depth >= 6) return compactMarker(value)
+        if (typeof value === "string") {
+            if (value.length <= stringLimit) return value
+            return value.slice(0, stringLimit) + "…"
+        }
+        if (Array.isArray(value)) {
+            var items = []
+            var count = Math.min(value.length, itemLimit)
+            for (var i = 0; i < count; i++) items.push(compactJsonValue(value[i], stringLimit, itemLimit, depth + 1))
+            if (value.length > itemLimit) items.push({"__preview__": "items truncated", "itemCount": value.length, "shownItems": itemLimit, "omittedItems": value.length - itemLimit})
+            return items
+        }
+        if (value && typeof value === "object") {
+            var result = {}
+            var keys = Object.keys(value)
+            var shown = Math.min(keys.length, itemLimit)
+            for (var j = 0; j < shown; j++) {
+                result[keys[j]] = compactJsonValue(value[keys[j]], stringLimit, itemLimit, depth + 1)
+            }
+            if (keys.length > itemLimit) result["__preview__"] = {"keyCount": keys.length, "shownKeys": itemLimit, "omittedKeys": keys.length - itemLimit}
+            return result
+        }
+        return value
+    }
+
+    function compactMarker(value) {
+        if (Array.isArray(value)) return {"__preview__": "array truncated", "itemCount": value.length}
+        if (value && typeof value === "object") return {"__preview__": "object truncated", "keyCount": Object.keys(value).length}
+        if (typeof value === "string" && value.length > 80) return value.slice(0, 80) + "…"
+        return value
     }
 
     function lineNumbers(text) {
@@ -280,6 +320,14 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
+            PayloadActionButton {
+                visible: viewer.extraActionText.length > 0
+                text: viewer.extraActionText
+                variant: "primary"
+                enabled: viewer.extraActionEnabled
+                Layout.preferredWidth: 88
+                onClicked: viewer.extraActionRequested()
+            }
             PayloadActionButton {
                 text: viewer.loadingAll ? "加载中..." : (viewer.loadedAll ? "已加载全部" : "加载全部")
                 variant: viewer.loadedAll ? "neutral" : "primary"

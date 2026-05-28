@@ -787,15 +787,6 @@ Item {
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
                             }
-                            MbButton {
-                                appTheme: page.appTheme
-                                text: "创建条件断点"
-                                variant: "primary"
-                                Layout.preferredWidth: 150
-                                Layout.preferredHeight: 34
-                                enabled: page.selectedSample() !== null && page.selectedSample().callId !== ""
-                                onClicked: bridge.createBreakpointFromCall(page.selectedSample().callId)
-                            }
                         }
 
                         RowLayout {
@@ -841,6 +832,9 @@ Item {
                                 payloadSize: page.selectedSample() ? page.selectedSample().paramsSize : 0
                                 payloadHash: page.selectedSample() ? page.selectedSample().paramsHash : ""
                                 truncated: page.selectedSample() ? page.selectedSample().paramsTruncated : false
+                                extraActionText: "条件断点"
+                                extraActionEnabled: page.selectedSample() !== null && page.selectedSample().callId !== ""
+                                onExtraActionRequested: bridge.createBreakpointFromCall(page.selectedSample().callId)
                             }
                         }
                     }

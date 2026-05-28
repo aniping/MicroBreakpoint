@@ -14,8 +14,8 @@ SUMMARY_LIMIT_CHARS = 260
 MAX_CHUNK_BYTES = 1024 * 1024
 SEARCH_CHUNK_BYTES = 1024 * 1024
 SEARCH_PREVIEW_CHARS = 100
-PREVIEW_STRING_CHARS = 480
-PREVIEW_COLLECTION_ITEMS = 16
+PREVIEW_STRING_CHARS = 180
+PREVIEW_COLLECTION_ITEMS = 6
 SAFE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -369,8 +369,8 @@ def preview_payload(value, serialized_text, content_format, truncated, content_s
 
 
 def json_preview_text(value, content_size):
-    for string_limit in (PREVIEW_STRING_CHARS, 240, 120, 60):
-        for item_limit in (PREVIEW_COLLECTION_ITEMS, 8, 4, 2):
+    for string_limit in (PREVIEW_STRING_CHARS, 120, 60):
+        for item_limit in (PREVIEW_COLLECTION_ITEMS, 4, 2):
             preview = preview_json_value(value, string_limit, item_limit)
             text = dumps(preview)
             if len(text.encode("utf-8")) <= PREVIEW_LIMIT_BYTES:
@@ -388,7 +388,7 @@ def preview_json_value(value, string_limit, item_limit, depth=0):
     if isinstance(value, str):
         if len(value) <= string_limit:
             return value
-        return value[:string_limit] + f"... [truncated {len(value) - string_limit} chars]"
+        return value[:string_limit] + "…"
     if isinstance(value, list):
         items = [preview_json_value(item, string_limit, item_limit, depth + 1) for item in value[:item_limit]]
         if len(value) > item_limit:
@@ -403,7 +403,11 @@ def preview_json_value(value, string_limit, item_limit, depth=0):
                 preview_key = f"{preview_key} #{index + 1}"
             result[preview_key] = preview_json_value(value[key], string_limit, item_limit, depth + 1)
         if len(keys) > item_limit:
-            result["__preview__"] = {"omittedKeys": len(keys) - item_limit}
+            result["__preview__"] = {
+                "keyCount": len(keys),
+                "shownKeys": item_limit,
+                "omittedKeys": len(keys) - item_limit,
+            }
         return result
     return value
 
