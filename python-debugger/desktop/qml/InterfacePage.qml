@@ -789,21 +789,23 @@ Item {
                             }
                         }
 
-                        RowLayout {
+                        ColumnLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             spacing: 10
 
                             ListView {
                                 id: sampleList
-                                Layout.preferredWidth: 150
-                                Layout.fillHeight: true
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 76
                                 clip: true
+                                orientation: ListView.Horizontal
+                                spacing: 8
                                 model: page.sampleRows(page.selectedDetail || page.selectedItem)
                                 delegate: Rectangle {
                                     required property var modelData
                                     required property int index
-                                    width: sampleList.width
+                                    width: 160
                                     height: 68
                                     radius: 4
                                     color: page.selectedSampleIndex === index ? page.appTheme.panelActive : page.appTheme.panelBgAlt

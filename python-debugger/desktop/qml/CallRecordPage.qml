@@ -1002,9 +1002,9 @@ Item {
         }
 
         Rectangle {
-            Layout.preferredWidth: 420
-            Layout.minimumWidth: 400
-            Layout.maximumWidth: 420
+            Layout.preferredWidth: 500
+            Layout.minimumWidth: 480
+            Layout.maximumWidth: 520
             Layout.fillHeight: true
             color: appTheme.panelBg
             border.color: appTheme.border
@@ -1082,11 +1082,11 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     spacing: 0
-                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 64; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "入参"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "返回"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 2 }
-                    TabButton { text: "Payload"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 3 }
-                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 4 }
+                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 72; onClicked: page.detailTabIndex = 0 }
+                    TabButton { text: "入参"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 72; onClicked: page.detailTabIndex = 1 }
+                    TabButton { text: "返回"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 72; onClicked: page.detailTabIndex = 2 }
+                    TabButton { text: "Payload"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 80; onClicked: page.detailTabIndex = 3 }
+                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 90; onClicked: page.detailTabIndex = 4 }
                     TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.fillWidth: true; onClicked: page.detailTabIndex = 5 }
                 }
 
