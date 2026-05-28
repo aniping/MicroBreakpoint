@@ -134,6 +134,25 @@ Invoke-DemoCurl `
     -Path "/api/demo/control" `
     -JsonBody '{"instType":"VNA","cmdName":"calibrate","slotId":1,"params":{"kit":"SOLT","ports":[1,2],"temperatureC":25.4}}'
 
+$LargeText = "micro-breakpoint-large-text-" * 4096
+$LargeTextBody = @{
+    instType = "VNA"
+    cmdName = "largeText"
+    slotId = 1
+    params = @{
+        scenario = "large-text-payload"
+        text = $LargeText
+        repeatCount = 4096
+        expectedChars = $LargeText.Length
+    }
+} | ConvertTo-Json -Compress -Depth 6
+
+Invoke-DemoCurl `
+    -Title "POST /api/demo/control - VNA large text payload" `
+    -Method "POST" `
+    -Path "/api/demo/control" `
+    -JsonBody $LargeTextBody
+
 Invoke-DemoCurl `
     -Title "POST /api/demo/control - SA measure sample 1" `
     -Method "POST" `

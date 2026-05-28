@@ -20,6 +20,9 @@ def test_call_all_demo_apis_script_covers_java_demo_rest_endpoints():
     assert script.count('-Path "/api/demo/control"') >= 14
     assert script.count('"cmdName":"start"') >= 3
     assert script.count('"cmdName":"measure"') >= 3
+    assert "micro-breakpoint-large-text-" in script
+    assert 'cmdName = "largeText"' in script
+    assert "ConvertTo-Json -Compress -Depth 6" in script
 
 
 def test_debugger_ports_are_configured_for_18601():

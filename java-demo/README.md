@@ -17,7 +17,7 @@ mvn spring-boot:run
 - `POST /api/demo/initialize`
 - `POST /api/demo/control`
 
-可以使用脚本批量调用 Java Demo 的全部 REST 接口，并生成多仪表对象、多样本值和多次同接口调用的典型调试流量：
+可以使用脚本批量调用 Java Demo 的全部 REST 接口，并生成多仪表对象、多样本值、大文本 payload 和多次同接口调用的典型调试流量：
 
 ```powershell
 cd java-demo
