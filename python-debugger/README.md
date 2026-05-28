@@ -47,13 +47,13 @@ python run_desktop.py
 
 后端完整接收 Java 上报的 `params/result`，但列表、日志和 QML 主模型只返回摘要字段。`/api/calls` 使用 SQL 级过滤、排序和分页，默认 `pageSize=50`，仅包含调用身份、状态、耗时、断点、`paramsSummary/resultSummary`、大小和截断标识，不返回完整 JSON。`/api/interfaces` 同样使用 SQL 级分页；`/api/calls/grouped` 和 `/api/interfaces/grouped` 使用全量 SQL 聚合统计整个 Session。
 
-完整 payload 进入 `call_payloads`：不超过 64KB 的内容保存在 `content_text`，超过 64KB 的内容写入 `data/payloads/{session_id}/{bucket}/{call_id}/params.json` 或 `result.json`。详情页默认显示前 8KB preview；需要完整内容时使用分块接口 `/api/calls/{callId}/payload`、导出接口 `/api/calls/{callId}/payload/export`，或后端搜索接口 `/api/calls/{callId}/payload/search`。文件型 payload 搜索按 1MB 分块流式扫描，不一次性读取完整大文件。
+完整 payload 进入 `call_payloads`：不超过 64KB 的内容保存在 `content_text`，超过 64KB 的内容写入 `data/payloads/{session_id}/{bucket}/{call_id}/params.json` 或 `result.json`。详情页默认显示 preview；调用详情使用 `/api/calls/{callId}/payload`、`/api/calls/{callId}/payload/export`、`/api/calls/{callId}/payload/search`，接口样本和断点快照等独立样本使用 `/api/payloads/{payloadId}`、`/api/payloads/{payloadId}/export`、`/api/payloads/{payloadId}/search?q=...`。文件型 payload 搜索按 1MB 分块流式扫描，不一次性读取完整大文件。
 
-桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，避免直接截断字符串导致无法格式化。搜索框只触发后端完整 payload 搜索，主模型仍只保留轻量 preview。
+桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，避免直接截断字符串导致无法格式化。`LargePayloadViewer` 支持 `callId+type` 和 `payloadId` 两种来源，“加载全部”会从 offset 0 拼接完整内容到界面，大文件建议导出查看；搜索结果使用浮层显示，不占用 JSON 展示区高度。
 
 `.mbrec` 桌面导入导出使用 zip 格式：`db.json` 保存数据库记录和 payload 元信息，大 payload 作为 `payloads/...` zip entry 单独存放；导入时校验大小和 hash，并恢复到新 Session 的 payload 目录。旧 JSON 归档接口保留兼容，但不会把文件型大 payload 内联进 JSON。
 
-参数样本按 `interface_id + slot_key + params_hash` 去重，样本列表和断点页只展示摘要、大小、hash 和命中次数；参数快照断点使用参数 hash/指纹优先匹配，不读取完整大 JSON 做字符串比较。
+参数样本按 `interface_id + slot_key + params_hash` 去重，样本列表和断点页只展示摘要、preview、大小、hash、payloadId 和命中次数；接口样本通过 `paramsPayloadId` 读取 JSON，不依赖 `callId`。`params_json/result_json/latest_params_json/params_snapshot_json/condition_json` 均为 legacy 兼容字段，新代码不再写入完整大 JSON，列表 API 和 QML 列表不得绑定这些字段。
 
 ## 验收主链路
 

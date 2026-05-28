@@ -60,7 +60,11 @@ class Bridge(QObject):
             return value
         result = {}
         for key, item in value.items():
-            if key in ("params", "result", "rawArgs", "args", "params_json", "result_json", "latest_params", "sample_args", "params_snapshot"):
+            if key in (
+                "params", "result", "rawArgs", "args", "raw_args", "params_json", "result_json",
+                "latest_params", "latest_params_json", "sample_args", "sample_args_json",
+                "params_snapshot", "params_snapshot_json",
+            ):
                 result[key] = self._payload_log_summary(item)
             else:
                 result[key] = self._log_safe_value(item)
@@ -338,6 +342,15 @@ class Bridge(QObject):
         )
         return json.dumps(result, ensure_ascii=False)
 
+    @Slot(str, int, int, result=str)
+    def loadPayloadChunkById(self, payloadId, offset, limit):
+        result = self._request(
+            "GET",
+            f"{self.backend}/api/payloads/{payloadId}",
+            params={"offset": offset, "limit": limit},
+        )
+        return json.dumps(result, ensure_ascii=False)
+
     @Slot(str, result=str)
     def callDetail(self, callId):
         if not callId:
@@ -370,6 +383,15 @@ class Bridge(QObject):
         )
         return json.dumps(result, ensure_ascii=False)
 
+    @Slot(str, str, result=str)
+    def searchPayloadById(self, payloadId, query):
+        result = self._request(
+            "GET",
+            f"{self.backend}/api/payloads/{payloadId}/search",
+            params={"q": query},
+        )
+        return json.dumps(result, ensure_ascii=False)
+
     @Slot(str, str)
     def exportPayload(self, callId, payloadType):
         suggested = f"{payloadType}.json"
@@ -382,6 +404,20 @@ class Bridge(QObject):
             params={"type": payloadType},
             timeout=30,
         )
+        if not response.ok:
+            self._emit_result({"success": False, "message": "payload export failed", "status": response.status_code})
+            return
+        Path(path).write_bytes(response.content)
+        self._emit_result({"success": True, "message": "payload exported", "path": path})
+
+    @Slot(str)
+    def exportPayloadById(self, payloadId):
+        suggested = "payload.json"
+        path, _ = QFileDialog.getSaveFileName(None, "瀵煎嚭瀹屾暣 payload", suggested, "JSON (*.json);;Text (*.txt);;All Files (*)")
+        if not path:
+            self._emit_result({"success": False, "message": "export cancelled"})
+            return
+        response = requests.get(f"{self.backend}/api/payloads/{payloadId}/export", timeout=30)
         if not response.ok:
             self._emit_result({"success": False, "message": "payload export failed", "status": response.status_code})
             return

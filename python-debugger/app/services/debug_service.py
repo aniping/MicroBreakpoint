@@ -766,7 +766,8 @@ def upsert_param_sample(interface_id, call_data, now):
         db.execute(
             """UPDATE interface_param_sample
                SET call_id=?, object_name=?, cmd_name=?, slot_id=?, args_json=?, params_json=NULL,
-                   params_hash=?, params_summary=?, params_size=?, params_payload_id=?,
+                   params_hash=?, params_summary=?, params_preview=?, params_truncated=?,
+                   params_size=?, params_payload_id=?,
                    last_seen_at=?, updated_at=?, seen_count=seen_count+1
                WHERE id=?""",
             (
@@ -777,6 +778,8 @@ def upsert_param_sample(interface_id, call_data, now):
                 dumps(call_data["raw_args"]),
                 call_data["params_hash"],
                 call_data["params_summary"],
+                call_data.get("params_preview"),
+                call_data.get("params_truncated", 0),
                 call_data["params_size"],
                 call_data["params_payload_id"],
                 now,
@@ -788,9 +791,10 @@ def upsert_param_sample(interface_id, call_data, now):
     db.execute(
         """INSERT INTO interface_param_sample
            (id, interface_id, call_id, object_name, cmd_name, slot_id, slot_key, args_json,
-            params_fingerprint, params_hash, params_summary, params_size, params_payload_id, params_json,
+            params_fingerprint, params_hash, params_summary, params_preview, params_truncated,
+            params_size, params_payload_id, params_json,
             first_seen_at, last_seen_at, created_at, updated_at, seen_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)""",
         (
             sample_id,
             interface_id,
@@ -803,6 +807,8 @@ def upsert_param_sample(interface_id, call_data, now):
             call_data["params_fingerprint"],
             call_data["params_hash"],
             call_data["params_summary"],
+            call_data.get("params_preview"),
+            call_data.get("params_truncated", 0),
             call_data["params_size"],
             call_data["params_payload_id"],
             now,
@@ -821,8 +827,10 @@ def sample_args_payload(call_data, created_at):
         "cmdName": call_data["cmd_name"],
         "slotId": call_data["slot_id"],
         "paramsSummary": call_data["params_summary"],
+        "paramsPreview": call_data.get("params_preview"),
         "paramsSize": call_data["params_size"],
         "paramsHash": call_data["params_hash"],
+        "paramsTruncated": bool(call_data.get("params_truncated")),
         "paramsPayloadId": call_data["params_payload_id"],
         "success": call_data.get("success"),
         "costMs": call_data.get("cost_ms"),
@@ -1594,7 +1602,7 @@ def recalculate_interface_stats(interface_id, now):
         """UPDATE discovered_interface
            SET call_count=?, success_count=?, exception_count=?, avg_cost_ms=?, max_cost_ms=?, min_cost_ms=?,
                first_seen_at=?, last_seen_at=?, params_sample_count=?,
-               latest_params_json=COALESCE(?, latest_params_json),
+               latest_params_json=NULL,
                latest_params_fingerprint=COALESCE(?, latest_params_fingerprint),
                params_summary=COALESCE(?, params_summary),
                updated_at=?
@@ -1609,7 +1617,6 @@ def recalculate_interface_stats(interface_id, now):
             first_seen,
             last_seen,
             sample_count,
-            latest["params_json"] if latest else None,
             latest["params_fingerprint"] if latest else None,
             latest["params_summary"] if latest else None,
             now,
@@ -1925,7 +1932,7 @@ def create_breakpoint(data):
             params_payload_id,
             dumps(condition_fields),
             dumps(conditions),
-            dumps(breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode)),
+            None,
             data.get("hitMode", "always"),
             data.get("hitLimit"),
             data.get("sourceType"),

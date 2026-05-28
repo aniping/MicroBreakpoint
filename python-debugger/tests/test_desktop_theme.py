@@ -79,7 +79,9 @@ def test_qml_does_not_render_full_payloads_in_lists_or_logs():
     assert "LargePayloadViewer" in qml_text
     assert "_log_safe_value" in bridge
     assert "loadPayloadChunk" in bridge
+    assert "loadPayloadChunkById" in bridge
     assert "exportPayload" in bridge
+    assert "exportPayloadById" in bridge
 
 
 def test_large_payload_viewer_formats_json_and_shows_line_numbers():
@@ -95,14 +97,29 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "selectByMouse: true" in viewer
     assert "flickableDirection: Flickable.HorizontalAndVerticalFlick" in viewer
     assert "verticalAlignment: TextInput.AlignVCenter" in viewer
+    assert "property string payloadId" in viewer
     assert "property bool loadedFromChunks" in viewer
+    assert "property bool loadingAll" in viewer
+    assert "property bool loadedAll" in viewer
     assert "onTruncatedChanged: resetContent()" in viewer
-    assert "var offset = loadedFromChunks ? nextOffset : 0" in viewer
+    assert "function loadAll()" in viewer
+    assert "var offset = 0" in viewer
+    assert "chunks.join(\"\")" in viewer
+    assert "function loadMore" not in viewer
+    assert "加载全部" in viewer
+    assert "Popup {" in viewer
     assert "component SearchField" in viewer
     assert "搜索完整 payload" in viewer
     assert "function searchSummary" in viewer
-    assert "结果来自后端" in viewer
+    assert "searchResultPopup.open()" in viewer
     assert "viewer.selectedSearchIndex === index" in viewer
+
+
+def test_interface_samples_use_payload_id_viewer():
+    qml = (QML_ROOT / "InterfacePage.qml").read_text(encoding="utf-8")
+
+    assert "paramsPayloadId: sample.params_payload_id || sample.paramsPayloadId || \"\"" in qml
+    assert "payloadId: page.selectedSample() ? page.selectedSample().paramsPayloadId : \"\"" in qml
 
 
 def test_call_record_page_keeps_filters_inside_groups():
@@ -180,8 +197,8 @@ def test_interface_page_shows_related_breakpoints_by_business_fields():
 def test_call_record_page_shows_breakpoint_list_in_detail_panel():
     qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
 
-    assert "断点列表 (\" + breakpoints.length + \")" in qml
-    assert "当前 Session" in qml
+    assert "TabButton { text: \"断点\"" in qml
+    assert "id: breakpointTabList" in qml
     assert "page.breakpointTitle(modelData)" in qml
     assert "endsWith(\" breakpoint\")" in qml
     assert "if (mode !== \"command_only\") text += \" / 槽位 \"" in qml

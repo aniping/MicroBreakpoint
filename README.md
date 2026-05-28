@@ -87,13 +87,13 @@ cd java-demo
 
 Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收并保存，但列表、日志和 QML 主模型只进入轻量摘要链路。`call_record` 只保留 `params_summary/result_summary`、前 8KB `preview`、大小、hash、截断标识和 payload 引用；`/api/calls` 使用 SQL 级过滤、排序和分页，默认只返回 50 条轻量调用记录，可通过 `pageSize=20/50/100` 分页浏览，不返回完整 `params/result/rawArgs`。`/api/interfaces` 同样使用 SQL 级分页，避免把整个 Session 的接口记录加载到 Python 内存。
 
-完整内容保存在 `call_payloads`：小于等于 64KB 的 payload 内联到 `content_text`，大于 64KB 的 payload 写入 `python-debugger/data/payloads/{session_id}/{bucket}/{call_id}/{params|result}.json`，SQLite 只保存路径、大小、hash 和编码信息。调用详情页默认只展示 preview；完整内容通过 `/api/calls/{callId}/payload?type=params|result&offset=0&limit=8192` 分块读取，通过 `/api/calls/{callId}/payload/export?type=params|result` 导出，通过 `/api/calls/{callId}/payload/search?type=result&q=xxx` 后端搜索。文件型 payload 搜索按 1MB 分块流式扫描并保留跨块 overlap，不会一次性读取完整大文件。
+完整内容保存在 `call_payloads`：小于等于 64KB 的 payload 内联到 `content_text`，大于 64KB 的 payload 写入 `python-debugger/data/payloads/{session_id}/{bucket}/{call_id}/{params|result}.json`，SQLite 只保存路径、大小、hash 和编码信息。调用详情通过 `/api/calls/{callId}/payload?type=params|result` 分块读取、导出和搜索；接口样本、断点快照等没有稳定 `callId` 的场景通过 `/api/payloads/{payloadId}`、`/api/payloads/{payloadId}/export`、`/api/payloads/{payloadId}/search?q=...` 读取同一份 payload。文件型 payload 搜索按 1MB 分块流式扫描并保留跨块 overlap，不会一次性读取完整大文件。
 
-桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，避免直接截断字符串导致无法格式化。搜索框只触发后端完整 payload 搜索，主模型仍只保留轻量 preview。
+桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，避免直接截断字符串导致无法格式化。`LargePayloadViewer` 同时支持 `callId+type` 和 `payloadId` 两种读取来源，“加载全部”会从 offset 0 拼接完整内容到界面，大文件建议直接导出查看。搜索框只触发后端完整 payload 搜索，结果使用浮层显示，不占用 JSON 展示区高度。
 
 `/api/calls/grouped` 和 `/api/interfaces/grouped` 使用全量 SQL 聚合统计整个 Session，不依赖列表第一页。`.mbrec` 桌面导入导出使用 zip 格式：`db.json` 保存数据库记录和 payload 元信息，大 payload 作为 `payloads/...` zip entry 单独存放；导入时会校验大小和 hash，并把 payload 文件恢复到新 Session 的 payload 目录。旧 JSON 归档接口仍保留兼容，但不会把文件型大 payload 内联到 JSON。
 
-接口参数样本按 `interface_id + slot_key + params_hash` 去重，只保存摘要、大小、hash、payload 引用、样本次数和首末次时间；已发现接口页和断点页不直接渲染完整参数或命中 payload。参数快照断点优先使用 `session_id + object_name + cmd_name + slot_key + params_fingerprint` 命中，不会为了匹配而从数据库或文件读取完整大 JSON。
+接口参数样本按 `interface_id + slot_key + params_hash` 去重，只保存摘要、preview、大小、hash、payload 引用、截断标识、样本次数和首末次时间；已发现接口页通过 `paramsPayloadId` 读取参数样本，不依赖 `callId` join。`call_record.params_json/result_json`、`discovered_interface.latest_params_json`、`interface_param_sample.params_json/result_json`、`breakpoint.params_snapshot_json`、`breakpoint.condition_json` 是 legacy 字段，仅为历史数据兼容保留，新代码不再写入完整大 JSON，也不得在列表接口或 QML 列表中绑定。
 
 ## 验收流程
 

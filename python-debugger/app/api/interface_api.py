@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db, row_to_dict
+from app.services.payload_store import payload_chunk_by_id
 from app.services.debug_service import (
     breakpoint_from_interface as create_breakpoint_from_interface,
     grouped_interfaces,
@@ -13,6 +14,23 @@ from app.services.debug_service import (
 )
 
 interface_api = Blueprint("interface_api", __name__, url_prefix="/api/interfaces")
+
+
+def normalize_sample(row):
+    sample = normalize(row_to_dict(row))
+    sample["sampleId"] = sample.get("id")
+    sample["paramsPayloadId"] = sample.get("params_payload_id") or sample.get("paramsPayloadId") or ""
+    if not sample.get("params_preview") and sample.get("paramsPayloadId"):
+        chunk = payload_chunk_by_id(get_db(), sample["paramsPayloadId"], 0, 8192)
+        if chunk:
+            sample["params_preview"] = chunk.get("content") or ""
+            sample["paramsPreview"] = sample["params_preview"]
+            sample["params_truncated"] = bool(chunk.get("hasMore"))
+    sample["paramsPreview"] = sample.get("params_preview") or sample.get("paramsPreview") or ""
+    sample["paramsSize"] = sample.get("params_size") or sample.get("paramsSize") or 0
+    sample["paramsHash"] = sample.get("params_hash") or sample.get("paramsHash") or sample.get("params_fingerprint") or ""
+    sample["paramsTruncated"] = bool(sample.get("params_truncated") or sample.get("paramsTruncated"))
+    return sample
 
 
 @interface_api.get("")
@@ -64,7 +82,8 @@ def interface_detail(interface_id):
     samples = get_db().execute(
         """SELECT s.id, s.interface_id, s.call_id, s.object_name, s.cmd_name, s.slot_id, s.slot_key,
                   s.params_fingerprint, s.params_hash, s.params_summary, s.params_size, s.params_payload_id,
-                  c.params_preview, c.params_truncated,
+                  COALESCE(NULLIF(s.params_preview, ''), c.params_preview) AS params_preview,
+                  COALESCE(s.params_truncated, c.params_truncated, 0) AS params_truncated,
                   s.result_summary, s.result_size, s.result_payload_id, s.success, s.cost_ms,
                   s.first_seen_at, s.last_seen_at, s.created_at, s.updated_at, s.seen_count
            FROM interface_param_sample s
@@ -74,7 +93,7 @@ def interface_detail(interface_id):
            LIMIT 10""",
         (interface_id,),
     ).fetchall()
-    item["samples"] = [normalize(row_to_dict(sample)) for sample in samples]
+    item["samples"] = [normalize_sample(sample) for sample in samples]
     return jsonify(item)
 
 
@@ -91,7 +110,8 @@ def interface_samples(interface_id):
     rows = get_db().execute(
         """SELECT s.id, s.interface_id, s.call_id, s.object_name, s.cmd_name, s.slot_id, s.slot_key,
                   s.params_fingerprint, s.params_hash, s.params_summary, s.params_size, s.params_payload_id,
-                  c.params_preview, c.params_truncated,
+                  COALESCE(NULLIF(s.params_preview, ''), c.params_preview) AS params_preview,
+                  COALESCE(s.params_truncated, c.params_truncated, 0) AS params_truncated,
                   s.result_summary, s.result_size, s.result_payload_id, s.success, s.cost_ms,
                   s.first_seen_at, s.last_seen_at, s.created_at, s.updated_at, s.seen_count
            FROM interface_param_sample s
@@ -101,7 +121,7 @@ def interface_samples(interface_id):
            LIMIT ? OFFSET ?""",
         (interface_id, limit, offset),
     ).fetchall()
-    return jsonify({"success": True, "items": [normalize(row_to_dict(row)) for row in rows], "limit": limit, "offset": offset})
+    return jsonify({"success": True, "items": [normalize_sample(row) for row in rows], "limit": limit, "offset": offset})
 
 
 @interface_api.get("/<interface_id>/breakpoints")

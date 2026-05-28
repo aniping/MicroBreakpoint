@@ -133,6 +133,8 @@ def ensure_interface_param_sample_schema(db):
           params_fingerprint TEXT,
           params_hash TEXT,
           params_summary TEXT,
+          params_preview TEXT,
+          params_truncated INTEGER DEFAULT 0,
           params_size INTEGER DEFAULT 0,
           params_payload_id TEXT,
           params_json TEXT,
@@ -154,8 +156,8 @@ def ensure_interface_param_sample_schema(db):
     required = {
         "id", "interface_id", "call_id", "object_name", "cmd_name", "slot_id", "slot_key",
         "args_json", "params_fingerprint", "params_hash", "params_summary", "params_size",
-        "params_payload_id", "params_json", "result_json", "result_summary", "result_size",
-        "result_payload_id", "success", "cost_ms",
+        "params_preview", "params_truncated", "params_payload_id", "params_json", "result_json",
+        "result_summary", "result_size", "result_payload_id", "success", "cost_ms",
         "first_seen_at", "last_seen_at", "created_at", "updated_at", "seen_count",
     }
     has_new_unique = any(
@@ -181,6 +183,8 @@ def ensure_interface_param_sample_schema(db):
           params_fingerprint TEXT,
           params_hash TEXT,
           params_summary TEXT,
+          params_preview TEXT,
+          params_truncated INTEGER DEFAULT 0,
           params_size INTEGER DEFAULT 0,
           params_payload_id TEXT,
           params_json TEXT,
@@ -203,7 +207,8 @@ def ensure_interface_param_sample_schema(db):
     db.execute(
         f"""INSERT OR IGNORE INTO interface_param_sample
            (id, interface_id, call_id, object_name, cmd_name, slot_id, slot_key, args_json,
-            params_fingerprint, params_hash, params_summary, params_size, params_payload_id,
+            params_fingerprint, params_hash, params_summary, params_preview, params_truncated,
+            params_size, params_payload_id,
             params_json, result_json, result_summary, result_size, result_payload_id, success, cost_ms,
             first_seen_at, last_seen_at, created_at, updated_at, seen_count)
            SELECT id, interface_id,
@@ -216,6 +221,8 @@ def ensure_interface_param_sample_schema(db):
                   params_fingerprint,
                   COALESCE({select_value('params_hash', 'NULL')}, params_fingerprint),
                   {select_value('params_summary', 'NULL')},
+                  {select_value('params_preview', 'NULL')},
+                  COALESCE({select_value('params_truncated', 'NULL')}, 0),
                   COALESCE({select_value('params_size', 'NULL')}, 0),
                   {select_value('params_payload_id', 'NULL')},
                   params_json,

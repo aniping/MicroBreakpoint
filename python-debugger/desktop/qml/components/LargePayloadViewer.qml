@@ -7,6 +7,7 @@ Item {
 
     property var appTheme
     property string callId: ""
+    property string payloadId: ""
     property string payloadType: "params"
     property string title: "payload"
     property string preview: ""
@@ -16,11 +17,18 @@ Item {
     property int nextOffset: 0
     property bool hasMore: false
     property bool loadedFromChunks: false
+    property bool loadingAll: false
+    property bool loadedAll: false
     property string currentText: preview || ""
     property string displayText: formatJsonPreview(currentText)
     property string searchText: ""
     property var searchMatches: []
     property int selectedSearchIndex: -1
+    property string loadError: ""
+
+    function hasPayloadSource() {
+        return (payloadId && payloadId.length > 0) || (callId && callId.length > 0)
+    }
 
     function sizeText(bytes) {
         var value = Number(bytes || 0)
@@ -33,9 +41,13 @@ Item {
         currentText = preview || ""
         nextOffset = 0
         loadedFromChunks = false
+        loadingAll = false
+        loadedAll = !truncated
         hasMore = !!truncated
+        loadError = ""
         searchMatches = []
         selectedSearchIndex = -1
+        if (searchResultPopup.opened) searchResultPopup.close()
     }
 
     function formatJsonPreview(text) {
@@ -57,39 +69,80 @@ Item {
         return result.join("\n")
     }
 
-    function loadMore() {
-        if (!callId || !hasMore) return
-        var offset = loadedFromChunks ? nextOffset : 0
-        var limit = loadedFromChunks ? 8192 : Math.min(Math.max(payloadSize, 8192), 262144)
-        var data = JSON.parse(bridge.loadPayloadChunk(callId, payloadType, offset, limit))
-        if (data.success === false) return
-        if (!loadedFromChunks) {
-            currentText = String(data.content || "")
-            loadedFromChunks = true
-        } else if ((currentText.length + String(data.content || "").length) > 262144) {
-            currentText = String(data.content || "")
-        } else {
-            currentText += String(data.content || "")
+    function loadChunk(offset, limit) {
+        if (payloadId && payloadId.length > 0) {
+            return JSON.parse(bridge.loadPayloadChunkById(payloadId, offset, limit))
         }
-        nextOffset = Number(data.nextOffset || nextOffset)
-        hasMore = !!data.hasMore
+        return JSON.parse(bridge.loadPayloadChunk(callId, payloadType, offset, limit))
+    }
+
+    function requestLoadAll() {
+        if (payloadSize > 10 * 1024 * 1024 && !loadedAll) {
+            largeLoadConfirm.open()
+            return
+        }
+        loadAll()
+    }
+
+    function loadAll() {
+        if (!hasPayloadSource() || loadingAll) return
+
+        loadingAll = true
+        loadError = ""
+        var offset = 0
+        var chunks = []
+        var limit = 1048576
+
+        while (true) {
+            var data = loadChunk(offset, limit)
+            if (!data || data.success === false) {
+                loadError = data && (data.message || data.error) ? String(data.message || data.error) : "payload load failed"
+                break
+            }
+
+            chunks.push(String(data.content || ""))
+
+            if (!data.hasMore) {
+                currentText = chunks.join("")
+                nextOffset = Number(data.nextOffset || 0)
+                hasMore = false
+                loadedFromChunks = true
+                loadedAll = true
+                break
+            }
+
+            var next = Number(data.nextOffset || 0)
+            if (next <= offset) {
+                loadError = "payload chunk offset did not advance"
+                break
+            }
+            offset = next
+        }
+
+        loadingAll = false
     }
 
     function runSearch() {
-        if (!callId || !searchText) {
+        if (!searchText || !hasPayloadSource()) {
             searchMatches = []
             selectedSearchIndex = -1
+            if (searchResultPopup.opened) searchResultPopup.close()
             return
         }
-        var data = JSON.parse(bridge.searchPayload(callId, payloadType, searchText))
+        var data = payloadId && payloadId.length > 0
+                ? JSON.parse(bridge.searchPayloadById(payloadId, searchText))
+                : JSON.parse(bridge.searchPayload(callId, payloadType, searchText))
         searchMatches = data.matches || []
         selectedSearchIndex = searchMatches.length > 0 ? 0 : -1
+        if (searchMatches.length > 0) searchResultPopup.open()
+        else if (searchResultPopup.opened) searchResultPopup.close()
     }
 
     function clearSearch() {
         searchText = ""
         searchMatches = []
         selectedSearchIndex = -1
+        if (searchResultPopup.opened) searchResultPopup.close()
     }
 
     function searchSummary() {
@@ -128,7 +181,7 @@ Item {
 
     component SearchField: TextField {
         id: field
-        implicitHeight: 34
+        implicitHeight: 30
         leftPadding: 30
         rightPadding: 8
         topPadding: 0
@@ -154,6 +207,7 @@ Item {
     }
 
     onCallIdChanged: resetContent()
+    onPayloadIdChanged: resetContent()
     onPayloadTypeChanged: resetContent()
     onPreviewChanged: resetContent()
     onPayloadSizeChanged: resetContent()
@@ -193,13 +247,68 @@ Item {
         Text {
             visible: viewer.truncated
             Layout.fillWidth: true
-            text: "内容较大，仅展示前 8KB，可加载更多或导出完整内容。"
+            text: "内容较大，当前仅展示预览。可加载全部到查看器，或直接导出完整文件。"
             color: viewer.appTheme.warning
             font.pixelSize: 12
             wrapMode: Text.Wrap
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            PayloadActionButton {
+                text: viewer.loadingAll ? "加载中..." : (viewer.loadedAll ? "已加载全部" : "加载全部")
+                variant: viewer.loadedAll ? "neutral" : "primary"
+                enabled: viewer.hasPayloadSource() && !viewer.loadingAll && !viewer.loadedAll
+                Layout.preferredWidth: 88
+                onClicked: viewer.requestLoadAll()
+            }
+            PayloadActionButton {
+                text: "导出完整"
+                enabled: viewer.hasPayloadSource()
+                Layout.preferredWidth: 82
+                onClicked: viewer.payloadId && viewer.payloadId.length > 0 ? bridge.exportPayloadById(viewer.payloadId) : bridge.exportPayload(viewer.callId, viewer.payloadType)
+            }
+            PayloadActionButton {
+                text: "复制预览"
+                enabled: viewer.displayText.length > 0
+                Layout.preferredWidth: 82
+                onClicked: bridge.copyText(viewer.displayText)
+            }
+            SearchField {
+                id: searchField
+                Layout.fillWidth: true
+                text: viewer.searchText
+                placeholderText: "搜索完整 payload"
+                onTextChanged: viewer.searchText = text
+                onAccepted: viewer.runSearch()
+            }
+            PayloadActionButton {
+                text: "搜索"
+                variant: "primary"
+                enabled: viewer.searchText.length > 0 && viewer.hasPayloadSource()
+                Layout.preferredWidth: 58
+                onClicked: viewer.runSearch()
+            }
+            PayloadActionButton {
+                text: "清空"
+                enabled: viewer.searchText.length > 0 || viewer.searchMatches.length > 0
+                Layout.preferredWidth: 52
+                onClicked: viewer.clearSearch()
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: viewer.loadError.length > 0 || viewer.searchText.length > 0
+            text: viewer.loadError.length > 0 ? viewer.loadError : viewer.searchSummary()
+            color: viewer.loadError.length > 0 ? viewer.appTheme.danger : (viewer.searchMatches.length > 0 ? viewer.appTheme.primary : viewer.appTheme.textMuted)
+            font.pixelSize: 11
+            elide: Text.ElideRight
+        }
+
         Rectangle {
+            id: payloadFrame
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: viewer.appTheme.inputBg
@@ -230,31 +339,32 @@ Item {
                     width: payloadFlick.contentWidth
                     height: payloadFlick.contentHeight
                     spacing: 0
-                Rectangle {
-                    id: lineNumberColumn
-                    width: 44
-                    height: parent.height
-                    color: viewer.appTheme.panelBgAlt
-                    border.color: viewer.appTheme.border
-                    Text {
-                        anchors.fill: parent
-                        anchors.topMargin: 8
-                        anchors.leftMargin: 6
-                        anchors.rightMargin: 8
-                        text: viewer.lineNumbers(viewer.displayText)
-                        color: viewer.appTheme.textDisabled
-                        font.family: "Consolas"
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignRight
+
+                    Rectangle {
+                        id: lineNumberColumn
+                        width: 44
+                        height: parent.height
+                        color: viewer.appTheme.panelBgAlt
+                        border.color: viewer.appTheme.border
+                        Text {
+                            anchors.fill: parent
+                            anchors.topMargin: 8
+                            anchors.leftMargin: 6
+                            anchors.rightMargin: 8
+                            text: viewer.lineNumbers(viewer.displayText)
+                            color: viewer.appTheme.textDisabled
+                            font.family: "Consolas"
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.AllButtons
+                            cursorShape: Qt.ArrowCursor
+                            onPressed: function(mouse) { mouse.accepted = true }
+                            onPositionChanged: function(mouse) { mouse.accepted = true }
+                        }
                     }
-                    MouseArea {
-                        anchors.fill: parent
-                        acceptedButtons: Qt.AllButtons
-                        cursorShape: Qt.ArrowCursor
-                        onPressed: function(mouse) { mouse.accepted = true }
-                        onPositionChanged: function(mouse) { mouse.accepted = true }
-                    }
-                }
 
                     Item {
                         width: Math.max(payloadFlick.width - lineNumberColumn.width, codeText.implicitWidth + 20)
@@ -275,83 +385,24 @@ Item {
                 }
             }
         }
+    }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-            PayloadActionButton { text: "加载更多"; variant: viewer.hasMore ? "primary" : "neutral"; enabled: viewer.hasMore; Layout.preferredWidth: 82; onClicked: viewer.loadMore() }
-            PayloadActionButton { text: "导出完整"; enabled: !!viewer.callId; Layout.preferredWidth: 82; onClicked: bridge.exportPayload(viewer.callId, viewer.payloadType) }
-            PayloadActionButton { text: "复制预览"; enabled: viewer.displayText.length > 0; Layout.preferredWidth: 82; onClicked: bridge.copyText(viewer.displayText) }
-            Item { Layout.fillWidth: true }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: searchPanel.implicitHeight + 18
+    Popup {
+        id: searchResultPopup
+        parent: Overlay.overlay
+        x: viewer.mapToItem(Overlay.overlay, 12, 0).x
+        y: viewer.mapToItem(Overlay.overlay, 12, viewer.height - Math.min(240, viewer.searchMatches.length * 48 + 24) - 16).y
+        width: Math.min(viewer.width - 24, 520)
+        height: Math.min(240, viewer.searchMatches.length * 48 + 24)
+        modal: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        padding: 8
+        background: Rectangle {
+            color: viewer.appTheme.panelBg
+            border.color: viewer.appTheme.border
             radius: 6
-            color: viewer.appTheme.panelBgAlt
-            border.color: viewer.appTheme.borderSoft
-
-            ColumnLayout {
-                id: searchPanel
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 9
-                spacing: 8
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-
-                    SearchField {
-                        Layout.fillWidth: true
-                        text: viewer.searchText
-                        placeholderText: "搜索完整 payload"
-                        onTextChanged: viewer.searchText = text
-                        onAccepted: viewer.runSearch()
-                    }
-
-                    PayloadActionButton {
-                        text: "搜索"
-                        variant: "primary"
-                        enabled: viewer.searchText.length > 0
-                        Layout.preferredWidth: 64
-                        onClicked: viewer.runSearch()
-                    }
-
-                    PayloadActionButton {
-                        text: "清空"
-                        enabled: viewer.searchText.length > 0 || viewer.searchMatches.length > 0
-                        Layout.preferredWidth: 56
-                        onClicked: viewer.clearSearch()
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Text {
-                        text: viewer.searchSummary()
-                        color: viewer.searchMatches.length > 0 ? viewer.appTheme.primary : viewer.appTheme.textMuted
-                        font.pixelSize: 11
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-                    Text {
-                        visible: viewer.searchMatches.length > 0
-                        text: "结果来自后端"
-                        color: viewer.appTheme.textDisabled
-                        font.pixelSize: 11
-                    }
-                }
-            }
         }
-
-        ListView {
-            Layout.fillWidth: true
-            Layout.preferredHeight: viewer.searchMatches.length > 0 ? Math.min(148, viewer.searchMatches.length * 48 + 6) : 0
-            visible: viewer.searchMatches.length > 0
+        contentItem: ListView {
             clip: true
             model: viewer.searchMatches
             spacing: 6
@@ -398,6 +449,52 @@ Item {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: viewer.selectedSearchIndex = index
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: largeLoadConfirm
+        parent: Overlay.overlay
+        width: Math.min(viewer.width - 24, 420)
+        height: confirmColumn.implicitHeight + 28
+        x: viewer.mapToItem(Overlay.overlay, (viewer.width - width) / 2, 0).x
+        y: viewer.mapToItem(Overlay.overlay, 0, Math.max(24, viewer.height / 2 - height / 2)).y
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        padding: 14
+        background: Rectangle {
+            color: viewer.appTheme.panelBg
+            border.color: viewer.appTheme.border
+            radius: 6
+        }
+        contentItem: ColumnLayout {
+            id: confirmColumn
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                text: "完整内容较大，加载到界面可能变慢，建议导出查看。是否继续加载全部？"
+                color: viewer.appTheme.textNormal
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                PayloadActionButton {
+                    text: "取消"
+                    Layout.preferredWidth: 72
+                    onClicked: largeLoadConfirm.close()
+                }
+                PayloadActionButton {
+                    text: "继续"
+                    variant: "primary"
+                    Layout.preferredWidth: 72
+                    onClicked: {
+                        largeLoadConfirm.close()
+                        viewer.loadAll()
+                    }
                 }
             }
         }

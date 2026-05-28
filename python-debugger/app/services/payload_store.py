@@ -162,6 +162,13 @@ def payload_by_call(db, call_id, payload_type):
     ).fetchone()
 
 
+def payload_by_id(db, payload_id):
+    return db.execute(
+        "SELECT * FROM call_payloads WHERE id=?",
+        (payload_id,),
+    ).fetchone()
+
+
 def read_payload_text(row):
     if not row:
         return None
@@ -184,6 +191,15 @@ def read_payload_value(row):
 
 def payload_chunk(db, call_id, payload_type, offset=0, limit=PREVIEW_LIMIT_BYTES):
     row = payload_by_call(db, call_id, payload_type)
+    return payload_chunk_from_row(row, offset, limit, call_id=call_id, payload_type=payload_type)
+
+
+def payload_chunk_by_id(db, payload_id, offset=0, limit=PREVIEW_LIMIT_BYTES):
+    row = payload_by_id(db, payload_id)
+    return payload_chunk_from_row(row, offset, limit, payload_id=payload_id)
+
+
+def payload_chunk_from_row(row, offset=0, limit=PREVIEW_LIMIT_BYTES, call_id=None, payload_type=None, payload_id=None):
     if not row:
         return None
     offset = max(0, int(offset or 0))
@@ -202,8 +218,10 @@ def payload_chunk(db, call_id, payload_type, offset=0, limit=PREVIEW_LIMIT_BYTES
             chunk = handle.read(limit)
     next_offset = min(size, offset + len(chunk))
     return {
-        "callId": call_id,
-        "type": payload_type,
+        "success": True,
+        "payloadId": payload_id or row["id"],
+        "callId": call_id or row["call_id"],
+        "type": payload_type or row["payload_type"],
         "offset": offset,
         "limit": limit,
         "size": size,
@@ -216,8 +234,18 @@ def payload_chunk(db, call_id, payload_type, offset=0, limit=PREVIEW_LIMIT_BYTES
 
 def export_payload_target(db, call_id, payload_type):
     row = payload_by_call(db, call_id, payload_type)
+    return export_payload_target_from_row(row)
+
+
+def export_payload_by_id(db, payload_id):
+    row = payload_by_id(db, payload_id)
+    return export_payload_target_from_row(row)
+
+
+def export_payload_target_from_row(row):
     if not row:
         return None, None
+    payload_type = row["payload_type"] or "payload"
     filename = f"{payload_type}.json" if (row["content_format"] or "json") == "json" else f"{payload_type}.txt"
     if row["storage_type"] == "file":
         path = _resolve_payload_path(row["content_path"])
@@ -227,18 +255,41 @@ def export_payload_target(db, call_id, payload_type):
 
 def search_payload(db, call_id, payload_type, query, limit=20):
     row = payload_by_call(db, call_id, payload_type)
+    return search_payload_from_row(row, query, limit, call_id=call_id, payload_type=payload_type)
+
+
+def search_payload_by_id(db, payload_id, query, limit=20):
+    row = payload_by_id(db, payload_id)
+    return search_payload_from_row(row, query, limit, payload_id=payload_id)
+
+
+def search_payload_from_row(row, query, limit=20, call_id=None, payload_type=None, payload_id=None):
     if not row:
         return None
     query = str(query or "")
     if not query:
-        return {"callId": call_id, "type": payload_type, "q": query, "matches": []}
+        return {
+            "success": True,
+            "payloadId": payload_id or row["id"],
+            "callId": call_id or row["call_id"],
+            "type": payload_type or row["payload_type"],
+            "q": query,
+            "matches": [],
+        }
     limit = max(1, int(limit or 20))
     if row["storage_type"] == "file":
         path = _resolve_payload_path(row["content_path"])
         if not path or not path.exists():
             return None
         matches = _search_file_payload(path, row["content_encoding"] or "utf-8", query, limit)
-        return {"callId": call_id, "type": payload_type, "q": query, "matches": matches}
+        return {
+            "success": True,
+            "payloadId": payload_id or row["id"],
+            "callId": call_id or row["call_id"],
+            "type": payload_type or row["payload_type"],
+            "q": query,
+            "matches": matches,
+        }
     text = row["content_text"] or ""
     matches = []
     start = 0
@@ -250,7 +301,14 @@ def search_payload(db, call_id, payload_type, query, limit=20):
         after = min(len(text), pos + len(query) + SEARCH_PREVIEW_CHARS)
         matches.append({"offset": len(text[:pos].encode("utf-8")), "preview": text[before:after]})
         start = pos + max(1, len(query))
-    return {"callId": call_id, "type": payload_type, "q": query, "matches": matches}
+    return {
+        "success": True,
+        "payloadId": payload_id or row["id"],
+        "callId": call_id or row["call_id"],
+        "type": payload_type or row["payload_type"],
+        "q": query,
+        "matches": matches,
+    }
 
 
 def _search_file_payload(path, encoding, query, limit):

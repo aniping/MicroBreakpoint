@@ -183,7 +183,7 @@ Item {
 
     function conditionLines(item) {
         if (!item) return ["无附加参数条件，命中该命令即暂停。"]
-        var condition = safeObject(item.condition || item.condition_json || {}, {})
+        var condition = safeObject(item.condition || {}, {})
         var conditions = safeObject(item.conditions || item.conditions_json || [], [])
         var lines = []
         if (Object.keys(condition).length > 0) {

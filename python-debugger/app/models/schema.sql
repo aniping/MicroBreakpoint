@@ -136,6 +136,8 @@ CREATE TABLE IF NOT EXISTS interface_param_sample (
   params_fingerprint TEXT,
   params_hash TEXT,
   params_summary TEXT,
+  params_preview TEXT,
+  params_truncated INTEGER DEFAULT 0,
   params_size INTEGER DEFAULT 0,
   params_payload_id TEXT,
   params_json TEXT,

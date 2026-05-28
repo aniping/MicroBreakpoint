@@ -141,6 +141,131 @@ def test_call_list_is_lightweight_and_payload_is_chunked(tmp_path):
         assert "data" not in record["raw_args_json"]
 
 
+def test_interface_sample_payload_loads_by_payload_id(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    create_and_start(client)
+    big_params = {"data": ["sample-payload-id"] + ["x" * 1024] * 80}
+    client.post("/api/calls/before", json=make_before("sample-large", object_name="VNA", cmd="sample", params=big_params))
+
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    sample = client.get(f"/api/interfaces/{interface_id}/samples").get_json()["items"][0]
+    payload_id = sample["paramsPayloadId"]
+    assert payload_id
+
+    with app.app_context():
+        db = get_db()
+        db.execute("UPDATE interface_param_sample SET call_id=NULL WHERE id=?", (sample["id"],))
+        db.commit()
+
+    sample_without_call = client.get(f"/api/interfaces/{interface_id}/samples").get_json()["items"][0]
+    assert sample_without_call["call_id"] is None
+    assert sample_without_call["paramsPayloadId"] == payload_id
+
+    chunk = client.get(f"/api/payloads/{payload_id}", query_string={"offset": 0, "limit": 4096}).get_json()
+    assert chunk["success"] is True
+    assert chunk["payloadId"] == payload_id
+    assert "sample-payload-id" in chunk["content"]
+
+
+def test_interface_sample_contains_preview_fields(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("sample-preview", object_name="VNA", cmd="preview", params={"mode": "A"}))
+
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    sample = client.get(f"/api/interfaces/{interface_id}/samples").get_json()["items"][0]
+    for key in ("paramsPreview", "paramsSize", "paramsHash", "paramsPayloadId", "paramsTruncated"):
+        assert key in sample
+    assert sample["paramsPreview"].startswith("{")
+    assert sample["paramsSize"] > 0
+    assert sample["paramsPayloadId"]
+    assert sample["paramsTruncated"] is False
+
+
+def test_payload_chunk_by_id_and_export(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    big_params = {"data": ["payload-export-by-id"] + ["z" * 1024] * 80}
+    client.post("/api/calls/before", json=make_before("payload-id-export", object_name="VNA", cmd="export", params=big_params))
+
+    detail = client.get("/api/calls/payload-id-export").get_json()
+    payload_id = detail["paramsPayloadId"]
+    chunk = client.get(f"/api/payloads/{payload_id}", query_string={"offset": 0, "limit": 4096}).get_json()
+    assert chunk["success"] is True
+    assert chunk["size"] == detail["params_size"]
+    assert "payload-export-by-id" in chunk["content"]
+
+    exported = client.get(f"/api/payloads/{payload_id}/export")
+    assert exported.status_code == 200
+    assert b"payload-export-by-id" in exported.data[:512]
+
+
+def test_payload_search_by_id(tmp_path, monkeypatch):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    big_params = {"trace": ["a" * 1024] * 70 + ["payload-id-needle"] + ["b" * 1024] * 70}
+    client.post("/api/calls/before", json=make_before("payload-id-search", object_name="VNA", cmd="search", params=big_params))
+
+    detail = client.get("/api/calls/payload-id-search").get_json()
+    import app.services.payload_store as payload_store
+
+    def fail_full_read(_row):
+        raise AssertionError("search must not read the full payload")
+
+    monkeypatch.setattr(payload_store, "read_payload_text", fail_full_read)
+    found = client.get(
+        f"/api/payloads/{detail['paramsPayloadId']}/search",
+        query_string={"q": "payload-id-needle"},
+    ).get_json()
+    assert found["success"] is True
+    assert found["matches"]
+    assert "payload-id-needle" in found["matches"][0]["preview"]
+
+
+def test_call_detail_contains_technical_fields(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    before = make_before("technical-fields", object_name="VNA", cmd="tech", params={"mode": "A"})
+    before["serviceName"] = "svc-tech"
+    before["className"] = "com.example.TechService"
+    before["methodName"] = "measureTech"
+    before["displayName"] = "Tech Display"
+    before["threadName"] = "tech-thread"
+    before["parameterMeta"] = [{"name": "mode", "javaType": "java.lang.String"}]
+    client.post("/api/calls/before", json=before)
+
+    detail = client.get("/api/calls/technical-fields").get_json()
+    assert detail["service_name"] == "svc-tech"
+    assert detail["class_name"] == "com.example.TechService"
+    assert detail["method_name"] == "measureTech"
+    assert detail["display_name"] == "Tech Display"
+    assert detail["thread_name"] == "tech-thread"
+    assert detail["parameter_meta"] == [{"name": "mode", "javaType": "java.lang.String"}]
+
+
+def test_list_api_does_not_return_legacy_large_fields(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("legacy-lightweight", object_name="VNA", cmd="light", params={"mode": "A"}))
+    finish(client, "legacy-lightweight")
+
+    forbidden = {
+        "params", "result", "params_json", "result_json", "latest_params_json",
+        "sample_args_json", "params_snapshot_json", "rawArgs", "raw_args",
+    }
+    call_item = client.get("/api/calls").get_json()["items"][0]
+    interface_item = client.get("/api/interfaces").get_json()["items"][0]
+    assert forbidden.isdisjoint(call_item)
+    assert forbidden.isdisjoint(interface_item)
+
+
 def test_large_text_payload_preview_is_valid_json(tmp_path):
     client = make_client(tmp_path)
 
@@ -632,7 +757,8 @@ def test_command_breakpoint_ignores_slot_id(tmp_path):
     breakpoint = client.get("/api/breakpoints").get_json()["items"][0]
     assert breakpoint["name"] == "VNA create"
     assert breakpoint["slot_id"] is None
-    assert breakpoint["condition"] == {"objectName": "VNA", "cmdName": "create"}
+    assert breakpoint["condition"] is None
+    assert breakpoint["condition_fields"] == {}
 
     with app.app_context():
         db = get_db()
@@ -680,7 +806,8 @@ def test_interface_breakpoint_matches_all_slots_for_object_and_command(tmp_path)
     breakpoint = client.get("/api/breakpoints").get_json()["items"][0]
     assert breakpoint["name"] == "VNA create"
     assert breakpoint["slot_id"] is None
-    assert breakpoint["condition"] == {"objectName": "VNA", "cmdName": "create"}
+    assert breakpoint["condition"] is None
+    assert breakpoint["condition_fields"] == {}
 
     hit_slot_1 = client.post("/api/calls/before", json=make_before("hit-slot-1", object_name="VNA", cmd="create", slot_id=1)).get_json()
     assert hit_slot_1["action"] == "pause"

@@ -241,7 +241,9 @@ Item {
                 mapped.push({
                     index: ds + 1,
                     fingerprint: sample.params_hash || sample.paramsHash || sample.params_fingerprint || sample.paramsFingerprint || "",
+                    sampleId: sample.id || sample.sampleId || "",
                     callId: callId(sample),
+                    paramsPayloadId: sample.params_payload_id || sample.paramsPayloadId || "",
                     objectName: objectName(sample),
                     cmdName: cmdName(sample),
                     slotId: slotText(sample),
@@ -272,7 +274,9 @@ Item {
             if (!byFingerprint[sampleKey]) {
                 byFingerprint[sampleKey] = {
                     fingerprint: fp,
+                    sampleId: "",
                     callId: callId(call),
+                    paramsPayloadId: call.params_payload_id || call.paramsPayloadId || "",
                     objectName: objectName(call),
                     cmdName: cmdName(call),
                     slotId: slotText(call),
@@ -302,7 +306,9 @@ Item {
         if (result.length === 0 && item) {
             result.push({
                 fingerprint: fingerprint(item),
+                sampleId: "",
                 callId: "",
+                paramsPayloadId: item.params_payload_id || item.paramsPayloadId || "",
                 objectName: objectName(item),
                 cmdName: cmdName(item),
                 slotId: slotText(item),
@@ -845,6 +851,7 @@ Item {
                                 appTheme: page.appTheme
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
+                                payloadId: page.selectedSample() ? page.selectedSample().paramsPayloadId : ""
                                 callId: page.selectedSample() ? page.selectedSample().callId : ""
                                 payloadType: "params"
                                 title: "参数样本"

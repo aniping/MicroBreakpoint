@@ -56,19 +56,14 @@ Item {
     }
 
     function callId(item) { return item ? String(item.call_id || item.callId || "") : "" }
-    function rawArgs(item) { return safeObject(item ? (item.raw_args || item.rawArgs || {}) : {}, {}) }
     function objectName(item) {
-        var args = rawArgs(item)
-        return String((item && (item.object_name || item.objectName)) || args.objectName || "未分类")
+        return String((item && (item.object_name || item.objectName)) || "未分类")
     }
     function cmdName(item) {
-        var args = rawArgs(item)
-        return String((item && (item.cmd_name || item.cmdName || item.methodName || item.method_name)) || args.cmdName || "-")
+        return String((item && (item.cmd_name || item.cmdName || item.methodName || item.method_name)) || "-")
     }
     function slotValue(item) {
-        var args = rawArgs(item)
         var value = item ? (item.slot_id !== undefined ? item.slot_id : item.slotId) : undefined
-        if (value === undefined || value === null) value = args.slotId
         return value === undefined || value === null || value === "" ? "-" : String(value)
     }
     function paramsSummary(item) {
@@ -1050,14 +1045,43 @@ Item {
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 42
+                    Layout.leftMargin: 10
+                    Layout.rightMargin: 10
+                    spacing: 6
+                    MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
+                    MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
+                    MbButton { appTheme: page.appTheme; text: "条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
+                    Button {
+                        id: moreActionButton
+                        text: "更多 ▾"
+                        enabled: page.selectedItem !== null
+                        Layout.preferredWidth: 72
+                        Layout.preferredHeight: 30
+                        onClicked: moreActionMenu.open()
+                        background: Rectangle { radius: 4; color: moreActionButton.hovered ? page.appTheme.panelHover : page.appTheme.panelBgAlt; border.color: page.appTheme.border }
+                        contentItem: Text { text: moreActionButton.text; color: page.appTheme.textNormal; font.pixelSize: 12; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                        Menu {
+                            id: moreActionMenu
+                            MenuItem { text: "继续全部"; enabled: page.selectedPausedCount() > 0; onTriggered: bridge.continueAll() }
+                            MenuItem { text: page.interfaceRegistered(page.selectedItem) ? "已登记接口" : "加入接口列表"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); onTriggered: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
+                            MenuItem { text: "导出参数"; enabled: page.selectedItem !== null; onTriggered: bridge.exportPayload(page.callId(page.selectedItem), "params") }
+                            MenuItem { text: "导出返回"; enabled: page.selectedItem !== null; onTriggered: bridge.exportPayload(page.callId(page.selectedItem), "result") }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     spacing: 0
                     TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 64; onClicked: page.detailTabIndex = 0 }
                     TabButton { text: "入参"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 1 }
                     TabButton { text: "返回"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 2 }
                     TabButton { text: "Payload"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 3 }
-                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 4 }
-                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.fillWidth: true; onClicked: page.detailTabIndex = 5 }
+                    TabButton { text: "断点"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 58; onClicked: page.detailTabIndex = 4 }
+                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 5; Layout.preferredWidth: 70; onClicked: page.detailTabIndex = 5 }
+                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 6; Layout.fillWidth: true; onClicked: page.detailTabIndex = 6 }
                 }
 
                 StackLayout {
@@ -1078,9 +1102,9 @@ Item {
                             y: 12
                             width: Math.max(0, (parent ? parent.width : 380) - 24)
                             spacing: 10
-                            MbDetailCard { appTheme: page.appTheme; title: "基础信息"; rows: page.overviewBasicRows(page.selectedItem) }
-                            MbDetailCard { appTheme: page.appTheme; title: "执行状态"; rows: page.overviewStateRows(page.selectedItem) }
-                            MbDetailCard { appTheme: page.appTheme; title: "线程与时间"; rows: page.overviewTimeRows(page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "基础信息"; rows: page.overviewBasicRows(page.selectedDetail || page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "执行状态"; rows: page.overviewStateRows(page.selectedDetail || page.selectedItem) }
+                            MbDetailCard { appTheme: page.appTheme; title: "线程与时间"; rows: page.overviewTimeRows(page.selectedDetail || page.selectedItem) }
                         }
                     }
                     LargePayloadViewer {
@@ -1117,123 +1141,65 @@ Item {
                             MbDetailCard { appTheme: page.appTheme; title: "Payload 摘要"; rows: page.payloadRows(page.selectedDetail) }
                         }
                     }
+                    ListView {
+                        id: breakpointTabList
+                        clip: true
+                        model: breakpoints
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: breakpointTabList.width
+                            height: 58
+                            color: index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg
+                            border.color: page.appTheme.borderSoft
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 10
+                                spacing: 10
+                                Rectangle { Layout.preferredWidth: 9; Layout.preferredHeight: 9; radius: 5; color: modelData.enabled ? page.appTheme.success : page.appTheme.textDisabled }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    spacing: 2
+                                    Text { text: page.breakpointTitle(modelData); color: page.appTheme.textStrong; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                    Text { text: page.breakpointSubtitle(modelData) + " / 命中 " + page.textOf(modelData.hit_count || modelData.hitCount || 0); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                                }
+                                Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.appTheme.success : page.appTheme.textMuted; font.pixelSize: 12; Layout.preferredWidth: 18 }
+                                MbSwitch {
+                                    appTheme: page.appTheme
+                                    checked: !!modelData.enabled
+                                    onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
+                                }
+                                MbButton {
+                                    appTheme: page.appTheme
+                                    text: "×"
+                                    variant: "danger"
+                                    Layout.preferredWidth: 32
+                                    Layout.preferredHeight: 28
+                                    onClicked: page.confirmDeleteBreakpoint(modelData.id, page.breakpointTitle(modelData))
+                                }
+                            }
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            visible: breakpoints.length === 0
+                            text: "暂无断点"
+                            color: page.appTheme.textMuted
+                            font.pixelSize: 13
+                        }
+                    }
                     MbJsonViewer { appTheme: page.appTheme; text: page.jsonText({
-                        serviceName: page.selectedItem ? (page.selectedItem.service_name || page.selectedItem.serviceName) : "",
-                        className: page.selectedItem ? (page.selectedItem.class_name || page.selectedItem.className) : "",
-                        methodName: page.selectedItem ? (page.selectedItem.method_name || page.selectedItem.methodName) : "",
-                        displayName: page.selectedItem ? (page.selectedItem.display_name || page.selectedItem.displayName) : "",
-                        parameterMeta: page.selectedItem ? (page.selectedItem.parameter_meta || page.selectedItem.parameterMeta || []) : [],
-                        exceptionType: page.selectedItem ? (page.selectedItem.exception_type || page.selectedItem.exceptionType) : "",
-                        exceptionMessage: page.selectedItem ? (page.selectedItem.exception_message || page.selectedItem.exceptionMessage) : ""
+                        serviceName: page.selectedDetail ? (page.selectedDetail.service_name || page.selectedDetail.serviceName || "") : "",
+                        className: page.selectedDetail ? (page.selectedDetail.class_name || page.selectedDetail.className || "") : "",
+                        methodName: page.selectedDetail ? (page.selectedDetail.method_name || page.selectedDetail.methodName || "") : "",
+                        displayName: page.selectedDetail ? (page.selectedDetail.display_name || page.selectedDetail.displayName || "") : "",
+                        threadName: page.selectedDetail ? (page.selectedDetail.thread_name || page.selectedDetail.threadName || "") : "",
+                        parameterMeta: page.selectedDetail ? (page.selectedDetail.parameter_meta || page.selectedDetail.parameterMeta || []) : [],
+                        exceptionType: page.selectedDetail ? (page.selectedDetail.exception_type || page.selectedDetail.exceptionType || "") : "",
+                        exceptionMessage: page.selectedDetail ? (page.selectedDetail.exception_message || page.selectedDetail.exceptionMessage || "") : ""
                     }) }
-                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedItem ? {
-                        callId: page.callId(page.selectedItem),
-                        objectName: page.objectName(page.selectedItem),
-                        cmdName: page.cmdName(page.selectedItem),
-                        slotId: page.slotValue(page.selectedItem),
-                        status: page.statusValue(page.selectedItem),
-                        paramsSummary: page.paramsSummary(page.selectedItem),
-                        resultSummary: page.resultSummary(page.selectedItem)
-                    } : {}) }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 190
-                    color: appTheme.panelBg
-                    border.color: appTheme.border
-                    GridLayout {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        columns: 2
-                        rowSpacing: 8
-                        columnSpacing: 10
-                        MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: page.selectedPausedCount() > 0 ? "success" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.continueAll() }
-                        MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "创建条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: page.interfaceRegistered(page.selectedItem) ? "已登记接口" : "加入接口列表"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: page.interfaceRegistered(page.selectedItem) ? "neutral" : "primary"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
-                        MbButton { appTheme: page.appTheme; text: "导出参数"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "params") }
-                        MbButton { appTheme: page.appTheme; text: "导出返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.fillWidth: true; Layout.preferredHeight: 36; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "result") }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 42
-                    color: appTheme.panelBgAlt
-                    border.color: appTheme.border
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 12
-                        spacing: 8
-                        Text {
-                            text: "断点列表 (" + breakpoints.length + ")"
-                            color: appTheme.textStrong
-                            font.pixelSize: 15
-                            font.weight: Font.DemiBold
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            text: "当前 Session"
-                            color: appTheme.textMuted
-                            font.pixelSize: 12
-                        }
-                    }
-                }
-
-                ListView {
-                    id: breakpointList
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 174
-                    visible: true
-                    model: breakpoints
-                    clip: true
-                    delegate: Rectangle {
-                        required property var modelData
-                        required property int index
-                        width: breakpointList.width
-                        height: 58
-                        color: index % 2 ? page.appTheme.panelBgAlt : page.appTheme.panelBg
-                        border.color: page.appTheme.borderSoft
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 10
-                            spacing: 10
-                            Rectangle { Layout.preferredWidth: 9; Layout.preferredHeight: 9; radius: 5; color: modelData.enabled ? page.appTheme.success : page.appTheme.textDisabled }
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                spacing: 2
-                                Text { text: page.breakpointTitle(modelData); color: page.appTheme.textStrong; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                                Text { text: page.breakpointSubtitle(modelData) + " / 命中 " + page.textOf(modelData.hit_count || modelData.hitCount || 0); color: page.appTheme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-                            }
-                            Text { text: modelData.enabled ? "开" : "关"; color: modelData.enabled ? page.appTheme.success : page.appTheme.textMuted; font.pixelSize: 12; Layout.preferredWidth: 18 }
-                            MbSwitch {
-                                appTheme: page.appTheme
-                                checked: !!modelData.enabled
-                                onToggled: function(value) { bridge.setBreakpointEnabled(modelData.id, value) }
-                            }
-                            MbButton {
-                                appTheme: page.appTheme
-                                text: "×"
-                                variant: "danger"
-                                Layout.preferredWidth: 32
-                                Layout.preferredHeight: 28
-                                onClicked: page.confirmDeleteBreakpoint(modelData.id, page.breakpointTitle(modelData))
-                            }
-                        }
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        visible: breakpoints.length === 0
-                        text: "暂无断点"
-                        color: page.appTheme.textMuted
-                        font.pixelSize: 13
-                    }
+                    MbJsonViewer { appTheme: page.appTheme; text: page.jsonText(page.selectedDetail || {}) }
                 }
             }
         }
