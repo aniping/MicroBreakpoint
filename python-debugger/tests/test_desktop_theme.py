@@ -92,6 +92,11 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "acceptedButtons: Qt.AllButtons" in viewer
     assert "onPressed: function(mouse) { mouse.accepted = true }" in viewer
     assert "wrapMode: TextEdit.NoWrap" in viewer
+    assert "component SearchField" in viewer
+    assert "搜索完整 payload" in viewer
+    assert "function searchSummary" in viewer
+    assert "结果来自后端" in viewer
+    assert "viewer.selectedSearchIndex === index" in viewer
 
 
 def test_call_record_page_keeps_filters_inside_groups():

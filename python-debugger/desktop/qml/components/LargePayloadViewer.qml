@@ -19,6 +19,7 @@ Item {
     property string displayText: formatJsonPreview(currentText)
     property string searchText: ""
     property var searchMatches: []
+    property int selectedSearchIndex: -1
 
     function sizeText(bytes) {
         var value = Number(bytes || 0)
@@ -32,6 +33,7 @@ Item {
         nextOffset = truncated ? Math.min(payloadSize, 8192) : payloadSize
         hasMore = !!truncated
         searchMatches = []
+        selectedSearchIndex = -1
     }
 
     function formatJsonPreview(text) {
@@ -66,10 +68,76 @@ Item {
     function runSearch() {
         if (!callId || !searchText) {
             searchMatches = []
+            selectedSearchIndex = -1
             return
         }
         var data = JSON.parse(bridge.searchPayload(callId, payloadType, searchText))
         searchMatches = data.matches || []
+        selectedSearchIndex = searchMatches.length > 0 ? 0 : -1
+    }
+
+    function clearSearch() {
+        searchText = ""
+        searchMatches = []
+        selectedSearchIndex = -1
+    }
+
+    function searchSummary() {
+        if (!searchText) return "输入关键词后搜索完整 payload"
+        if (searchMatches.length === 0) return "没有匹配结果"
+        return "找到 " + searchMatches.length + " 处匹配"
+    }
+
+    function compactPreview(value) {
+        return String(value || "").replace(/\s+/g, " ")
+    }
+
+    component PayloadActionButton: Button {
+        id: actionButton
+        property string variant: "neutral"
+        implicitHeight: 30
+        padding: 0
+        background: Rectangle {
+            radius: 4
+            color: !actionButton.enabled ? "transparent"
+                  : actionButton.variant === "primary" ? (actionButton.hovered ? viewer.appTheme.primaryHover : viewer.appTheme.primary)
+                  : actionButton.hovered ? viewer.appTheme.panelHover : viewer.appTheme.panelBgAlt
+            border.color: actionButton.variant === "primary" ? viewer.appTheme.primary : viewer.appTheme.border
+        }
+        contentItem: Text {
+            text: actionButton.text
+            color: !actionButton.enabled ? viewer.appTheme.textDisabled
+                  : actionButton.variant === "primary" ? viewer.appTheme.onAccent : viewer.appTheme.textNormal
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+    }
+
+    component SearchField: TextField {
+        id: field
+        implicitHeight: 34
+        leftPadding: 30
+        rightPadding: 8
+        selectByMouse: true
+        color: viewer.appTheme.textNormal
+        placeholderTextColor: viewer.appTheme.textDisabled
+        font.pixelSize: 12
+        background: Rectangle {
+            radius: 5
+            color: viewer.appTheme.inputBg
+            border.color: field.activeFocus ? viewer.appTheme.primary : viewer.appTheme.border
+        }
+        Text {
+            text: "⌕"
+            color: viewer.appTheme.textMuted
+            font.pixelSize: 16
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+        }
     }
 
     onCallIdChanged: resetContent()
@@ -175,36 +243,126 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            Button { text: "加载更多"; enabled: viewer.hasMore; onClicked: viewer.loadMore() }
-            Button { text: "导出完整"; enabled: !!viewer.callId; onClicked: bridge.exportPayload(viewer.callId, viewer.payloadType) }
-            Button { text: "复制当前预览"; enabled: viewer.displayText.length > 0; onClicked: bridge.copyText(viewer.displayText) }
+            PayloadActionButton { text: "加载更多"; variant: viewer.hasMore ? "primary" : "neutral"; enabled: viewer.hasMore; Layout.preferredWidth: 82; onClicked: viewer.loadMore() }
+            PayloadActionButton { text: "导出完整"; enabled: !!viewer.callId; Layout.preferredWidth: 82; onClicked: bridge.exportPayload(viewer.callId, viewer.payloadType) }
+            PayloadActionButton { text: "复制预览"; enabled: viewer.displayText.length > 0; Layout.preferredWidth: 82; onClicked: bridge.copyText(viewer.displayText) }
+            Item { Layout.fillWidth: true }
         }
 
-        RowLayout {
+        Rectangle {
             Layout.fillWidth: true
-            spacing: 8
-            TextField {
-                Layout.fillWidth: true
-                text: viewer.searchText
-                placeholderText: "后端搜索"
-                onTextChanged: viewer.searchText = text
+            implicitHeight: searchPanel.implicitHeight + 18
+            radius: 6
+            color: viewer.appTheme.panelBgAlt
+            border.color: viewer.appTheme.borderSoft
+
+            ColumnLayout {
+                id: searchPanel
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 9
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    SearchField {
+                        Layout.fillWidth: true
+                        text: viewer.searchText
+                        placeholderText: "搜索完整 payload"
+                        onTextChanged: viewer.searchText = text
+                        onAccepted: viewer.runSearch()
+                    }
+
+                    PayloadActionButton {
+                        text: "搜索"
+                        variant: "primary"
+                        enabled: viewer.searchText.length > 0
+                        Layout.preferredWidth: 64
+                        onClicked: viewer.runSearch()
+                    }
+
+                    PayloadActionButton {
+                        text: "清空"
+                        enabled: viewer.searchText.length > 0 || viewer.searchMatches.length > 0
+                        Layout.preferredWidth: 56
+                        onClicked: viewer.clearSearch()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        text: viewer.searchSummary()
+                        color: viewer.searchMatches.length > 0 ? viewer.appTheme.primary : viewer.appTheme.textMuted
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        visible: viewer.searchMatches.length > 0
+                        text: "结果来自后端"
+                        color: viewer.appTheme.textDisabled
+                        font.pixelSize: 11
+                    }
+                }
             }
-            Button { text: "搜索"; enabled: viewer.searchText.length > 0; onClicked: viewer.runSearch() }
         }
 
         ListView {
             Layout.fillWidth: true
-            Layout.preferredHeight: viewer.searchMatches.length > 0 ? 88 : 0
+            Layout.preferredHeight: viewer.searchMatches.length > 0 ? Math.min(148, viewer.searchMatches.length * 48 + 6) : 0
             visible: viewer.searchMatches.length > 0
             clip: true
             model: viewer.searchMatches
-            delegate: Text {
+            spacing: 6
+            delegate: Rectangle {
                 required property var modelData
+                required property int index
                 width: ListView.view.width
-                text: "@" + modelData.offset + "  " + modelData.preview
-                color: viewer.appTheme.textMuted
-                font.pixelSize: 11
-                elide: Text.ElideRight
+                height: 42
+                radius: 5
+                color: viewer.selectedSearchIndex === index ? viewer.appTheme.panelActive : viewer.appTheme.panelBgAlt
+                border.color: viewer.selectedSearchIndex === index ? viewer.appTheme.primary : viewer.appTheme.borderSoft
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 10
+
+                    Rectangle {
+                        Layout.preferredWidth: 54
+                        Layout.preferredHeight: 24
+                        radius: 4
+                        color: viewer.appTheme.primarySoft
+                        border.color: viewer.appTheme.primary
+                        Text {
+                            anchors.centerIn: parent
+                            text: "@" + modelData.offset
+                            color: viewer.appTheme.primary
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    Text {
+                        text: viewer.compactPreview(modelData.preview)
+                        color: viewer.appTheme.textNormal
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: viewer.selectedSearchIndex = index
+                }
             }
         }
     }
