@@ -37,13 +37,24 @@ Item {
         return value + " B"
     }
 
+    function utf8Size(text) {
+        return unescape(encodeURIComponent(String(text || ""))).length
+    }
+
+    function previewIsComplete() {
+        if (truncated) return false
+        var size = Number(payloadSize || 0)
+        if (size <= 0) return String(preview || "").length > 0
+        return utf8Size(preview) >= size
+    }
+
     function resetContent() {
         currentText = preview || ""
         nextOffset = 0
         loadedFromChunks = false
         loadingAll = false
-        loadedAll = !truncated
-        hasMore = !!truncated
+        loadedAll = previewIsComplete()
+        hasMore = hasPayloadSource() && !loadedAll
         loadError = ""
         searchMatches = []
         selectedSearchIndex = -1

@@ -102,6 +102,8 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "property bool loadingAll" in viewer
     assert "property bool loadedAll" in viewer
     assert "onTruncatedChanged: resetContent()" in viewer
+    assert "function previewIsComplete()" in viewer
+    assert "loadedAll = previewIsComplete()" in viewer
     assert "function loadAll()" in viewer
     assert "var offset = 0" in viewer
     assert "chunks.join(\"\")" in viewer
@@ -173,6 +175,11 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "sessionId + objectName + cmdName" in qml
     assert "LargePayloadViewer" in qml
     assert "page.selectedSample().paramsPreview" in qml
+    assert "loadMoreSamples" not in qml
+    assert 'TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true' in qml
+    assert 'TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.fillWidth: true' in qml
+    assert 'TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.fillWidth: true' in qml
+    assert 'TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 3; Layout.fillWidth: true' in qml
     assert "参数样本" in qml
     assert "相关调用" in qml
     assert '"调用 #"' in qml
@@ -197,8 +204,11 @@ def test_interface_page_shows_related_breakpoints_by_business_fields():
 def test_call_record_page_shows_breakpoint_list_in_detail_panel():
     qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
 
-    assert "TabButton { text: \"断点\"" in qml
-    assert "id: breakpointTabList" in qml
+    assert "id: breakpointList" in qml
+    assert "id: breakpointTabList" not in qml
+    assert "TabButton { text: \"断点\"" not in qml
+    assert "断点列表 (" in qml
+    assert "当前 Session" in qml
     assert "page.breakpointTitle(modelData)" in qml
     assert "endsWith(\" breakpoint\")" in qml
     assert "if (mode !== \"command_only\") text += \" / 槽位 \"" in qml

@@ -335,15 +335,6 @@ Item {
         return rows[Math.max(0, Math.min(selectedSampleIndex, rows.length - 1))]
     }
 
-    function loadMoreSamples() {
-        if (!selectedInterfaceId) return
-        sampleLimit += 10
-        var data = JSON.parse(bridge.interfaceSamples(selectedInterfaceId, 0, sampleLimit))
-        var next = cloneObject(selectedDetail || {})
-        next.samples = data.items || []
-        selectedDetail = next
-    }
-
     function statusText(status) {
         if (status === "running") return "运行中"
         if (status === "finished") return "成功"
@@ -689,9 +680,9 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     spacing: 0
-                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 78; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 82; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 96; onClicked: page.detailTabIndex = 2 }
+                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true; onClicked: page.detailTabIndex = 0 }
+                    TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.fillWidth: true; onClicked: page.detailTabIndex = 1 }
+                    TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.fillWidth: true; onClicked: page.detailTabIndex = 2 }
                     TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 3; Layout.fillWidth: true; onClicked: page.detailTabIndex = 3 }
                 }
 
@@ -804,15 +795,6 @@ Item {
                                 Layout.preferredHeight: 34
                                 enabled: page.selectedSample() !== null && page.selectedSample().callId !== ""
                                 onClicked: bridge.createBreakpointFromCall(page.selectedSample().callId)
-                            }
-                            MbButton {
-                                appTheme: page.appTheme
-                                text: "加载更多"
-                                variant: "neutral"
-                                Layout.preferredWidth: 96
-                                Layout.preferredHeight: 34
-                                enabled: page.selectedItem && page.sampleRows(page.selectedDetail || page.selectedItem).length < page.sampleCount(page.selectedItem)
-                                onClicked: page.loadMoreSamples()
                             }
                         }
 
