@@ -30,9 +30,10 @@ def payload_root():
 
 
 def serialize_payload(value):
-    if isinstance(value, str):
-        return value, "text"
-    return dumps(value), "json"
+    try:
+        return dumps(value), "json"
+    except TypeError:
+        return str(value), "text"
 
 
 def payload_meta(value):
@@ -396,12 +397,23 @@ def preview_json_value(value, string_limit, item_limit, depth=0):
     if isinstance(value, dict):
         result = {}
         keys = list(value.keys())
-        for key in keys[:item_limit]:
-            result[key] = preview_json_value(value[key], string_limit, item_limit, depth + 1)
+        for index, key in enumerate(keys[:item_limit]):
+            preview_key = preview_json_key(key, string_limit)
+            if preview_key in result:
+                preview_key = f"{preview_key} #{index + 1}"
+            result[preview_key] = preview_json_value(value[key], string_limit, item_limit, depth + 1)
         if len(keys) > item_limit:
             result["__preview__"] = {"omittedKeys": len(keys) - item_limit}
         return result
     return value
+
+
+def preview_json_key(key, string_limit):
+    text = str(key)
+    limit = max(24, min(string_limit, 120))
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"... [key truncated {len(text) - limit} chars]"
 
 
 def preview_marker(value):

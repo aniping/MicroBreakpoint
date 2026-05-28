@@ -291,6 +291,45 @@ def test_large_text_payload_preview_is_valid_json(tmp_path):
     assert len(preview["text"]) < len(large_text)
 
 
+def test_large_top_level_string_result_preview_is_valid_json(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    large_text = "micro-breakpoint-top-level-string-" * 4096
+    client.post("/api/calls/before", json=make_before("top-level-string-call", object_name="VNA", cmd="largeString"))
+    client.post(
+        "/api/calls/after",
+        json={"callId": "top-level-string-call", "success": True, "costMs": 5, "result": large_text},
+    )
+
+    detail = client.get("/api/calls/top-level-string-call").get_json()
+    preview = json.loads(detail["result_preview"])
+    assert preview.startswith("micro-breakpoint-top-level-string-")
+    assert "truncated" in preview
+    assert len(preview) < len(large_text)
+
+
+def test_large_object_key_payload_preview_is_valid_bounded_json(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    long_key = "micro-breakpoint-large-object-key-" * 256
+    params = {f"{long_key}{index}": {"value": index} for index in range(30)}
+    client.post(
+        "/api/calls/before",
+        json=make_before("large-object-key-call", object_name="VNA", cmd="largeObject", params=params),
+    )
+    finish(client, "large-object-key-call")
+
+    detail = client.get("/api/calls/large-object-key-call").get_json()
+    preview_text = detail["params_preview"]
+    preview = json.loads(preview_text)
+    assert isinstance(preview, dict)
+    assert "__preview__" in preview
+    assert all(len(key) < 180 for key in preview if key != "__preview__")
+    assert len(preview_text.encode("utf-8")) <= 8192
+
+
 def test_payload_search_streaming_file(tmp_path, monkeypatch):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
     client = app.test_client()

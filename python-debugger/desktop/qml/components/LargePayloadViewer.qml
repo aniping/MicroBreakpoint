@@ -24,6 +24,7 @@ Item {
     property string searchText: ""
     property var searchMatches: []
     property int selectedSearchIndex: -1
+    property string searchError: ""
     property string loadError: ""
 
     function hasPayloadSource() {
@@ -56,9 +57,9 @@ Item {
         loadedAll = previewIsComplete()
         hasMore = hasPayloadSource() && !loadedAll
         loadError = ""
+        searchError = ""
         searchMatches = []
         selectedSearchIndex = -1
-        if (searchResultPopup.opened) searchResultPopup.close()
     }
 
     function formatJsonPreview(text) {
@@ -137,26 +138,38 @@ Item {
         if (!searchText || !hasPayloadSource()) {
             searchMatches = []
             selectedSearchIndex = -1
-            if (searchResultPopup.opened) searchResultPopup.close()
+            searchError = ""
             return
         }
-        var data = payloadId && payloadId.length > 0
-                ? JSON.parse(bridge.searchPayloadById(payloadId, searchText))
-                : JSON.parse(bridge.searchPayload(callId, payloadType, searchText))
-        searchMatches = data.matches || []
-        selectedSearchIndex = searchMatches.length > 0 ? 0 : -1
-        if (searchMatches.length > 0) searchResultPopup.open()
-        else if (searchResultPopup.opened) searchResultPopup.close()
+        try {
+            var data = payloadId && payloadId.length > 0
+                    ? JSON.parse(bridge.searchPayloadById(payloadId, searchText))
+                    : JSON.parse(bridge.searchPayload(callId, payloadType, searchText))
+            if (!data || data.success === false) {
+                searchError = data && (data.message || data.error) ? String(data.message || data.error) : "payload search failed"
+                searchMatches = []
+                selectedSearchIndex = -1
+                return
+            }
+            searchError = ""
+            searchMatches = data.matches || []
+            selectedSearchIndex = searchMatches.length > 0 ? 0 : -1
+        } catch (e) {
+            searchError = String(e)
+            searchMatches = []
+            selectedSearchIndex = -1
+        }
     }
 
     function clearSearch() {
         searchText = ""
         searchMatches = []
         selectedSearchIndex = -1
-        if (searchResultPopup.opened) searchResultPopup.close()
+        searchError = ""
     }
 
     function searchSummary() {
+        if (searchError.length > 0) return searchError
         if (!searchText) return "输入关键词后搜索完整 payload"
         if (searchMatches.length === 0) return "没有匹配结果"
         return "找到 " + searchMatches.length + " 处匹配"
@@ -286,9 +299,16 @@ Item {
                 Layout.preferredWidth: 82
                 onClicked: bridge.copyText(viewer.displayText)
             }
+            Item { Layout.fillWidth: true }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
             SearchField {
                 id: searchField
                 Layout.fillWidth: true
+                Layout.preferredHeight: 32
                 text: viewer.searchText
                 placeholderText: "搜索完整 payload"
                 onTextChanged: viewer.searchText = text
@@ -298,24 +318,92 @@ Item {
                 text: "搜索"
                 variant: "primary"
                 enabled: viewer.searchText.length > 0 && viewer.hasPayloadSource()
-                Layout.preferredWidth: 58
-                onClicked: viewer.runSearch()
+                Layout.preferredWidth: 74
+                Layout.preferredHeight: 32
+                onClicked: {
+                    searchField.forceActiveFocus()
+                    viewer.runSearch()
+                }
             }
             PayloadActionButton {
                 text: "清空"
                 enabled: viewer.searchText.length > 0 || viewer.searchMatches.length > 0
-                Layout.preferredWidth: 52
+                Layout.preferredWidth: 60
+                Layout.preferredHeight: 32
                 onClicked: viewer.clearSearch()
             }
         }
 
         Text {
             Layout.fillWidth: true
-            visible: viewer.loadError.length > 0 || viewer.searchText.length > 0
+            visible: viewer.loadError.length > 0 || viewer.searchText.length > 0 || viewer.searchError.length > 0
             text: viewer.loadError.length > 0 ? viewer.loadError : viewer.searchSummary()
-            color: viewer.loadError.length > 0 ? viewer.appTheme.danger : (viewer.searchMatches.length > 0 ? viewer.appTheme.primary : viewer.appTheme.textMuted)
+            color: (viewer.loadError.length > 0 || viewer.searchError.length > 0) ? viewer.appTheme.danger : (viewer.searchMatches.length > 0 ? viewer.appTheme.primary : viewer.appTheme.textMuted)
             font.pixelSize: 11
             elide: Text.ElideRight
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(118, viewer.searchMatches.length * 42 + 14)
+            visible: viewer.searchMatches.length > 0
+            radius: 5
+            color: viewer.appTheme.panelBgAlt
+            border.color: viewer.appTheme.border
+            clip: true
+
+            ListView {
+                anchors.fill: parent
+                anchors.margins: 7
+                clip: true
+                model: viewer.searchMatches
+                spacing: 6
+                delegate: Rectangle {
+                    required property var modelData
+                    required property int index
+                    width: ListView.view.width
+                    height: 36
+                    radius: 4
+                    color: viewer.selectedSearchIndex === index ? viewer.appTheme.panelActive : viewer.appTheme.panelBg
+                    border.color: viewer.selectedSearchIndex === index ? viewer.appTheme.primary : viewer.appTheme.borderSoft
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+
+                        Rectangle {
+                            Layout.preferredWidth: 54
+                            Layout.preferredHeight: 22
+                            radius: 4
+                            color: viewer.appTheme.primarySoft
+                            border.color: viewer.appTheme.primary
+                            Text {
+                                anchors.centerIn: parent
+                                text: "@" + modelData.offset
+                                color: viewer.appTheme.primary
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                            }
+                        }
+
+                        Text {
+                            text: viewer.compactPreview(modelData.preview)
+                            color: viewer.appTheme.textNormal
+                            font.pixelSize: 12
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: viewer.selectedSearchIndex = index
+                    }
+                }
+            }
         }
 
         Rectangle {
@@ -393,73 +481,6 @@ Item {
                             wrapMode: TextEdit.NoWrap
                         }
                     }
-                }
-            }
-        }
-    }
-
-    Popup {
-        id: searchResultPopup
-        parent: Overlay.overlay
-        x: viewer.mapToItem(Overlay.overlay, 12, 0).x
-        y: viewer.mapToItem(Overlay.overlay, 12, viewer.height - Math.min(240, viewer.searchMatches.length * 48 + 24) - 16).y
-        width: Math.min(viewer.width - 24, 520)
-        height: Math.min(240, viewer.searchMatches.length * 48 + 24)
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        padding: 8
-        background: Rectangle {
-            color: viewer.appTheme.panelBg
-            border.color: viewer.appTheme.border
-            radius: 6
-        }
-        contentItem: ListView {
-            clip: true
-            model: viewer.searchMatches
-            spacing: 6
-            delegate: Rectangle {
-                required property var modelData
-                required property int index
-                width: ListView.view.width
-                height: 42
-                radius: 5
-                color: viewer.selectedSearchIndex === index ? viewer.appTheme.panelActive : viewer.appTheme.panelBgAlt
-                border.color: viewer.selectedSearchIndex === index ? viewer.appTheme.primary : viewer.appTheme.borderSoft
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 10
-
-                    Rectangle {
-                        Layout.preferredWidth: 54
-                        Layout.preferredHeight: 24
-                        radius: 4
-                        color: viewer.appTheme.primarySoft
-                        border.color: viewer.appTheme.primary
-                        Text {
-                            anchors.centerIn: parent
-                            text: "@" + modelData.offset
-                            color: viewer.appTheme.primary
-                            font.pixelSize: 11
-                            font.weight: Font.DemiBold
-                        }
-                    }
-
-                    Text {
-                        text: viewer.compactPreview(modelData.preview)
-                        color: viewer.appTheme.textNormal
-                        font.pixelSize: 12
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: viewer.selectedSearchIndex = index
                 }
             }
         }

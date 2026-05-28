@@ -680,10 +680,10 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     spacing: 0
-                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.fillWidth: true; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.fillWidth: true; onClicked: page.detailTabIndex = 2 }
-                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 3; Layout.fillWidth: true; onClicked: page.detailTabIndex = 3 }
+                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true; Layout.preferredWidth: 1; onClicked: page.detailTabIndex = 0 }
+                    TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.fillWidth: true; Layout.preferredWidth: 1; onClicked: page.detailTabIndex = 1 }
+                    TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.fillWidth: true; Layout.preferredWidth: 1; onClicked: page.detailTabIndex = 2 }
+                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 3; Layout.fillWidth: true; Layout.preferredWidth: 1; onClicked: page.detailTabIndex = 3 }
                 }
 
                 StackLayout {

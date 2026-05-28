@@ -49,7 +49,7 @@ python run_desktop.py
 
 完整 payload 进入 `call_payloads`：不超过 64KB 的内容保存在 `content_text`，超过 64KB 的内容写入 `data/payloads/{session_id}/{bucket}/{call_id}/params.json` 或 `result.json`。详情页默认显示 preview；调用详情使用 `/api/calls/{callId}/payload`、`/api/calls/{callId}/payload/export`、`/api/calls/{callId}/payload/search`，接口样本和断点快照等独立样本使用 `/api/payloads/{payloadId}`、`/api/payloads/{payloadId}/export`、`/api/payloads/{payloadId}/search?q=...`。文件型 payload 搜索按 1MB 分块流式扫描，不一次性读取完整大文件。
 
-桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，避免直接截断字符串导致无法格式化。`LargePayloadViewer` 支持 `callId+type` 和 `payloadId` 两种来源，“加载全部”会从 offset 0 拼接完整内容到界面，只有 preview 覆盖完整 payload 时才显示已加载全部，大文件建议导出查看；搜索结果使用浮层显示，不占用 JSON 展示区高度。
+桌面端 Payload 预览区支持横向和纵向滚动，长 JSON 不会撑进调用列表或日志；后端会生成结构化裁剪后的合法 JSON preview，列表、对象键名和大字符串都会保留可解析的截断标记，避免直接截断字符串导致无法格式化。`LargePayloadViewer` 支持 `callId+type` 和 `payloadId` 两种来源，“加载全部”会从 offset 0 拼接完整内容到界面，只有 preview 覆盖完整 payload 时才显示已加载全部，大文件建议导出查看；搜索框独立成行，结果在预览区内联显示。
 
 `.mbrec` 桌面导入导出使用 zip 格式：`db.json` 保存数据库记录和 payload 元信息，大 payload 作为 `payloads/...` zip entry 单独存放；导入时校验大小和 hash，并恢复到新 Session 的 payload 目录。旧 JSON 归档接口保留兼容，但不会把文件型大 payload 内联进 JSON。
 

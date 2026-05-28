@@ -38,7 +38,7 @@ def test_call_record_uses_business_debug_fields():
     assert "cmdName(item)" in qml
     assert "interfaceRegistered(item)" in qml
     assert "args.instType" not in qml
-    assert "加入接口列表" in qml
+    assert "登记接口" in qml
     assert "bridge.addInterfaceFromCall" in qml
     assert "imported_paused" in qml
     assert "历史暂停" in qml
@@ -113,7 +113,9 @@ def test_large_payload_viewer_formats_json_and_shows_line_numbers():
     assert "component SearchField" in viewer
     assert "搜索完整 payload" in viewer
     assert "function searchSummary" in viewer
-    assert "searchResultPopup.open()" in viewer
+    assert "property string searchError" in viewer
+    assert "Layout.preferredHeight: 32" in viewer
+    assert "viewer.searchMatches.length * 42 + 14" in viewer
     assert "viewer.selectedSearchIndex === index" in viewer
 
 
@@ -176,10 +178,10 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "LargePayloadViewer" in qml
     assert "page.selectedSample().paramsPreview" in qml
     assert "loadMoreSamples" not in qml
-    assert 'TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true' in qml
-    assert 'TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.fillWidth: true' in qml
-    assert 'TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.fillWidth: true' in qml
-    assert 'TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 3; Layout.fillWidth: true' in qml
+    assert 'TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true; Layout.preferredWidth: 1' in qml
+    assert 'TabButton { text: "样本"; selected: page.detailTabIndex === 1; Layout.fillWidth: true; Layout.preferredWidth: 1' in qml
+    assert 'TabButton { text: "相关调用"; selected: page.detailTabIndex === 2; Layout.fillWidth: true; Layout.preferredWidth: 1' in qml
+    assert 'TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 3; Layout.fillWidth: true; Layout.preferredWidth: 1' in qml
     assert "参数样本" in qml
     assert "相关调用" in qml
     assert '"调用 #"' in qml
@@ -204,6 +206,11 @@ def test_interface_page_shows_related_breakpoints_by_business_fields():
 def test_call_record_page_shows_breakpoint_list_in_detail_panel():
     qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
 
+    assert 'text: "更多 ▾"' not in qml
+    assert 'text: "继续全部"' in qml
+    assert 'text: "导出入参"' in qml
+    assert 'text: "导出返回"' in qml
+    assert 'text: "登记接口"' in qml
     assert "id: breakpointList" in qml
     assert "id: breakpointTabList" not in qml
     assert "TabButton { text: \"断点\"" not in qml
