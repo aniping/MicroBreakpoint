@@ -1,5 +1,7 @@
 import json
+import tempfile
 import uuid
+import zipfile
 from hashlib import sha256
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from app.services.payload_store import (
     read_payload_text,
     read_payload_value,
     save_payload,
+    save_payload_file_copy,
     search_payload,
 )
 from app.services.wait_manager import wait_manager
@@ -1029,7 +1032,52 @@ def export_session_archive(session_id, payload=None):
     return {"success": True, "archive": archive}
 
 
-def import_session_archive(archive, lock_interfaces=False, import_file_name=None):
+def export_session_archive_file(session_id, payload=None):
+    result = export_session_archive(session_id, payload)
+    if not result.get("success"):
+        return result
+    archive = result["archive"]
+    handle = tempfile.NamedTemporaryFile(prefix="micro-breakpoint-", suffix=".mbrec", delete=False)
+    handle.close()
+    path = Path(handle.name)
+    db = get_db()
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive_zip:
+        archive_zip.writestr("manifest.json", dumps({
+            "format": MBREC_FORMAT,
+            "version": MBREC_VERSION,
+            "archiveId": archive.get("archiveId"),
+            "archiveName": archive.get("archiveName"),
+            "exportedAt": archive.get("exportedAt"),
+            "content": "zip",
+        }))
+        archive_zip.writestr("db.json", dumps(archive))
+        for row in db.execute(
+            "SELECT * FROM call_payloads WHERE session_id=? AND storage_type='file' ORDER BY created_at ASC",
+            (session_id,),
+        ).fetchall():
+            payload_row, target = export_payload_target(db, row["call_id"], row["payload_type"])
+            if not payload_row or not target or not hasattr(target, "exists") or not target.exists():
+                continue
+            entry = _payload_zip_entry(row)
+            archive_zip.write(target, entry)
+    return {
+        "success": True,
+        "path": path,
+        "archiveId": archive.get("archiveId"),
+        "archiveName": archive.get("archiveName"),
+    }
+
+
+def import_session_archive_file(fileobj, lock_interfaces=False, import_file_name=None):
+    with zipfile.ZipFile(fileobj) as archive_zip:
+        try:
+            archive = loads(archive_zip.read("db.json").decode("utf-8"), None)
+        except KeyError:
+            return {"success": False, "message": "db.json missing"}
+        return import_session_archive(archive, lock_interfaces, import_file_name, archive_zip)
+
+
+def import_session_archive(archive, lock_interfaces=False, import_file_name=None, payload_zip=None):
     if not isinstance(archive, dict):
         return {"success": False, "message": "invalid archive"}
     if archive.get("format") != MBREC_FORMAT or archive.get("version") != MBREC_VERSION:
@@ -1162,6 +1210,24 @@ def import_session_archive(archive, lock_interfaces=False, import_file_name=None
             if text is None:
                 text = item.get("content_text")
             if text is None:
+                if payload_zip and item.get("storage_type") == "file":
+                    entry = item.get("export_entry") or _payload_zip_entry(item)
+                    try:
+                        with payload_zip.open(entry) as source:
+                            save_payload_file_copy(
+                                db,
+                                new_session_id,
+                                new_call_id,
+                                item.get("payload_type") or "params",
+                                source,
+                                item.get("content_format") or "json",
+                                item.get("content_encoding") or "utf-8",
+                                item.get("content_size"),
+                                item.get("content_hash"),
+                                item.get("created_at") or now,
+                            )
+                    except KeyError:
+                        continue
                 continue
             value = loads(text, text) if (item.get("content_format") or "json") == "json" else text
             save_payload(db, new_session_id, new_call_id, item.get("payload_type") or "params", value, item.get("created_at") or now)
@@ -1221,9 +1287,23 @@ def _archive_payload_rows(session_id):
         (session_id,),
     ).fetchall():
         item = row_to_dict(row)
-        item["export_content_text"] = read_payload_text(row)
+        if row["storage_type"] == "inline":
+            item["export_content_text"] = row["content_text"] or ""
+        else:
+            item["export_entry"] = _payload_zip_entry(row)
         rows.append(item)
     return rows
+
+
+def _payload_zip_entry(row):
+    content_path = str(row["content_path"] or "").replace("\\", "/").lstrip("/")
+    if content_path:
+        return f"payloads/{content_path}"
+    session_id = str(row["session_id"] or "unknown")
+    call_id = str(row["call_id"] or "unknown")
+    payload_type = str(row["payload_type"] or "params")
+    suffix = "json" if (row["content_format"] or "json") == "json" else "txt"
+    return f"payloads/{session_id}/{call_id}/{payload_type}.{suffix}"
 
 
 def _insert_archive_row(db, table, row, overrides=None, omit=()):
@@ -1277,10 +1357,18 @@ def list_sessions():
 def list_calls(session_id=None, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None, page=1, page_size=DEFAULT_PAGE_SIZE):
     sid = session_id or STATE["sessionId"]
     if not sid:
-        return []
-    rows = get_db().execute(
-        """SELECT c.id, c.call_id, c.session_id, c.call_index, c.object_name, c.cmd_name,
+        size = page_size_value(page_size)
+        return {"success": True, "items": [], "page": page_value(page), "pageSize": size, "total": 0}
+    page = page_value(page)
+    page_size = page_size_value(page_size)
+    where, args = call_list_where(sid, object_name, keyword, status)
+    order_sql = call_list_order(sort_by, sort_order)
+    db = get_db()
+    total = db.execute(f"SELECT COUNT(*) FROM call_record c {where}", args).fetchone()[0]
+    rows = db.execute(
+        f"""SELECT c.id, c.call_id, c.session_id, c.call_index, c.object_name, c.cmd_name,
                   c.slot_id, c.slot_key, c.status, c.breakpoint_id, c.breakpoint_name,
+                  c.description, c.exception_type, c.exception_message,
                   c.cost_ms, c.created_at, c.created_at AS started_at, c.finished_at, c.updated_at,
                   c.interface_id, c.discovery_enabled, c.interface_registered,
                   c.params_summary, c.result_summary, c.params_size, c.result_size,
@@ -1288,39 +1376,127 @@ def list_calls(session_id=None, object_name=None, keyword=None, status=None, sor
                   c.payload_status, i.interface_alias
            FROM call_record c
            LEFT JOIN discovered_interface i ON c.interface_id=i.id
-           WHERE c.session_id=?
-           ORDER BY c.id DESC""",
-        (sid,),
+           {where}
+           {order_sql}
+           LIMIT ? OFFSET ?""",
+        args + [page_size, (page - 1) * page_size],
     ).fetchall()
-    items = [normalize(row_to_dict(row)) for row in rows]
-    return paginate(filter_items(items, object_name, keyword, status, sort_by, sort_order), page, page_size)
+    return {"success": True, "items": [normalize(row_to_dict(row)) for row in rows], "page": page, "pageSize": page_size, "total": total}
 
 
 def list_interfaces(session_id=None, object_name=None, keyword=None, status=None, sort_by=None, sort_order=None, page=1, page_size=DEFAULT_PAGE_SIZE):
     sid = session_id or STATE["sessionId"]
     if not sid:
-        return []
-    rows = get_db().execute(
-        """SELECT id, session_id, object_name, cmd_name, slot_id, slot_key, service_name,
+        size = page_size_value(page_size)
+        return {"success": True, "items": [], "page": page_value(page), "pageSize": size, "total": 0}
+    page = page_value(page)
+    page_size = page_size_value(page_size)
+    where, args = interface_list_where(sid, object_name, keyword, status)
+    order_sql = interface_list_order(sort_by, sort_order)
+    db = get_db()
+    total = db.execute(f"SELECT COUNT(*) FROM discovered_interface {where}", args).fetchone()[0]
+    rows = db.execute(
+        f"""SELECT id, session_id, object_name, cmd_name, slot_id, slot_key, service_name,
                   class_name, method_name, interface_alias, display_name, description,
                   latest_params_fingerprint, params_sample_count, params_summary,
                   first_seen_at, last_seen_at, call_count, success_count, exception_count,
                   avg_cost_ms, max_cost_ms, min_cost_ms, created_at, updated_at
            FROM discovered_interface
-           WHERE session_id=?
-           ORDER BY last_seen_at DESC""",
-        (sid,),
+           {where}
+           {order_sql}
+           LIMIT ? OFFSET ?""",
+        args + [page_size, (page - 1) * page_size],
     ).fetchall()
-    items = [normalize(row_to_dict(row)) for row in rows]
-    return paginate(filter_items(items, object_name, keyword, status, sort_by, sort_order), page, page_size)
+    return {"success": True, "items": [normalize(row_to_dict(row)) for row in rows], "page": page, "pageSize": page_size, "total": total}
+
+
+def page_value(value):
+    try:
+        return max(1, int(value or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def call_list_where(session_id, object_name=None, keyword=None, status=None):
+    clauses = ["c.session_id=?"]
+    args = [session_id]
+    if object_name:
+        clauses.append("c.object_name=?")
+        args.append(object_name)
+    if status:
+        clauses.append("c.status=?")
+        args.append(status)
+    needle = str(keyword or "").strip()
+    if needle:
+        like = f"%{needle}%"
+        clauses.append(
+            """(c.object_name LIKE ? OR c.cmd_name LIKE ? OR c.description LIKE ?
+                OR c.params_summary LIKE ? OR c.result_summary LIKE ?
+                OR c.exception_message LIKE ? OR c.call_id LIKE ?)"""
+        )
+        args.extend([like, like, like, like, like, like, like])
+    return "WHERE " + " AND ".join(clauses), args
+
+
+def interface_list_where(session_id, object_name=None, keyword=None, status=None):
+    clauses = ["session_id=?"]
+    args = [session_id]
+    if object_name:
+        clauses.append("object_name=?")
+        args.append(object_name)
+    if status == "exception":
+        clauses.append("COALESCE(exception_count, 0) > 0")
+    elif status == "success":
+        clauses.append("COALESCE(success_count, 0) > 0")
+    needle = str(keyword or "").strip()
+    if needle:
+        like = f"%{needle}%"
+        clauses.append(
+            """(object_name LIKE ? OR cmd_name LIKE ? OR display_name LIKE ?
+                OR description LIKE ? OR params_summary LIKE ? OR interface_alias LIKE ?)"""
+        )
+        args.extend([like, like, like, like, like, like])
+    return "WHERE " + " AND ".join(clauses), args
+
+
+def call_list_order(sort_by=None, sort_order=None):
+    columns = {
+        "call_index": "c.call_index",
+        "created_at": "c.created_at",
+        "updated_at": "c.updated_at",
+        "cost_ms": "c.cost_ms",
+        "cmd_name": "c.cmd_name",
+        "object_name": "c.object_name",
+        "slot_id": "c.slot_id",
+        "status": "c.status",
+        "hit": "CASE WHEN c.breakpoint_id IS NOT NULL AND c.breakpoint_id<>'' THEN 1 ELSE 0 END",
+    }
+    key = snake_case(str(sort_by or ""))
+    column = columns.get(key, "c.id")
+    direction = "ASC" if str(sort_order or "").lower() == "asc" else "DESC"
+    return f"ORDER BY {column} {direction}, c.id DESC"
+
+
+def interface_list_order(sort_by=None, sort_order=None):
+    columns = {
+        "last_seen_at": "last_seen_at",
+        "first_seen_at": "first_seen_at",
+        "call_count": "call_count",
+        "success_count": "success_count",
+        "exception_count": "exception_count",
+        "avg_cost_ms": "avg_cost_ms",
+        "cmd_name": "cmd_name",
+        "object_name": "object_name",
+    }
+    key = snake_case(str(sort_by or "last_seen_at"))
+    column = columns.get(key, "last_seen_at")
+    direction = "ASC" if str(sort_order or "").lower() == "asc" else "DESC"
+    return f"ORDER BY {column} {direction}, id DESC"
 
 
 def paginate(items, page=1, page_size=DEFAULT_PAGE_SIZE):
     page_size = page_size_value(page_size)
-    try:
-        page = max(1, int(page or 1))
-    except (TypeError, ValueError):
-        page = 1
+    page = page_value(page)
     start = (page - 1) * page_size
     return items[start:start + page_size]
 
@@ -1536,11 +1712,69 @@ def filter_items(items, object_name=None, keyword=None, status=None, sort_by=Non
 
 
 def grouped_calls(session_id=None):
-    return grouped("calls", list_calls(session_id))
+    sid = session_id or STATE["sessionId"]
+    if not sid:
+        return []
+    rows = get_db().execute(
+        """SELECT COALESCE(NULLIF(object_name, ''), ?) AS object_name,
+                  COUNT(*) AS call_count,
+                  SUM(CASE WHEN status='paused' THEN 1 ELSE 0 END) AS paused_count,
+                  SUM(CASE WHEN status='exception' THEN 1 ELSE 0 END) AS exception_count,
+                  SUM(CASE WHEN breakpoint_id IS NOT NULL AND breakpoint_id<>'' THEN 1 ELSE 0 END) AS hit_count,
+                  SUM(CASE WHEN status IN ('running','continued') THEN 1 ELSE 0 END) AS running_count,
+                  AVG(cost_ms) AS avg_cost_ms,
+                  MAX(updated_at) AS last_seen_at
+           FROM call_record
+           WHERE session_id=?
+           GROUP BY COALESCE(NULLIF(object_name, ''), ?)
+           ORDER BY object_name ASC""",
+        (UNCATEGORIZED_OBJECT, sid, UNCATEGORIZED_OBJECT),
+    ).fetchall()
+    return [
+        {
+            "objectName": row["object_name"],
+            "callCount": row["call_count"] or 0,
+            "pausedCount": row["paused_count"] or 0,
+            "exceptionCount": row["exception_count"] or 0,
+            "hitCount": row["hit_count"] or 0,
+            "runningCount": row["running_count"] or 0,
+            "avgCostMs": row["avg_cost_ms"],
+            "lastSeenAt": row["last_seen_at"],
+        }
+        for row in rows
+    ]
 
 
 def grouped_interfaces(session_id=None):
-    return grouped("interfaces", list_interfaces(session_id))
+    sid = session_id or STATE["sessionId"]
+    if not sid:
+        return []
+    rows = get_db().execute(
+        """SELECT COALESCE(NULLIF(object_name, ''), ?) AS object_name,
+                  COUNT(*) AS interface_count,
+                  SUM(COALESCE(call_count, 0)) AS call_count,
+                  SUM(COALESCE(success_count, 0)) AS success_count,
+                  SUM(COALESCE(exception_count, 0)) AS exception_count,
+                  AVG(avg_cost_ms) AS avg_cost_ms,
+                  MAX(last_seen_at) AS last_seen_at
+           FROM discovered_interface
+           WHERE session_id=?
+           GROUP BY COALESCE(NULLIF(object_name, ''), ?)
+           ORDER BY object_name ASC""",
+        (UNCATEGORIZED_OBJECT, sid, UNCATEGORIZED_OBJECT),
+    ).fetchall()
+    return [
+        {
+            "objectName": row["object_name"],
+            "interfaceCount": row["interface_count"] or 0,
+            "callCount": row["call_count"] or 0,
+            "successCount": row["success_count"] or 0,
+            "exceptionCount": row["exception_count"] or 0,
+            "avgCostMs": row["avg_cost_ms"],
+            "lastSeenAt": row["last_seen_at"],
+        }
+        for row in rows
+    ]
 
 
 def grouped(kind, items):

@@ -12,6 +12,8 @@ INLINE_LIMIT_BYTES = 64 * 1024
 PREVIEW_LIMIT_BYTES = 8 * 1024
 SUMMARY_LIMIT_CHARS = 260
 MAX_CHUNK_BYTES = 1024 * 1024
+SEARCH_CHUNK_BYTES = 1024 * 1024
+SEARCH_PREVIEW_CHARS = 100
 SAFE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -89,6 +91,62 @@ def save_payload(db, session_id, call_id, payload_type, value, now=None):
     meta["payload_id"] = payload_id
     meta["storage_type"] = storage_type
     return meta
+
+
+def save_payload_file_copy(db, session_id, call_id, payload_type, source, content_format="json", content_encoding="utf-8", expected_size=None, expected_hash=None, now=None):
+    now = now or now_iso()
+    content_format = content_format or "json"
+    content_encoding = content_encoding or "utf-8"
+    payload_id = f"payload-{sha256('|'.join([str(session_id), str(call_id), payload_type]).encode('utf-8')).hexdigest()[:24]}"
+    content_path = _payload_relative_path(session_id, call_id, payload_type, content_format)
+    target = payload_root() / content_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    hasher = sha256()
+    size = 0
+    with target.open("wb") as handle:
+        while True:
+            chunk = source.read(MAX_CHUNK_BYTES)
+            if not chunk:
+                break
+            if isinstance(chunk, str):
+                chunk = chunk.encode(content_encoding, errors="replace")
+            hasher.update(chunk)
+            size += len(chunk)
+            handle.write(chunk)
+    content_hash = hasher.hexdigest()
+    if expected_size is not None and int(expected_size or 0) != size:
+        raise ValueError("payload size mismatch")
+    if expected_hash and expected_hash != content_hash:
+        raise ValueError("payload hash mismatch")
+    db.execute(
+        """INSERT INTO call_payloads
+           (id, call_id, session_id, payload_type, storage_type, content_text, content_path,
+            content_size, content_hash, content_encoding, content_format, created_at)
+           VALUES (?, ?, ?, ?, 'file', NULL, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(call_id, payload_type) DO UPDATE SET
+             session_id=excluded.session_id,
+             storage_type=excluded.storage_type,
+             content_text=excluded.content_text,
+             content_path=excluded.content_path,
+             content_size=excluded.content_size,
+             content_hash=excluded.content_hash,
+             content_encoding=excluded.content_encoding,
+             content_format=excluded.content_format,
+             created_at=excluded.created_at""",
+        (
+            payload_id,
+            call_id,
+            session_id,
+            payload_type,
+            content_path.as_posix(),
+            size,
+            content_hash,
+            content_encoding,
+            content_format,
+            now,
+        ),
+    )
+    return {"payload_id": payload_id, "storage_type": "file", "size": size, "hash": content_hash}
 
 
 def payload_by_call(db, call_id, payload_type):
@@ -171,18 +229,73 @@ def search_payload(db, call_id, payload_type, query, limit=20):
     query = str(query or "")
     if not query:
         return {"callId": call_id, "type": payload_type, "q": query, "matches": []}
-    text = read_payload_text(row) or ""
+    limit = max(1, int(limit or 20))
+    if row["storage_type"] == "file":
+        path = _resolve_payload_path(row["content_path"])
+        if not path or not path.exists():
+            return None
+        matches = _search_file_payload(path, row["content_encoding"] or "utf-8", query, limit)
+        return {"callId": call_id, "type": payload_type, "q": query, "matches": matches}
+    text = row["content_text"] or ""
     matches = []
     start = 0
-    while len(matches) < int(limit or 20):
+    while len(matches) < limit:
         pos = text.find(query, start)
         if pos < 0:
             break
-        before = max(0, pos - 80)
-        after = min(len(text), pos + len(query) + 80)
+        before = max(0, pos - SEARCH_PREVIEW_CHARS)
+        after = min(len(text), pos + len(query) + SEARCH_PREVIEW_CHARS)
         matches.append({"offset": len(text[:pos].encode("utf-8")), "preview": text[before:after]})
         start = pos + max(1, len(query))
     return {"callId": call_id, "type": payload_type, "q": query, "matches": matches}
+
+
+def _search_file_payload(path, encoding, query, limit):
+    query_bytes = query.encode(encoding, errors="replace")
+    if not query_bytes:
+        return []
+    matches = []
+    overlap_size = max(0, len(query_bytes) - 1)
+    previous = b""
+    offset = 0
+    last_match = -1
+    with path.open("rb") as handle:
+        while len(matches) < limit:
+            chunk = handle.read(SEARCH_CHUNK_BYTES)
+            if not chunk:
+                break
+            window = previous + chunk
+            window_base = offset - len(previous)
+            start = 0
+            while len(matches) < limit:
+                pos = window.find(query_bytes, start)
+                if pos < 0:
+                    break
+                absolute = window_base + pos
+                if absolute > last_match:
+                    matches.append({
+                        "offset": absolute,
+                        "preview": _file_payload_preview(path, encoding, absolute, len(query_bytes)),
+                    })
+                    last_match = absolute
+                start = pos + max(1, len(query_bytes))
+            previous = window[-overlap_size:] if overlap_size else b""
+            offset += len(chunk)
+    return matches
+
+
+def _file_payload_preview(path, encoding, offset, query_size):
+    before_bytes = SEARCH_PREVIEW_CHARS * 4
+    after_bytes = (SEARCH_PREVIEW_CHARS * 4) + query_size
+    start = max(0, offset - before_bytes)
+    with path.open("rb") as handle:
+        handle.seek(start)
+        data = handle.read((offset - start) + after_bytes)
+    prefix_size = offset - start
+    prefix = data[:prefix_size].decode(encoding, errors="replace")
+    match = data[prefix_size:prefix_size + query_size].decode(encoding, errors="replace")
+    suffix = data[prefix_size + query_size:].decode(encoding, errors="replace")
+    return prefix[-SEARCH_PREVIEW_CHARS:] + match + suffix[:SEARCH_PREVIEW_CHARS]
 
 
 def summarize_payload(value, serialized_text=None):

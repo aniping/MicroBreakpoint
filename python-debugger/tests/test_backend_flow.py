@@ -1,3 +1,7 @@
+from io import BytesIO
+import json
+import zipfile
+
 from app import create_app
 from app.db.database import get_db
 
@@ -133,6 +137,75 @@ def test_call_list_is_lightweight_and_payload_is_chunked(tmp_path):
         assert "data" not in record["raw_args_json"]
 
 
+def test_payload_search_streaming_file(tmp_path, monkeypatch):
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+    client = app.test_client()
+
+    create_and_start(client)
+    big_result = {"trace": ["a" * 1024] * 70 + ["needle-cross-boundary"] + ["b" * 1024] * 70}
+    client.post("/api/calls/before", json=make_before("search-large", object_name="VNA", cmd="acquire"))
+    client.post("/api/calls/after", json={"callId": "search-large", "success": True, "costMs": 10, "result": big_result})
+
+    import app.services.payload_store as payload_store
+
+    def fail_full_read(_row):
+        raise AssertionError("search must not read the full payload")
+
+    monkeypatch.setattr(payload_store, "read_payload_text", fail_full_read)
+    found = client.get(
+        "/api/calls/search-large/payload/search",
+        query_string={"type": "result", "q": "needle-cross-boundary"},
+    ).get_json()
+    assert found["matches"]
+    assert found["matches"][0]["offset"] > 64 * 1024
+    assert "needle-cross-boundary" in found["matches"][0]["preview"]
+    missing = client.get(
+        "/api/calls/search-large/payload/search",
+        query_string={"type": "result", "q": "not-present"},
+    ).get_json()
+    assert missing["matches"] == []
+
+
+def test_archive_does_not_inline_large_payload(tmp_path):
+    source_app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "source" / "debugger.sqlite3")})
+    source_client = source_app.test_client()
+    source_session, _ = create_and_start(source_client)
+    big_result = {"trace": ["payload-marker-" + ("x" * 1024)] * 90}
+    source_client.post("/api/calls/before", json=make_before("archive-large", object_name="VNA", cmd="acquire"))
+    source_client.post("/api/calls/after", json={"callId": "archive-large", "success": True, "costMs": 10, "result": big_result})
+
+    archive_response = source_client.post(
+        f"/api/sessions/{source_session}/export-file",
+        json={"archiveName": "large archive"},
+    )
+    assert archive_response.status_code == 200
+    with zipfile.ZipFile(BytesIO(archive_response.data)) as archive_zip:
+        names = archive_zip.namelist()
+        assert "db.json" in names
+        payload_names = [name for name in names if name.startswith("payloads/") and name.endswith("/result.json")]
+        assert payload_names
+        db_json = archive_zip.read("db.json").decode("utf-8")
+        assert len(db_json.encode("utf-8")) < 50 * 1024
+        db_payload = json.loads(db_json)
+        result_payload = [item for item in db_payload["callPayloads"] if item["payload_type"] == "result"][0]
+        assert "export_content_text" not in result_payload
+
+    target_client = make_client(tmp_path / "target")
+    imported = target_client.post(
+        "/api/sessions/import-file",
+        data={"file": (BytesIO(archive_response.data), "large archive.mbrec"), "lockInterfaces": "0"},
+        content_type="multipart/form-data",
+    )
+    assert imported.status_code == 200
+    imported_call = target_client.get("/api/calls").get_json()["items"][0]
+    chunk = target_client.get(
+        f"/api/calls/{imported_call['call_id']}/payload",
+        query_string={"type": "result", "offset": 0, "limit": 4096},
+    ).get_json()
+    assert chunk["size"] > 64 * 1024
+    assert "payload-marker" in chunk["content"]
+
+
 def test_call_list_defaults_to_first_50_records(tmp_path):
     client = make_client(tmp_path)
 
@@ -144,6 +217,80 @@ def test_call_list_defaults_to_first_50_records(tmp_path):
 
     assert len(client.get("/api/calls").get_json()["items"]) == 50
     assert len(client.get("/api/calls", query_string={"pageSize": 100}).get_json()["items"]) == 60
+
+
+def test_call_list_sql_pagination(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    for index in range(120):
+        call_id = f"sql-page-{index}"
+        client.post("/api/calls/before", json=make_before(call_id, params={"index": index}))
+        finish(client, call_id)
+
+    first = client.get("/api/calls").get_json()
+    second = client.get("/api/calls", query_string={"page": 2, "pageSize": 50}).get_json()
+    assert first["success"] is True
+    assert first["page"] == 1
+    assert first["pageSize"] == 50
+    assert first["total"] == 120
+    assert len(first["items"]) == 50
+    assert second["page"] == 2
+    assert second["pageSize"] == 50
+    assert second["total"] == 120
+    assert len(second["items"]) == 50
+    assert first["items"][0]["call_index"] == 120
+    assert second["items"][0]["call_index"] == 70
+    forbidden = {"params", "result", "rawArgs", "raw_args", "params_json", "result_json"}
+    assert forbidden.isdisjoint(first["items"][0])
+
+
+def test_call_list_sql_filter_keyword_status_object(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("vna-acquire", object_name="VNA", cmd="acquire", params={"mode": "fast"}))
+    finish(client, "vna-acquire")
+    client.post("/api/calls/before", json=make_before("vna-error", object_name="VNA", cmd="stop", params={"mode": "slow"}))
+    finish(client, "vna-error", success=False)
+    client.post("/api/calls/before", json=make_before("sg-acquire", object_name="SG", cmd="acquire", params={"freq": 1}))
+    finish(client, "sg-acquire")
+
+    by_object = client.get("/api/calls", query_string={"objectName": "VNA"}).get_json()
+    assert by_object["total"] == 2
+    assert {item["object_name"] for item in by_object["items"]} == {"VNA"}
+
+    by_status = client.get("/api/calls", query_string={"status": "exception"}).get_json()
+    assert by_status["total"] == 1
+    assert by_status["items"][0]["call_id"] == "vna-error"
+
+    by_keyword = client.get("/api/calls", query_string={"keyword": "acquire"}).get_json()
+    assert by_keyword["total"] == 2
+    assert {item["call_id"] for item in by_keyword["items"]} == {"vna-acquire", "sg-acquire"}
+
+
+def test_interface_list_sql_pagination(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    for index in range(120):
+        call_id = f"iface-page-{index}"
+        client.post("/api/calls/before", json=make_before(call_id, object_name="VNA", cmd=f"cmd-{index}", params={"index": index}))
+        finish(client, call_id)
+
+    first = client.get("/api/interfaces").get_json()
+    second = client.get("/api/interfaces", query_string={"page": 2, "pageSize": 50}).get_json()
+    assert first["success"] is True
+    assert first["page"] == 1
+    assert first["pageSize"] == 50
+    assert first["total"] == 120
+    assert len(first["items"]) == 50
+    assert second["page"] == 2
+    assert second["pageSize"] == 50
+    assert second["total"] == 120
+    assert len(second["items"]) == 50
+    forbidden = {"latest_params_json", "sample_args_json", "params"}
+    assert forbidden.isdisjoint(first["items"][0])
 
 
 def test_interface_identity_ignores_slot_and_service_name(tmp_path):
@@ -915,6 +1062,28 @@ def test_grouped_endpoints_return_object_groups(tmp_path):
     interface_groups = client.get("/api/interfaces/grouped").get_json()["groups"]
     assert {group["objectName"] for group in call_groups} == {"SA", "SG"}
     assert {group["objectName"] for group in interface_groups} == {"SA", "SG"}
+
+
+def test_grouped_calls_uses_full_session(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    for index in range(75):
+        client.post("/api/calls/before", json=make_before(f"full-sa-{index}", object_name="SA", cmd=f"sa-{index}"))
+        finish(client, f"full-sa-{index}")
+    for index in range(25):
+        client.post("/api/calls/before", json=make_before(f"full-vna-{index}", object_name="VNA", cmd=f"vna-{index}"))
+        finish(client, f"full-vna-{index}", success=index != 0)
+
+    assert len(client.get("/api/calls").get_json()["items"]) == 50
+    call_groups = {group["objectName"]: group for group in client.get("/api/calls/grouped").get_json()["groups"]}
+    assert call_groups["SA"]["callCount"] == 75
+    assert call_groups["VNA"]["callCount"] == 25
+    assert call_groups["VNA"]["exceptionCount"] == 1
+    interface_groups = {group["objectName"]: group for group in client.get("/api/interfaces/grouped").get_json()["groups"]}
+    assert interface_groups["SA"]["interfaceCount"] == 75
+    assert interface_groups["VNA"]["interfaceCount"] == 25
+    assert interface_groups["VNA"]["exceptionCount"] == 1
 
 
 def test_legacy_core_module_delegates_to_session_debug_service(tmp_path):

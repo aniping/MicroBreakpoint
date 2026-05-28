@@ -85,9 +85,11 @@ cd java-demo
 
 ## 大 Payload 存储与查看
 
-Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收并保存，但列表和日志只进入轻量摘要链路。`call_record` 只保留 `params_summary/result_summary`、前 8KB `preview`、大小、hash、截断标识和 payload 引用；`/api/calls` 默认只返回 50 条轻量调用记录，可通过 `pageSize=20/50/100` 分页浏览，不返回完整 `params/result/rawArgs`。
+Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收并保存，但列表、日志和 QML 主模型只进入轻量摘要链路。`call_record` 只保留 `params_summary/result_summary`、前 8KB `preview`、大小、hash、截断标识和 payload 引用；`/api/calls` 使用 SQL 级过滤、排序和分页，默认只返回 50 条轻量调用记录，可通过 `pageSize=20/50/100` 分页浏览，不返回完整 `params/result/rawArgs`。`/api/interfaces` 同样使用 SQL 级分页，避免把整个 Session 的接口记录加载到 Python 内存。
 
-完整内容保存在 `call_payloads`：小于等于 64KB 的 payload 内联到 `content_text`，大于 64KB 的 payload 写入 `python-debugger/data/payloads/{session_id}/{bucket}/{call_id}/{params|result}.json`，SQLite 只保存路径、大小、hash 和编码信息。调用详情页默认只展示 preview；完整内容通过 `/api/calls/{callId}/payload?type=params|result&offset=0&limit=8192` 分块读取，通过 `/api/calls/{callId}/payload/export?type=params|result` 导出，通过 `/api/calls/{callId}/payload/search?type=result&q=xxx` 后端搜索。
+完整内容保存在 `call_payloads`：小于等于 64KB 的 payload 内联到 `content_text`，大于 64KB 的 payload 写入 `python-debugger/data/payloads/{session_id}/{bucket}/{call_id}/{params|result}.json`，SQLite 只保存路径、大小、hash 和编码信息。调用详情页默认只展示 preview；完整内容通过 `/api/calls/{callId}/payload?type=params|result&offset=0&limit=8192` 分块读取，通过 `/api/calls/{callId}/payload/export?type=params|result` 导出，通过 `/api/calls/{callId}/payload/search?type=result&q=xxx` 后端搜索。文件型 payload 搜索按 1MB 分块流式扫描并保留跨块 overlap，不会一次性读取完整大文件。
+
+`/api/calls/grouped` 和 `/api/interfaces/grouped` 使用全量 SQL 聚合统计整个 Session，不依赖列表第一页。`.mbrec` 桌面导入导出使用 zip 格式：`db.json` 保存数据库记录和 payload 元信息，大 payload 作为 `payloads/...` zip entry 单独存放；导入时会校验大小和 hash，并把 payload 文件恢复到新 Session 的 payload 目录。旧 JSON 归档接口仍保留兼容，但不会把文件型大 payload 内联到 JSON。
 
 接口参数样本按 `interface_id + slot_key + params_hash` 去重，只保存摘要、大小、hash、payload 引用、样本次数和首末次时间；已发现接口页和断点页不直接渲染完整参数或命中 payload。参数快照断点优先使用 `session_id + object_name + cmd_name + slot_key + params_fingerprint` 命中，不会为了匹配而从数据库或文件读取完整大 JSON。
 

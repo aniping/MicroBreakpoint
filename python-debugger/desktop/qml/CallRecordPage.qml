@@ -8,9 +8,15 @@ Item {
 
     property var appTheme
     property var items: []
+    property int page: 1
+    property int pageSize: 50
+    property int total: 0
     property var breakpoints: []
     property bool canClearRecords: false
     property string breakpointFilter: ""
+    property string callsKeyword: ""
+    property string callsObjectName: ""
+    property string callsStatus: ""
     property string selectedCallId: ""
     property int detailTabIndex: 0
     property var expandedGroups: ({})
@@ -172,6 +178,22 @@ Item {
         var count = 0
         for (var i = 0; i < items.length; i++) if (statusValue(items[i]) === "paused") count++
         return count
+    }
+
+    function totalPages() {
+        return Math.max(1, Math.ceil(Number(total || 0) / Math.max(1, Number(pageSize || 50))))
+    }
+
+    function backendStatus(text) {
+        if (text === "success") return "finished"
+        if (text === "paused") return "paused"
+        if (text === "exception") return "exception"
+        if (text === "running") return "running"
+        return ""
+    }
+
+    function applyBackendFilter() {
+        bridge.setCallsFilter(callsKeyword, callsObjectName, backendStatus(callsStatus))
     }
 
     function ensureSelection() {
@@ -696,6 +718,64 @@ Item {
                         width: parent ? parent.width : 900
                         spacing: 10
                         anchors.margins: 12
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 48
+                            radius: 4
+                            color: page.appTheme.panelBgAlt
+                            border.color: page.appTheme.borderSoft
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                spacing: 8
+                                MbTextField {
+                                    appTheme: page.appTheme
+                                    Layout.preferredWidth: 220
+                                    Layout.preferredHeight: 34
+                                    placeholderText: "搜索调用"
+                                    text: page.callsKeyword
+                                    onTextChanged: page.callsKeyword = text
+                                    onAccepted: page.applyBackendFilter()
+                                }
+                                MbTextField {
+                                    appTheme: page.appTheme
+                                    Layout.preferredWidth: 150
+                                    Layout.preferredHeight: 34
+                                    placeholderText: "objectName"
+                                    text: page.callsObjectName
+                                    onTextChanged: page.callsObjectName = text
+                                    onAccepted: page.applyBackendFilter()
+                                }
+                                FilterCombo {
+                                    Layout.preferredWidth: 120
+                                    model: ["all", "success", "paused", "exception", "running"]
+                                    currentIndex: Math.max(0, model.indexOf(page.callsStatus || "all"))
+                                    onActivated: {
+                                        page.callsStatus = currentText
+                                        page.applyBackendFilter()
+                                    }
+                                }
+                                MbButton { appTheme: page.appTheme; text: "搜索"; variant: "primary"; implicitWidth: 76; onClicked: page.applyBackendFilter() }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    text: "总数 " + page.total + "，第 " + page.page + " / " + page.totalPages() + " 页"
+                                    color: page.appTheme.textNormal
+                                    font.pixelSize: 13
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                MbButton { appTheme: page.appTheme; text: "上一页"; variant: "neutral"; implicitWidth: 80; enabled: page.page > 1; onClicked: bridge.previousCallsPage() }
+                                MbButton { appTheme: page.appTheme; text: "下一页"; variant: "neutral"; implicitWidth: 80; enabled: page.page < page.totalPages(); onClicked: bridge.nextCallsPage() }
+                                FilterCombo {
+                                    Layout.preferredWidth: 96
+                                    model: ["20", "50", "100"]
+                                    currentIndex: Math.max(0, model.indexOf(String(page.pageSize || 50)))
+                                    prefix: "每页 "
+                                    onActivated: bridge.setCallsPageSize(Number(currentText))
+                                }
+                            }
+                        }
 
                         Repeater {
                             model: page.groups()

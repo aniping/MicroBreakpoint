@@ -23,6 +23,14 @@ class Bridge(QObject):
         super().__init__()
         self.backend = BACKEND_URL
         self.settings = QSettings("MicroBreakpoint", "Desktop")
+        self.callsPage = 1
+        self.callsPageSize = 50
+        self.callsTotal = 0
+        self.callsKeyword = ""
+        self.callsObjectName = ""
+        self.callsStatus = ""
+        self.callsSortBy = "call_index"
+        self.callsSortOrder = "desc"
 
     def _request(self, method, url, **kwargs):
         try:
@@ -147,24 +155,34 @@ class Bridge(QObject):
 
     @Slot(str, str, str)
     def exportSession(self, sessionId, archiveName, remark):
-        result = self._request(
-            "POST",
-            f"{self.backend}/api/sessions/{sessionId}/export",
-            json={"archiveName": archiveName, "remark": remark},
-        )
-        if not result.get("success"):
-            self._emit_result(result)
-            return
-        archive = result.get("archive") or {}
-        suggested = self._archive_filename(archive.get("archiveName") or archiveName or sessionId)
+        suggested = self._archive_filename(archiveName or sessionId)
         path, _ = QFileDialog.getSaveFileName(None, "导出组件化断点调试工具会话", suggested, "组件化断点调试工具归档 (*.mbrec)")
         if not path:
             self._emit_result({"success": False, "message": "export cancelled"})
             return
         if not path.lower().endswith(".mbrec"):
             path += ".mbrec"
-        Path(path).write_text(json.dumps(archive, ensure_ascii=False, indent=2), encoding="utf-8")
-        self._emit_result({"success": True, "message": "exported", "path": path, "archiveId": archive.get("archiveId")})
+        try:
+            response = requests.post(
+                f"{self.backend}/api/sessions/{sessionId}/export-file",
+                json={"archiveName": archiveName, "remark": remark},
+                timeout=60,
+                stream=True,
+            )
+            if not response.ok:
+                try:
+                    result = response.json()
+                except ValueError:
+                    result = {"success": False, "message": response.text or "export failed", "status": response.status_code}
+                self._emit_result(result)
+                return
+            with Path(path).open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        handle.write(chunk)
+            self._emit_result({"success": True, "message": "exported", "path": path})
+        except Exception as exc:
+            self._emit_result({"success": False, "message": f"export failed: {exc}"})
 
     @Slot(bool)
     def importSession(self, lockInterfaces):
@@ -173,15 +191,20 @@ class Bridge(QObject):
             self._emit_result({"success": False, "message": "import cancelled"})
             return
         try:
-            archive = json.loads(Path(path).read_text(encoding="utf-8"))
+            with Path(path).open("rb") as handle:
+                response = requests.post(
+                    f"{self.backend}/api/sessions/import-file",
+                    files={"file": (Path(path).name, handle, "application/zip")},
+                    data={"lockInterfaces": "1" if lockInterfaces else "0"},
+                    timeout=60,
+                )
         except Exception as exc:
             self._emit_result({"success": False, "message": f"invalid archive: {exc}"})
             return
-        result = self._request(
-            "POST",
-            f"{self.backend}/api/sessions/import",
-            json={"archive": archive, "lockInterfaces": lockInterfaces, "importFileName": Path(path).name},
-        )
+        try:
+            result = response.json()
+        except ValueError:
+            result = {"success": response.ok, "message": response.text, "status": response.status_code}
         self._handle_import_result(result)
         self.refreshAll()
 
@@ -212,7 +235,62 @@ class Bridge(QObject):
 
     @Slot()
     def loadCalls(self):
-        self.callsChanged.emit(json.dumps(self._request("GET", f"{self.backend}/api/calls", params={"pageSize": 50}), ensure_ascii=False))
+        params = {
+            "page": self.callsPage,
+            "pageSize": self.callsPageSize,
+            "sortBy": self.callsSortBy,
+            "sortOrder": self.callsSortOrder,
+        }
+        if self.callsKeyword:
+            params["keyword"] = self.callsKeyword
+        if self.callsObjectName:
+            params["objectName"] = self.callsObjectName
+        if self.callsStatus:
+            params["status"] = self.callsStatus
+        result = self._request("GET", f"{self.backend}/api/calls", params=params)
+        self.callsPage = int(result.get("page") or self.callsPage)
+        self.callsPageSize = int(result.get("pageSize") or self.callsPageSize)
+        self.callsTotal = int(result.get("total") or 0)
+        self.callsChanged.emit(json.dumps(result, ensure_ascii=False))
+
+    @Slot(int)
+    def setCallsPage(self, page):
+        self.callsPage = max(1, int(page or 1))
+        self.loadCalls()
+
+    @Slot(int)
+    def setCallsPageSize(self, pageSize):
+        size = int(pageSize or 50)
+        self.callsPageSize = size if size in (20, 50, 100) else 50
+        self.callsPage = 1
+        self.loadCalls()
+
+    @Slot(str, str, str)
+    def setCallsFilter(self, keyword, objectName, status):
+        self.callsKeyword = str(keyword or "").strip()
+        self.callsObjectName = str(objectName or "").strip()
+        self.callsStatus = str(status or "").strip()
+        self.callsPage = 1
+        self.loadCalls()
+
+    @Slot(str, str)
+    def setCallsSort(self, sortBy, sortOrder):
+        self.callsSortBy = str(sortBy or "call_index")
+        self.callsSortOrder = "asc" if str(sortOrder or "").lower() == "asc" else "desc"
+        self.callsPage = 1
+        self.loadCalls()
+
+    @Slot()
+    def nextCallsPage(self):
+        if self.callsPage * self.callsPageSize < self.callsTotal:
+            self.callsPage += 1
+            self.loadCalls()
+
+    @Slot()
+    def previousCallsPage(self):
+        if self.callsPage > 1:
+            self.callsPage -= 1
+            self.loadCalls()
 
     @Slot()
     def loadInterfaces(self):

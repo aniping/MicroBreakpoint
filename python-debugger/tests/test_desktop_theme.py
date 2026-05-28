@@ -326,7 +326,8 @@ def test_session_tab_exposes_mbrec_import_export_controls():
     assert "bridge.openExistingSession(sessionId)" in qml
     assert "bridge.importSession(page.importLockInterfaces)" in qml
     assert "bridge.exportSession(page.exportSessionId, page.exportArchiveName, page.exportRemark)" in qml
-    assert '"importFileName": Path(path).name' in bridge_source
+    assert "/api/sessions/import-file" in bridge_source
+    assert "/api/sessions/{sessionId}/export-file" in bridge_source
     assert "debugging: !!stateData.debugging" in main
     assert "pausedCount: Number(stateData.pausedCount || 0)" in main
 

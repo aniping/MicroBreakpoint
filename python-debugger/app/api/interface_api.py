@@ -17,18 +17,16 @@ interface_api = Blueprint("interface_api", __name__, url_prefix="/api/interfaces
 
 @interface_api.get("")
 def interfaces():
-    return jsonify({
-        "items": list_interfaces(
-            request.args.get("sessionId"),
-            request.args.get("objectName"),
-            request.args.get("keyword"),
-            request.args.get("status"),
-            request.args.get("sortBy"),
-            request.args.get("sortOrder"),
-            request.args.get("page"),
-            request.args.get("pageSize"),
-        )
-    })
+    return jsonify(list_interfaces(
+        request.args.get("sessionId"),
+        request.args.get("objectName"),
+        request.args.get("keyword"),
+        request.args.get("status"),
+        request.args.get("sortBy"),
+        request.args.get("sortOrder"),
+        request.args.get("page"),
+        request.args.get("pageSize"),
+    ))
 
 
 @interface_api.get("/grouped")

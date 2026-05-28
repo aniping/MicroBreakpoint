@@ -30,6 +30,9 @@ ApplicationWindow {
     property int currentPage: 0
     property var stateData: ({state: "NO_SESSION", mode: "idle", debugging: false, callCount: 0, discoveredInterfaceCount: 0, breakpointCount: 0, pausedCount: 0, interfaceLocked: false})
     property var callItems: []
+    property int callListPage: 1
+    property int callListPageSize: 50
+    property int callListTotal: 0
     property var interfaceItems: []
     property var breakpointItems: []
     property var sessionItems: []
@@ -80,7 +83,13 @@ ApplicationWindow {
     Connections {
         target: bridge
         function onStateChanged(payload) { stateData = JSON.parse(payload) }
-        function onCallsChanged(payload) { callItems = JSON.parse(payload).items || [] }
+        function onCallsChanged(payload) {
+            var data = JSON.parse(payload)
+            callItems = data.items || []
+            callListPage = Number(data.page || 1)
+            callListPageSize = Number(data.pageSize || 50)
+            callListTotal = Number(data.total || callItems.length)
+        }
         function onInterfacesChanged(payload) { interfaceItems = JSON.parse(payload).items || [] }
         function onBreakpointsChanged(payload) { breakpointItems = JSON.parse(payload).items || [] }
         function onSessionsChanged(payload) { sessionItems = JSON.parse(payload).items || [] }
@@ -362,6 +371,9 @@ ApplicationWindow {
                 CallRecordPage {
                     appTheme: theme
                     items: callItems
+                    page: root.callListPage
+                    pageSize: root.callListPageSize
+                    total: root.callListTotal
                     breakpoints: breakpointItems
                     canClearRecords: stateData.mode === "idle" && stateData.hasSession
                     breakpointFilter: root.callBreakpointFilter

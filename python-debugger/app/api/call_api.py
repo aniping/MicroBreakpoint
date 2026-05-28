@@ -33,18 +33,16 @@ def after():
 
 @call_api.get("")
 def calls():
-    return jsonify({
-        "items": list_calls(
-            request.args.get("sessionId"),
-            request.args.get("objectName"),
-            request.args.get("keyword"),
-            request.args.get("status"),
-            request.args.get("sortBy"),
-            request.args.get("sortOrder"),
-            request.args.get("page"),
-            request.args.get("pageSize"),
-        )
-    })
+    return jsonify(list_calls(
+        request.args.get("sessionId"),
+        request.args.get("objectName"),
+        request.args.get("keyword"),
+        request.args.get("status"),
+        request.args.get("sortBy"),
+        request.args.get("sortOrder"),
+        request.args.get("page"),
+        request.args.get("pageSize"),
+    ))
 
 
 @call_api.get("/grouped")
