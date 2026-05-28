@@ -797,11 +797,19 @@ Item {
                             ListView {
                                 id: sampleList
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 76
+                                Layout.preferredHeight: 86
                                 clip: true
                                 orientation: ListView.Horizontal
+                                boundsBehavior: Flickable.StopAtBounds
+                                flickableDirection: Flickable.HorizontalFlick
+                                interactive: contentWidth > width
                                 spacing: 8
                                 model: page.sampleRows(page.selectedDetail || page.selectedItem)
+                                ScrollBar.horizontal: ScrollBar {
+                                    policy: sampleList.contentWidth > sampleList.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                    contentItem: Rectangle { implicitHeight: 8; radius: 4; color: parent.pressed ? page.appTheme.primary : page.appTheme.textDisabled }
+                                    background: Rectangle { color: page.appTheme.panelBgAlt; radius: 4 }
+                                }
                                 delegate: Rectangle {
                                     required property var modelData
                                     required property int index

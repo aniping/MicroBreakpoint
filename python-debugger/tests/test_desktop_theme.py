@@ -184,7 +184,9 @@ def test_interface_page_uses_grouped_cards_and_detail_tabs():
     assert "LargePayloadViewer" in qml
     assert "page.selectedSample().paramsPreview" in qml
     assert "orientation: ListView.Horizontal" in qml
-    assert "Layout.preferredHeight: 76" in qml
+    assert "Layout.preferredHeight: 86" in qml
+    assert "ScrollBar.horizontal: ScrollBar" in qml
+    assert "policy: sampleList.contentWidth > sampleList.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff" in qml
     assert "width: 160" in qml
     assert "loadMoreSamples" not in qml
     assert 'TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.fillWidth: true; Layout.preferredWidth: 1' in qml
@@ -218,7 +220,12 @@ def test_call_record_page_shows_breakpoint_list_in_detail_panel():
     assert "Layout.preferredWidth: 500" in qml
     assert "Layout.minimumWidth: 480" in qml
     assert "Layout.maximumWidth: 520" in qml
-    assert 'TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 90' in qml
+    assert "GridLayout {" in qml
+    assert "columns: 4" in qml
+    assert "columnSpacing: 10" in qml
+    assert "rowSpacing: 10" in qml
+    assert "radius: 4" in qml
+    assert 'TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 88' in qml
     assert 'text: "更多 ▾"' not in qml
     assert 'text: "继续全部"' in qml
     assert 'text: "导出入参"' in qml

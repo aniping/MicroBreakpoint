@@ -631,11 +631,12 @@ Item {
     component TabButton: Button {
         id: tab
         property bool selected: false
-        implicitHeight: 38
+        implicitHeight: 32
         padding: 0
         background: Rectangle {
-            color: tab.selected ? page.appTheme.primary : (tab.hovered ? page.appTheme.panelHover : page.appTheme.panelBgAlt)
-            border.color: tab.selected ? page.appTheme.primary : page.appTheme.border
+            radius: 4
+            color: tab.selected ? page.appTheme.primary : (tab.hovered ? page.appTheme.panelHover : "transparent")
+            border.color: tab.selected ? page.appTheme.primary : "transparent"
         }
         contentItem: Text {
             text: tab.text
@@ -1045,7 +1046,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 92
+                    Layout.preferredHeight: 98
                     Layout.leftMargin: 10
                     Layout.rightMargin: 10
                     Layout.topMargin: 10
@@ -1056,38 +1057,43 @@ Item {
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 8
-                        spacing: 8
-                        RowLayout {
+                        anchors.margins: 10
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 6
-                            MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
-                            MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.continueAll() }
-                            MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
-                            MbButton { appTheme: page.appTheme; text: "条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
-                            Item { Layout.fillWidth: true }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            MbButton { appTheme: page.appTheme; text: "导出入参"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "params") }
-                            MbButton { appTheme: page.appTheme; text: "导出返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "result") }
-                            MbButton { appTheme: page.appTheme; text: "登记接口"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: "success"; Layout.preferredWidth: 88; Layout.preferredHeight: 30; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
-                            Item { Layout.fillWidth: true }
+                            columns: 4
+                            columnSpacing: 10
+                            rowSpacing: 10
+                            MbButton { appTheme: page.appTheme; text: "继续执行"; iconText: "▶"; enabled: page.selectedItem && page.statusValue(page.selectedItem) === "paused"; variant: "primary"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.continueCall(page.callId(page.selectedItem)) }
+                            MbButton { appTheme: page.appTheme; text: "继续全部"; iconText: "▶"; enabled: page.selectedPausedCount() > 0; variant: "primary"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.continueAll() }
+                            MbButton { appTheme: page.appTheme; text: "命令断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.createMethodBreakpointFromCall(page.callId(page.selectedItem)) }
+                            MbButton { appTheme: page.appTheme; text: "条件断点"; enabled: page.selectedItem !== null; variant: "primary"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.createBreakpointFromCall(page.callId(page.selectedItem)) }
+                            MbButton { appTheme: page.appTheme; text: "导出入参"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "params") }
+                            MbButton { appTheme: page.appTheme; text: "导出返回"; enabled: page.selectedItem !== null; variant: "neutral"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.exportPayload(page.callId(page.selectedItem), "result") }
+                            MbButton { appTheme: page.appTheme; text: "登记接口"; enabled: page.selectedItem !== null && !page.interfaceRegistered(page.selectedItem); variant: "success"; Layout.preferredWidth: 96; Layout.preferredHeight: 30; onClicked: bridge.addInterfaceFromCall(page.callId(page.selectedItem)) }
                         }
                     }
                 }
 
-                RowLayout {
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 38
-                    spacing: 0
-                    TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 72; onClicked: page.detailTabIndex = 0 }
-                    TabButton { text: "入参"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 72; onClicked: page.detailTabIndex = 1 }
-                    TabButton { text: "返回"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 72; onClicked: page.detailTabIndex = 2 }
-                    TabButton { text: "Payload"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 80; onClicked: page.detailTabIndex = 3 }
-                    TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 90; onClicked: page.detailTabIndex = 4 }
-                    TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.fillWidth: true; onClicked: page.detailTabIndex = 5 }
+                    Layout.preferredHeight: 48
+                    Layout.leftMargin: 10
+                    Layout.rightMargin: 10
+                    Layout.bottomMargin: 8
+                    radius: 5
+                    color: page.appTheme.panelBgAlt
+                    border.color: page.appTheme.borderSoft
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        spacing: 4
+                        TabButton { text: "概览"; selected: page.detailTabIndex === 0; Layout.preferredWidth: 68; onClicked: page.detailTabIndex = 0 }
+                        TabButton { text: "入参"; selected: page.detailTabIndex === 1; Layout.preferredWidth: 68; onClicked: page.detailTabIndex = 1 }
+                        TabButton { text: "返回"; selected: page.detailTabIndex === 2; Layout.preferredWidth: 68; onClicked: page.detailTabIndex = 2 }
+                        TabButton { text: "Payload"; selected: page.detailTabIndex === 3; Layout.preferredWidth: 78; onClicked: page.detailTabIndex = 3 }
+                        TabButton { text: "技术信息"; selected: page.detailTabIndex === 4; Layout.preferredWidth: 88; onClicked: page.detailTabIndex = 4 }
+                        TabButton { text: "原始 JSON"; selected: page.detailTabIndex === 5; Layout.fillWidth: true; onClicked: page.detailTabIndex = 5 }
+                    }
                 }
 
                 StackLayout {
