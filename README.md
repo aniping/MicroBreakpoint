@@ -7,6 +7,8 @@
 
 关键原则：当前模型只有“开始调试 / 停止调试”。点击“开始调试”后，Java 上报的 before-call 才会进入调用记录、接口发现和断点判断；停止调试后新的 before-call 会直接放行，不污染当前 Session。Java 调用由外部脚本、业务系统或手动 HTTP 请求触发，桌面端不再承担 Java 请求发起器职责。
 
+用户操作和 Java 侵入式接入说明见：[用户指导手册](docs/user-guide.md)。
+
 ## 环境
 
 Python 使用 conda 环境管理：
