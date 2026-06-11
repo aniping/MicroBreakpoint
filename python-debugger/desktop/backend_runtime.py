@@ -1,22 +1,23 @@
 import logging
-from threading import Thread
+import os
+from pathlib import Path
+import shutil
+import subprocess
 from time import monotonic, sleep
 
 import requests
-from werkzeug.serving import make_server
 
-from app import create_app
 from desktop.config import BACKEND_HOST, BACKEND_PORT
 
 
 class DesktopBackendRuntime:
-    def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None):
+    def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None, command=None):
         self.host = host
         self.port = port
         self.app_config = app_config
         self.url = f"http://{host}:{port}"
-        self._server = None
-        self._thread = None
+        self.command = command
+        self._process = None
         self._owned = False
 
     @property
@@ -26,30 +27,44 @@ class DesktopBackendRuntime:
     def start(self, timeout=8.0):
         self._enable_console_logging()
         if self.is_ready():
-            self._log(f"reuse Python backend at {self.url}")
+            self._log(f"reuse Java backend at {self.url}")
             return False
-        self._log(f"start Python backend at {self.url}")
-        app = create_app(self.app_config)
-        self._server = make_server(self.host, self.port, app, threaded=True)
-        self._thread = Thread(target=self._server.serve_forever, name="micro-breakpoint-backend", daemon=True)
-        self._thread.start()
+        self._log(f"start Java backend at {self.url}")
+        self._process = subprocess.Popen(
+            self.command or self._backend_command(),
+            cwd=self._java_backend_dir(),
+            env=self._backend_env(),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
         self._owned = True
-        self._wait_until_ready(timeout)
-        self._log(f"Python backend ready at {self.url}")
+        try:
+            self._wait_until_ready(timeout)
+        except Exception:
+            self._terminate_process()
+            self._owned = False
+            raise
+        self._log(f"Java backend ready at {self.url}")
         return True
 
     def stop(self):
         self._stop_debug_session()
-        if not self._owned or self._server is None:
+        if not self._owned or self._process is None:
             return
-        self._log(f"stop Python backend at {self.url}")
-        self._server.shutdown()
-        if self._thread is not None:
-            self._thread.join(timeout=3)
-        self._server = None
-        self._thread = None
+        self._log(f"stop Java backend at {self.url}")
+        self._terminate_process()
         self._owned = False
-        self._log("Python backend stopped")
+        self._log("Java backend stopped")
+
+    def _terminate_process(self):
+        if self._process is None:
+            return
+        self._process.terminate()
+        try:
+            self._process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            self._process.kill()
+            self._process.wait(timeout=3)
+        self._process = None
 
     def _enable_console_logging(self):
         logger = logging.getLogger("werkzeug")
@@ -61,6 +76,31 @@ class DesktopBackendRuntime:
 
     def _log(self, message):
         print(f"[MicroBreakpoint] {message}", flush=True)
+
+    def _java_backend_dir(self):
+        return Path(__file__).resolve().parents[2] / "java-debugger"
+
+    def _backend_command(self):
+        jar = self._java_backend_dir() / "target" / "micro-breakpoint-debugger-0.1.0.jar"
+        if jar.exists():
+            return ["java", "-jar", str(jar)]
+        mvn = shutil.which("mvn.cmd") or shutil.which("mvn") or "mvn"
+        return [mvn, "-q", "-DskipTests", "spring-boot:run"]
+
+    def _backend_env(self):
+        env = os.environ.copy()
+        env["SERVER_PORT"] = str(self.port)
+        env["MICRO_BREAKPOINT_DATABASE"] = self._database_path()
+        payload_root = (self.app_config or {}).get("PAYLOAD_ROOT")
+        if payload_root:
+            env["MICRO_BREAKPOINT_PAYLOAD_ROOT"] = str(payload_root)
+        return env
+
+    def _database_path(self):
+        database = (self.app_config or {}).get("DATABASE")
+        if database:
+            return str(database)
+        return str((Path(__file__).resolve().parents[1] / "data" / "debugger.sqlite3").resolve())
 
     def _stop_debug_session(self):
         try:
@@ -81,4 +121,4 @@ class DesktopBackendRuntime:
             if self.is_ready():
                 return
             sleep(0.1)
-        raise RuntimeError(f"Python backend did not start at {self.url}")
+        raise RuntimeError(f"Java backend did not start at {self.url}")

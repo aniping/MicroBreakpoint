@@ -1,5 +1,19 @@
 # Python Debugger
 
+## Java 后端迁移说明
+
+当前默认后端为仓库根目录下的 `java-debugger/` Spring Boot 服务，端口仍为 `18601`。本目录继续提供 PySide6/QML 桌面端；`python run_desktop.py` 会复用已有 Java 后端，若端口不可用则自动启动 `java-debugger`。`run_backend.py` 仅作为 legacy Flask 后端保留，便于对照旧实现。
+
+常用命令：
+
+```powershell
+cd ..\java-debugger
+mvn spring-boot:run
+
+cd ..\python-debugger
+python run_desktop.py
+```
+
 Flask 后端端口 `18601`，桌面端使用 PySide6/QML。
 
 ## Conda 环境

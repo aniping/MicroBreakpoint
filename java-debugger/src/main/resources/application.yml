@@ -1,0 +1,7 @@
+server:
+  port: 18601
+
+micro-breakpoint:
+  database: ../python-debugger/data/debugger.sqlite3
+  payload-root:
+  breakpoint-timeout-seconds: 300

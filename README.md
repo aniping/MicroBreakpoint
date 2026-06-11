@@ -131,3 +131,30 @@ conda run -n micro-breakpoint pytest
 cd ..\java-demo
 mvn test
 ```
+## Java 后端
+
+后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端启动时会优先复用已有 `18601` 后端，若不可用则自动拉起 `java-debugger`。
+
+启动 Java 后端：
+
+```powershell
+cd java-debugger
+mvn spring-boot:run
+```
+
+打包后端：
+
+```powershell
+cd java-debugger
+mvn -DskipTests package
+```
+
+验证命令：
+
+```powershell
+cd java-debugger
+mvn test
+
+cd ..\python-debugger
+conda run -n micro-breakpoint pytest tests/test_desktop_backend_runtime.py tests/test_java_demo_scripts.py
+```
