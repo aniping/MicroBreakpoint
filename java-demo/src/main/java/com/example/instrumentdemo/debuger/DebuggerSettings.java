@@ -2,7 +2,7 @@ package com.example.instrumentdemo.debuger;
 
 public class DebuggerSettings {
 
-    public static boolean enabled = true;
+    public static volatile boolean enabled = false;
 
     public static String serverUrl = "http://127.0.0.1:18601";
 

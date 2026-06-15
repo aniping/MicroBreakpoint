@@ -23,6 +23,7 @@ public class DebugClient {
 
             return OBJECT_MAPPER.readValue(responseBody, WaitResponse.class);
         } catch (Exception e) {
+            DebuggerSettings.enabled = false;
             System.out.println("[MicroBreakpoint] wait failed, continue business. callId="
                     + callId
                     + ", error="
@@ -81,6 +82,7 @@ public class DebugClient {
 
             return OBJECT_MAPPER.readValue(responseBody, BeforeCallResponse.class);
         } catch (Exception e) {
+            DebuggerSettings.enabled = false;
             System.out.println("[MicroBreakpoint] before-call http failed, continue. method="
                     + request.getMethodName()
                     + ", error="
@@ -96,6 +98,7 @@ public class DebugClient {
         try {
             postJson(url, request, DebuggerSettings.readTimeoutMs);
         } catch (Exception e) {
+            DebuggerSettings.enabled = false;
             System.out.println("[MicroBreakpoint] after-call http failed, ignore. callId="
                     + request.getCallId()
                     + ", error="

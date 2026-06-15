@@ -4,6 +4,8 @@ Spring Boot 微服务示例，端口 `8080`。Service 方法通过 `DebugInvoker
 
 Python Debugger 上报地址在 `src/main/resources/application.yml` 的 `debugger.server-url` 中配置，默认是 `http://127.0.0.1:18601`。
 
+Java Demo 默认以 `debugger.enabled=false` 启动。断点程序点击“开始调试”后，会请求 Demo 的 `/api/demo/debugger/enabled` 打开上报开关；点击“停止调试”后会请求同一接口关闭开关。
+
 ## 启动
 
 ```powershell
@@ -14,6 +16,7 @@ mvn spring-boot:run
 ## 接口
 
 - `GET /api/demo/ping`
+- `POST /api/demo/debugger/enabled`
 - `POST /api/demo/initialize`
 - `POST /api/demo/control`
 
@@ -45,4 +48,4 @@ cd java-demo
 
 Java 上报中 `objectName`、`cmdName`、`slotId` 和 `params` 都是顶层字段；`rawArgs` 仅作为技术信息保留。
 
-Python Debugger 不在线时，业务接口仍会正常执行；上报失败只会打印警告。
+Python Debugger 不在线时，业务接口仍会正常执行；上报失败会打印警告，并自动把本地 `debugger.enabled` 关闭，避免断点程序异常退出后持续发起失败请求。

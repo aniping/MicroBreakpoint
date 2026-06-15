@@ -86,6 +86,11 @@ class Bridge(QObject):
         if refresh:
             self.refreshAll()
 
+    def _emit_debug_result(self, value):
+        self._emit_result(value)
+        if isinstance(value, dict) and value.get("success") is False and value.get("message"):
+            self.userNotice.emit(str(value.get("message")))
+
     @Slot(result=str)
     def getThemeMode(self):
         value = self.settings.value("theme/mode", "dark")
@@ -108,12 +113,12 @@ class Bridge(QObject):
 
     @Slot()
     def startDebug(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/debug/start", json={}))
+        self._emit_debug_result(self._request("POST", f"{self.backend}/api/debug/start", json={}))
         self.refreshAll()
 
     @Slot()
     def stopDebug(self):
-        self._emit_result(self._request("POST", f"{self.backend}/api/debug/stop"))
+        self._emit_debug_result(self._request("POST", f"{self.backend}/api/debug/stop"))
         self.refreshAll()
 
     @Slot()

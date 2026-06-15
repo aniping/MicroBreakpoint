@@ -2,7 +2,7 @@ server:
   port: 8080
 
 debugger:
-  enabled: true
+  enabled: false
   server-url: http://127.0.0.1:18601
   service-name: instrument-service-demo
   connect-timeout-ms: 300

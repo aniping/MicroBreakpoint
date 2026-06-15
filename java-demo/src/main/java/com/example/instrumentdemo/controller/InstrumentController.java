@@ -2,10 +2,10 @@ package com.example.instrumentdemo.controller;
 
 import com.example.instrumentdemo.controller.dto.ControlParams;
 import com.example.instrumentdemo.controller.dto.InitParams;
+import com.example.instrumentdemo.debuger.DebuggerSettings;
 import com.example.instrumentdemo.model.ValueResult;
 import com.example.instrumentdemo.service.InstrumentService;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -25,6 +25,13 @@ public class InstrumentController {
     @GetMapping("/ping")
     public String ping() {
         return "pong";
+    }
+
+    @PostMapping("/debugger/enabled")
+    public Map<String, Object> setDebuggerEnabled(
+            @RequestBody(required = false) Map<String, Object> body) {
+        DebuggerSettings.enabled = body != null && Boolean.TRUE.equals(body.get("enabled"));
+        return Map.of("success", true, "enabled", DebuggerSettings.enabled);
     }
 
     @PostMapping("/initialize")

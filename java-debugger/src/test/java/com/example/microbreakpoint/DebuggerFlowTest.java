@@ -2,21 +2,31 @@ package com.example.microbreakpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.sun.net.httpserver.HttpServer;
+
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+
+import com.example.microbreakpoint.config.DebuggerProperties;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "micro-breakpoint.database=target/test-data/debugger-flow.sqlite3",
@@ -25,14 +35,34 @@ import org.springframework.http.ResponseEntity;
 })
 class DebuggerFlowTest {
 
+    private static final AtomicBoolean DEMO_DEBUGGER_ENABLED = new AtomicBoolean(false);
+    private static final HttpServer DEMO_SERVER = startDemoServer();
+    private static final String DEMO_BASE_URL = "http://127.0.0.1:" + DEMO_SERVER.getAddress().getPort();
+
     @Autowired
     private TestRestTemplate rest;
 
+    @Autowired
+    private DebuggerProperties properties;
+
+    @DynamicPropertySource
+    static void demoProperties(DynamicPropertyRegistry registry) {
+        registry.add("micro-breakpoint.demo-base-url", () -> DEMO_BASE_URL);
+        registry.add("micro-breakpoint.demo-request-timeout-ms", () -> "200");
+    }
+
+    @AfterAll
+    static void stopDemoServer() {
+        DEMO_SERVER.stop(0);
+    }
+
     @BeforeEach
     void reset() {
+        properties.setDemoBaseUrl(DEMO_BASE_URL);
         rest.postForObject("/api/debug/stop", Map.of(), Map.class);
         rest.exchange("/api/sessions", HttpMethod.DELETE, HttpEntity.EMPTY, Map.class);
         rest.postForObject("/api/interfaces/lock", Map.of("locked", false), Map.class);
+        DEMO_DEBUGGER_ENABLED.set(false);
     }
 
     @Test
@@ -72,6 +102,34 @@ class DebuggerFlowTest {
         assertThat(byCommand.get("start")).containsEntry("call_count", 2);
         assertThat(byCommand.get("start")).containsEntry("params_sample_count", 2);
         assertThat(byCommand.get("stop")).containsEntry("call_count", 1);
+    }
+
+    @Test
+    void debugStartAndStopToggleDemoDebuggerSwitch() {
+        assertThat(DEMO_DEBUGGER_ENABLED.get()).isFalse();
+
+        createAndStart();
+
+        assertThat(DEMO_DEBUGGER_ENABLED.get()).isTrue();
+
+        Map<String, Object> stopped = post("/api/debug/stop", Map.of());
+
+        assertThat(stopped).containsEntry("success", true).containsEntry("debugging", false);
+        assertThat(DEMO_DEBUGGER_ENABLED.get()).isFalse();
+    }
+
+    @Test
+    void debugStartFailsWhenDemoSwitchIsUnavailable() {
+        properties.setDemoBaseUrl("http://127.0.0.1:1");
+
+        ResponseEntity<Map<String, Object>> response = rest.exchange("/api/debug/start", HttpMethod.POST,
+                new HttpEntity<>(Map.of()), new ParameterizedTypeReference<>() {
+                });
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(response.getBody()).containsEntry("success", false).containsEntry("debugging", false);
+        assertThat(String.valueOf(response.getBody().get("message"))).contains("Java Demo");
+        assertThat(get("/api/debug/state")).containsEntry("debugging", false).containsEntry("mode", "idle");
     }
 
     @Test
@@ -178,6 +236,27 @@ class DebuggerFlowTest {
         post("/api/sessions", Map.of());
         Map<String, Object> started = post("/api/debug/start", Map.of());
         assertThat(started).containsEntry("state", "DEBUGGING");
+    }
+
+    private static HttpServer startDemoServer() {
+        try {
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/api/demo/debugger/enabled", exchange -> {
+                String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                DEMO_DEBUGGER_ENABLED.set(body.contains("\"enabled\":true"));
+                byte[] response = ("{\"success\":true,\"enabled\":"
+                        + DEMO_DEBUGGER_ENABLED.get() + "}").getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json;charset=UTF-8");
+                exchange.sendResponseHeaders(200, response.length);
+                try (java.io.OutputStream outputStream = exchange.getResponseBody()) {
+                    outputStream.write(response);
+                }
+            });
+            server.start();
+            return server;
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
     private void finish(String callId, boolean success, int costMs) {

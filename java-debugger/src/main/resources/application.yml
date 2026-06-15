@@ -5,3 +5,5 @@ micro-breakpoint:
   database: ../python-debugger/data/debugger.sqlite3
   payload-root:
   breakpoint-timeout-seconds: 300
+  demo-base-url: http://127.0.0.1:8080
+  demo-request-timeout-ms: 1000

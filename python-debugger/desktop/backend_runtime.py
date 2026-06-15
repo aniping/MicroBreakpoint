@@ -94,6 +94,12 @@ class DesktopBackendRuntime:
         payload_root = (self.app_config or {}).get("PAYLOAD_ROOT")
         if payload_root:
             env["MICRO_BREAKPOINT_PAYLOAD_ROOT"] = str(payload_root)
+        demo_base_url = (self.app_config or {}).get("DEMO_BASE_URL")
+        if demo_base_url:
+            env["MICRO_BREAKPOINT_DEMO_BASE_URL"] = str(demo_base_url)
+        demo_request_timeout_ms = (self.app_config or {}).get("DEMO_REQUEST_TIMEOUT_MS")
+        if demo_request_timeout_ms:
+            env["MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS"] = str(demo_request_timeout_ms)
         return env
 
     def _database_path(self):

@@ -34,6 +34,7 @@ def test_debugger_ports_are_configured_for_18601():
     java_yml = (ROOT / "java-demo" / "src" / "main" / "resources" / "application.yml").read_text(encoding="utf-8")
     java_settings = (ROOT / "java-demo" / "src" / "main" / "java" / "com" / "example" / "instrumentdemo" / "debuger" / "DebuggerSettings.java").read_text(encoding="utf-8")
     java_config = (ROOT / "java-demo" / "src" / "main" / "java" / "com" / "example" / "instrumentdemo" / "debuger" / "DebuggerSettingsConfig.java").read_text(encoding="utf-8")
+    java_debugger_yml = (ROOT / "java-debugger" / "src" / "main" / "resources" / "application.yml").read_text(encoding="utf-8")
 
     assert "BACKEND_PORT = 18601" in python_config
     assert "BACKEND_PORT" in run_backend
@@ -41,8 +42,13 @@ def test_debugger_ports_are_configured_for_18601():
     assert "BACKEND_PORT" in runtime
     assert "page.backendUrl" in settings_page
     assert "http://127.0.0.1:18601" in java_yml
+    assert "enabled: false" in java_yml
     assert "http://127.0.0.1:18601" in java_settings
+    assert "public static volatile boolean enabled = false" in java_settings
+    assert "${debugger.enabled:false}" in java_config
     assert "${debugger.server-url:http://127.0.0.1:18601}" in java_config
+    assert "demo-base-url: http://127.0.0.1:8080" in java_debugger_yml
+    assert "demo-request-timeout-ms: 1000" in java_debugger_yml
 
 
 def test_object_cmd_bash_scripts_cover_discovery_and_breakpoints():

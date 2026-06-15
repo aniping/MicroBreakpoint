@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 public class DebuggerSettingsConfig {
 
     public DebuggerSettingsConfig(
-            @Value("${debugger.enabled:true}") boolean enabled,
+            @Value("${debugger.enabled:false}") boolean enabled,
             @Value("${debugger.server-url:http://127.0.0.1:18601}") String serverUrl,
             @Value("${debugger.service-name:instrument-service}") String serviceName,
             @Value("${debugger.connect-timeout-ms:300}") int connectTimeoutMs,
