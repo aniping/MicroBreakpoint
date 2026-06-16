@@ -90,6 +90,7 @@ class DesktopBackendRuntime:
     def _backend_env(self):
         env = os.environ.copy()
         env["SERVER_PORT"] = str(self.port)
+        env["MICRO_BREAKPOINT_PARENT_PID"] = str(os.getpid())
         env["MICRO_BREAKPOINT_DATABASE"] = self._database_path()
         payload_root = (self.app_config or {}).get("PAYLOAD_ROOT")
         if payload_root:

@@ -140,6 +140,7 @@ mvn test
 后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端启动时会优先复用已有 `18601` 后端，若不可用则自动拉起 `java-debugger`。
 
 Java 后端默认通过 `micro-breakpoint.demo-base-url=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `micro-breakpoint.demo-request-timeout-ms` 控制。
+桌面端自动拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。
 
 启动 Java 后端：
 

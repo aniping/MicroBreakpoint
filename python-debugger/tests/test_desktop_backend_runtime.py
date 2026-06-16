@@ -1,5 +1,6 @@
 import sqlite3
 import socket
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
@@ -58,6 +59,14 @@ def test_desktop_backend_runtime_prints_console_lifecycle_logs(tmp_path, capsys)
     assert "[MicroBreakpoint] Java backend ready at" in output
     assert "[MicroBreakpoint] stop Java backend at" in output
     assert "[MicroBreakpoint] Java backend stopped" in output
+
+
+def test_desktop_backend_runtime_passes_parent_pid_to_java(tmp_path):
+    runtime = DesktopBackendRuntime(port=free_port(), app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+
+    env = runtime._backend_env()
+
+    assert env["MICRO_BREAKPOINT_PARENT_PID"] == str(os.getpid())
 
 
 def free_port():

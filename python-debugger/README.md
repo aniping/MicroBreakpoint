@@ -3,6 +3,7 @@
 ## Java 后端迁移说明
 
 当前默认后端为仓库根目录下的 `java-debugger/` Spring Boot 服务，端口仍为 `18601`。本目录继续提供 PySide6/QML 桌面端；`python run_desktop.py` 会复用已有 Java 后端，若端口不可用则自动启动 `java-debugger`。`run_backend.py` 仅作为 legacy Flask 后端保留，便于对照旧实现。
+桌面端自动拉起 Java 后端时会传入当前桌面进程 PID；Java 后端会启用父进程 watchdog，检测到桌面进程异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，因此不会被桌面端误停。
 
 常用命令：
 
