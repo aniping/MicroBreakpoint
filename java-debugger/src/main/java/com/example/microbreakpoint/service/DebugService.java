@@ -187,6 +187,20 @@ public class DebugService {
         return stateResponse(mapOf("success", true, "deletedCount", counts, "releasedCount", released));
     }
 
+    public synchronized Map<String, Object> clearCallRecords() {
+        if (debugging) {
+            return mapOf("success", false, "message", "请先停止调试");
+        }
+        if (sessionId == null) {
+            return mapOf("success", false, "message", "请先新建或选择会话");
+        }
+        String sid = sessionId;
+        Map<String, Object> counts = mapOf(
+                "calls", count("SELECT COUNT(*) FROM call_record WHERE session_id=?", sid));
+        jdbc.update("DELETE FROM call_record WHERE session_id=?", sid);
+        return stateResponse(mapOf("success", true, "deletedCount", counts));
+    }
+
     public synchronized Map<String, Object> deleteSession(String targetSessionId) {
         if (debugging) {
             return mapOf("success", false, "message", "请先停止调试");

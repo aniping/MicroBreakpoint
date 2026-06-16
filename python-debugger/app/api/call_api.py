@@ -6,6 +6,7 @@ from app.services.debug_service import (
     before_call,
     breakpoint_from_call as create_breakpoint_from_call,
     call_detail as call_detail_payload,
+    clear_call_records,
     continue_all_calls,
     continue_call as continue_one_call,
     export_payload_target,
@@ -48,6 +49,12 @@ def calls():
 @call_api.get("/grouped")
 def calls_grouped():
     return jsonify({"success": True, "groups": grouped_calls(request.args.get("sessionId"))})
+
+
+@call_api.post("/clear")
+def clear_calls():
+    result = clear_call_records()
+    return jsonify(result), 200 if result.get("success") else 400
 
 
 @call_api.get("/<call_id>")

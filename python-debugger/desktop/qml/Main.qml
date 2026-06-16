@@ -54,7 +54,7 @@ ApplicationWindow {
 
     function confirmClearCurrentSession() {
         confirmDialog.ask("清空当前会话", "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。", "清空", function() {
-            bridge.clearCalls()
+            bridge.clearCurrentSession()
         })
     }
 

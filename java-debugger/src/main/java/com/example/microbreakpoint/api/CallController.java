@@ -65,6 +65,12 @@ public class CallController {
         return debugService.groupedCalls(sessionId);
     }
 
+    @PostMapping("/clear")
+    public ResponseEntity<Map<String, Object>> clear() {
+        Map<String, Object> result = debugService.clearCallRecords();
+        return ResponseEntity.status(Boolean.TRUE.equals(result.get("success")) ? 200 : 400).body(result);
+    }
+
     @GetMapping("/{callId}")
     public ResponseEntity<Map<String, Object>> detail(@PathVariable String callId) {
         Map<String, Object> result = debugService.callDetail(callId);

@@ -969,6 +969,25 @@ def test_clear_and_delete_session_respect_session_boundaries(tmp_path):
     assert client.get("/api/breakpoints", query_string={"sessionId": first_session}).get_json()["items"] == []
 
 
+def test_clear_call_records_keeps_interfaces_and_breakpoints(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("record-only-clear"))
+    finish(client, "record-only-clear")
+    interface_id = client.get("/api/interfaces").get_json()["items"][0]["id"]
+    client.post(f"/api/interfaces/{interface_id}/breakpoint", json={})
+    client.post("/api/debug/stop")
+
+    cleared = client.post("/api/calls/clear")
+    assert cleared.status_code == 200
+    assert cleared.get_json()["deletedCount"]["calls"] == 1
+    assert client.get("/api/calls").get_json()["items"] == []
+    assert len(client.get("/api/interfaces").get_json()["items"]) == 1
+    assert len(client.get("/api/interfaces/" + interface_id + "/samples").get_json()["items"]) == 1
+    assert len(client.get("/api/breakpoints").get_json()["items"]) == 1
+
+
 def test_clear_sessions_deletes_history_and_resets_state(tmp_path):
     client = make_client(tmp_path)
 

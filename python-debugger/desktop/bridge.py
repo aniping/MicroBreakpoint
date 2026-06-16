@@ -50,6 +50,7 @@ class Bridge(QObject):
             value.get("code") in ("DUPLICATE_COMMAND_BREAKPOINT", "DUPLICATE_CONDITION_BREAKPOINT")
             or message.startswith("条件断点已创建")
             or message == "当前会话数据已清空。"
+            or message == "调用记录已清空。"
         ):
             self.userNotice.emit(message)
 
@@ -133,6 +134,13 @@ class Bridge(QObject):
 
     @Slot()
     def clearCalls(self):
+        result = self._request("POST", f"{self.backend}/api/calls/clear")
+        if result.get("success"):
+            result["message"] = "调用记录已清空。"
+        self._emit_operation_result(result)
+
+    @Slot()
+    def clearCurrentSession(self):
         result = self._request("POST", f"{self.backend}/api/sessions/current/clear")
         if result.get("success"):
             result["message"] = "当前会话数据已清空。"

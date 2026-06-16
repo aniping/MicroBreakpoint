@@ -185,6 +185,21 @@ def clear_current_session():
     return state_response(success=True, deletedCount=counts, releasedCount=released)
 
 
+def clear_call_records():
+    if STATE["debugging"]:
+        return {"success": False, "message": "请先停止调试"}
+    if not STATE["sessionId"]:
+        return {"success": False, "message": "请先新建或选择会话"}
+    db = get_db()
+    session_id = STATE["sessionId"]
+    counts = {
+        "calls": db.execute("SELECT COUNT(*) FROM call_record WHERE session_id=?", (session_id,)).fetchone()[0],
+    }
+    db.execute("DELETE FROM call_record WHERE session_id=?", (session_id,))
+    db.commit()
+    return state_response(success=True, deletedCount=counts)
+
+
 def delete_session(session_id):
     if STATE["debugging"]:
         return {"success": False, "message": "请先停止调试"}

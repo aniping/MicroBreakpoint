@@ -436,7 +436,7 @@ Item {
     }
 
     function confirmClearRecords() {
-        confirmDialog.ask("清空当前会话", "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。", "清空", function() {
+        confirmDialog.ask("清空调用记录", "确认清空当前会话的调用记录吗？接口列表、参数样本和断点会保留。", "清空记录", function() {
             bridge.clearCalls()
         })
     }

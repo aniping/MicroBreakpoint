@@ -202,6 +202,23 @@ class DebuggerFlowTest {
     }
 
     @Test
+    void clearCallRecordsKeepsInterfacesAndBreakpoints() {
+        createAndStart();
+        post("/api/calls/before", makeBefore("record-only-clear", "SA", "start", 1, Map.of("mode", "A")));
+        finish("record-only-clear", true, 5);
+        Map<String, Object> interfaceItem = items(get("/api/interfaces")).get(0);
+        post("/api/interfaces/" + interfaceItem.get("id") + "/breakpoint", Map.of());
+        post("/api/debug/stop", Map.of());
+
+        Map<String, Object> cleared = post("/api/calls/clear", Map.of());
+        assertThat(cleared).containsEntry("success", true);
+        assertThat((Map<String, Object>) cleared.get("deletedCount")).containsEntry("calls", 1);
+        assertThat(items(get("/api/calls"))).isEmpty();
+        assertThat(items(get("/api/interfaces"))).hasSize(1);
+        assertThat(items(get("/api/breakpoints"))).hasSize(1);
+    }
+
+    @Test
     void archiveFileRoundTripKeepsLargePayloadReadable() {
         Map<String, Object> created = post("/api/sessions", Map.of());
         String sessionId = String.valueOf(created.get("sessionId"));

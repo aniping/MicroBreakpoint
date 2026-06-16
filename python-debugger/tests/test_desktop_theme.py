@@ -351,6 +351,7 @@ def test_main_has_persistent_interface_lock_switch():
 
 def test_main_uses_fixed_business_pages_and_title():
     qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+    call_qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
 
     assert 'title: "组件化断点调试工具"' in qml
     assert "property int currentPage: 0" in qml
@@ -360,6 +361,8 @@ def test_main_uses_fixed_business_pages_and_title():
     assert 'text: "历史会话"' in qml
     assert "SettingsTab" not in qml
     assert "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。" in qml
+    assert "bridge.clearCurrentSession()" in qml
+    assert "确认清空当前会话的调用记录吗？接口列表、参数样本和断点会保留。" in call_qml
 
 
 def test_session_tab_exposes_mbrec_import_export_controls():
@@ -460,6 +463,19 @@ def test_clear_sessions_calls_backend_endpoint():
 
     assert bridge.requests == [("DELETE", f"{bridge.backend}/api/sessions", {})]
     assert bridge.refreshed == 1
+
+
+def test_clear_calls_and_current_session_use_separate_endpoints():
+    bridge = CaptureBridge()
+
+    bridge.clearCalls()
+    bridge.clearCurrentSession()
+
+    assert bridge.requests == [
+        ("POST", f"{bridge.backend}/api/calls/clear", {}),
+        ("POST", f"{bridge.backend}/api/sessions/current/clear", {}),
+    ]
+    assert bridge.refreshed == 2
 
 
 def test_bridge_wires_interface_lock_and_manual_registration():
