@@ -42,6 +42,10 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
+When changing debugger backend behavior or API contracts, keep the Java backend
+(`java-debugger/`) and legacy Flask backend (`python-debugger/app/`) behavior in
+sync unless the user explicitly scopes the task to only one backend.
+
 ## 4. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**

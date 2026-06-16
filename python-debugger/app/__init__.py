@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask
 from flask_cors import CORS
 
@@ -15,9 +17,20 @@ from app.services.wait_manager import wait_manager
 def create_app(test_config=None):
     app = Flask(__name__)
     database = (test_config or {}).get("DATABASE", "data/debugger.sqlite3")
+    config = test_config or {}
     app.config.update(
         DATABASE=database,
-        PAYLOAD_ROOT=(test_config or {}).get("PAYLOAD_ROOT") if test_config else None,
+        PAYLOAD_ROOT=config.get("PAYLOAD_ROOT") if test_config else None,
+        DEMO_BASE_URL=config.get(
+            "DEMO_BASE_URL",
+            os.environ.get("MICRO_BREAKPOINT_DEMO_BASE_URL", "http://127.0.0.1:8080"),
+        ),
+        DEMO_REQUEST_TIMEOUT_MS=int(
+            config.get(
+                "DEMO_REQUEST_TIMEOUT_MS",
+                os.environ.get("MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS", 1000),
+            )
+        ),
         TESTING=bool(test_config and test_config.get("TESTING")),
     )
     if app.config["PAYLOAD_ROOT"] is None and database != ":memory:":

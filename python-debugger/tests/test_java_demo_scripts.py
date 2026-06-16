@@ -28,6 +28,7 @@ def test_call_all_demo_apis_script_covers_java_demo_rest_endpoints():
 def test_debugger_ports_are_configured_for_18601():
     python_config = (ROOT / "python-debugger" / "desktop" / "config.py").read_text(encoding="utf-8")
     run_backend = (ROOT / "python-debugger" / "run_backend.py").read_text(encoding="utf-8")
+    flask_app = (ROOT / "python-debugger" / "app" / "__init__.py").read_text(encoding="utf-8")
     run_desktop = (ROOT / "python-debugger" / "run_desktop.py").read_text(encoding="utf-8")
     bridge = (ROOT / "python-debugger" / "desktop" / "bridge.py").read_text(encoding="utf-8")
     runtime = (ROOT / "python-debugger" / "desktop" / "backend_runtime.py").read_text(encoding="utf-8")
@@ -45,6 +46,10 @@ def test_debugger_ports_are_configured_for_18601():
     assert '"external"' in run_desktop
     assert '"none"' not in run_desktop
     assert "MICRO_BREAKPOINT_DATABASE" in run_backend
+    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" in run_backend
+    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" in run_backend
+    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" in flask_app
+    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" in flask_app
     assert "SERVER_PORT" in run_backend
     assert "BACKEND_URL" in bridge
     assert "BACKEND_PORT" in runtime

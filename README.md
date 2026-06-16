@@ -7,7 +7,7 @@
 
 关键原则：当前模型只有“开始调试 / 停止调试”。点击“开始调试”后，Java 上报的 before-call 才会进入调用记录、接口发现和断点判断；停止调试后新的 before-call 会直接放行，不污染当前 Session。Java 调用由外部脚本、业务系统或手动 HTTP 请求触发，桌面端不再承担 Java 请求发起器职责。
 
-Java Demo 默认以 `debugger.enabled=false` 启动。点击“开始调试”时，Java 后端会先按 `micro-breakpoint.demo-base-url` 请求 Demo 的 `/api/demo/debugger/enabled` 打开上报开关；如果 Demo 不在线或请求失败，桌面端会弹窗提示并保持未调试状态。点击“停止调试”会释放后端暂停请求并关闭 Demo 开关；如果断点后端异常退出，Demo 下次上报失败时也会自动把本地开关关闭。
+Java Demo 默认以 `debugger.enabled=false` 启动。点击“开始调试”时，断点后端会先请求 Demo 的 `/api/demo/debugger/enabled` 打开上报开关；如果 Demo 不在线或请求失败，桌面端会弹窗提示并保持未调试状态。点击“停止调试”会释放后端暂停请求并关闭 Demo 开关；如果断点后端异常退出，Demo 下次上报失败时也会自动把本地开关关闭。
 
 用户操作和 Java 侵入式接入说明见：[用户指导手册](docs/user-guide.md)。
 
@@ -148,7 +148,7 @@ mvn test
 
 后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
 
-Java 后端默认通过 `micro-breakpoint.demo-base-url=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `micro-breakpoint.demo-request-timeout-ms` 控制。
+内置 Python Flask 后端默认通过 `MICRO_BREAKPOINT_DEMO_BASE_URL=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS` 控制。Java 后端使用对应的 `micro-breakpoint.demo-base-url` 和 `micro-breakpoint.demo-request-timeout-ms` 配置。
 桌面端通过 `--backend jar` 拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。
 
 启动 Java 后端：

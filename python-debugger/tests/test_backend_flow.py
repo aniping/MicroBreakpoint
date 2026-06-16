@@ -1,6 +1,10 @@
 from io import BytesIO
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from threading import Thread
 import zipfile
+
+import pytest
 
 from app import create_app
 from app.db.database import get_db
@@ -30,10 +34,49 @@ def make_client(tmp_path):
     return app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def demo_switch_server(monkeypatch):
+    server, state = start_demo_switch_server()
+    monkeypatch.setenv("MICRO_BREAKPOINT_DEMO_BASE_URL", f"http://127.0.0.1:{server.server_port}")
+    monkeypatch.setenv("MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS", "200")
+    try:
+        yield state
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def create_and_start(client):
     created = client.post("/api/sessions", json={}).get_json()
     started = client.post("/api/debug/start", json={}).get_json()
     return created["sessionId"], started
+
+
+def start_demo_switch_server():
+    state = {"enabled": False}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            if self.path != "/api/demo/debugger/enabled":
+                self.send_response(404)
+                self.end_headers()
+                return
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).replace(b" ", b"")
+            state["enabled"] = b'"enabled":true' in body
+            payload = json.dumps({"success": True, "enabled": state["enabled"]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json;charset=UTF-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format, *args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, state
 
 
 def finish(client, call_id, success=True, cost_ms=5):
@@ -89,6 +132,42 @@ def test_debug_records_and_discovers_by_business_identity(tmp_path):
     assert by_cmd["start"]["call_count"] == 2
     assert by_cmd["start"]["params_sample_count"] == 2
     assert by_cmd["stop"]["call_count"] == 1
+
+
+def test_debug_start_and_stop_toggle_demo_switch(tmp_path, demo_switch_server):
+    client = make_client(tmp_path)
+
+    assert demo_switch_server["enabled"] is False
+
+    _, started = create_and_start(client)
+
+    assert started["debugging"] is True
+    assert demo_switch_server["enabled"] is True
+
+    stopped = client.post("/api/debug/stop").get_json()
+
+    assert stopped["success"] is True
+    assert stopped["debugging"] is False
+    assert demo_switch_server["enabled"] is False
+
+
+def test_debug_start_fails_when_demo_switch_is_unavailable(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE": str(tmp_path / "debugger.sqlite3"),
+        "DEMO_BASE_URL": "http://127.0.0.1:1",
+        "DEMO_REQUEST_TIMEOUT_MS": 50,
+    })
+    client = app.test_client()
+
+    response = client.post("/api/debug/start", json={})
+    payload = response.get_json()
+
+    assert response.status_code == 400
+    assert payload["success"] is False
+    assert payload["debugging"] is False
+    assert payload["mode"] == "idle"
+    assert "Java Demo" in payload["message"]
 
 
 def test_call_list_is_lightweight_and_payload_is_chunked(tmp_path):

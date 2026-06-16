@@ -36,6 +36,8 @@ python run_desktop.py
 
 桌面端默认使用 `internal` 后端模式，会自动启动本项目自带的 Python Flask 后端。若 `18601` 端口已有可用后端，桌面端会直接复用。
 
+内置 Python Flask 后端默认通过 `MICRO_BREAKPOINT_DEMO_BASE_URL=http://127.0.0.1:8080` 请求 Java Demo 的 `/api/demo/debugger/enabled`，在“开始调试 / 停止调试”时打开或关闭 Demo 上报开关；请求超时由 `MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS` 控制，默认 `1000` 毫秒。Demo 不在线时，“开始调试”会失败并保持未调试状态。
+
 显式使用本地 jar：
 
 ```powershell
