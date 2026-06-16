@@ -3,7 +3,7 @@
 组件化断点调试工具是一个面向业务组件命令的接口级断点调试 Demo。它由两部分组成：
 
 - `java-demo/`：Spring Boot 3 微服务示例，提供仪表初始化和控制接口，并通过 AOP 上报调用。
-- `python-debugger/`：Flask 后端 + SQLite + PySide6/QML 桌面端，用于 Session 化采集调用、动态发现接口、设置断点并控制 Java 请求继续执行。
+- `python-debugger/`：PySide6/QML 桌面端 + legacy Flask 代码，用于 Session 化采集调用、动态发现接口、设置断点并控制 Java 请求继续执行。
 
 关键原则：当前模型只有“开始调试 / 停止调试”。点击“开始调试”后，Java 上报的 before-call 才会进入调用记录、接口发现和断点判断；停止调试后新的 before-call 会直接放行，不污染当前 Session。Java 调用由外部脚本、业务系统或手动 HTTP 请求触发，桌面端不再承担 Java 请求发起器职责。
 
@@ -24,13 +24,6 @@ Java 需要 JDK 17+ 和 Maven，Demo 代码不依赖 IDE Lombok 插件或额外�
 
 ## 启动
 
-启动 Python 后端：
-
-```powershell
-cd python-debugger
-python run_backend.py
-```
-
 启动桌面端：
 
 ```powershell
@@ -38,9 +31,25 @@ cd python-debugger
 python run_desktop.py
 ```
 
-桌面端启动时会自动拉起 Python 后端；如果 `18601` 端口已经有后端在运行，桌面端会直接复用现有后端。
-通过控制台运行 `python run_desktop.py` 时，会输出内置 Python 后端的启动、复用、停止日志，并保留 Flask 访问日志，便于排查接口请求。
-退出桌面端时会先调用 `/api/debug/stop`，释放暂停中的断点请求并把当前会话写回空闲状态；下次启动会恢复上次打开的会话，但默认仍进入“接口列表”页。如果复用了外部后端，只停止调试状态，不关闭外部后端进程。
+桌面端默认使用 `external` 后端模式：不会自动启动后端，也不会编译后端；启动前只检查 `http://127.0.0.1:18601/api/debug/state` 是否可用。需要先手动启动后端，或改用下面的显式模式。
+
+使用当前运行目录下 `backend/` 文件夹中的 jar 作为后端：
+
+```powershell
+cd python-debugger
+python run_desktop.py --backend jar
+```
+
+`--backend jar` 会优先查找 `backend/micro-breakpoint-debugger.jar`，否则允许唯一一个 `backend/micro-breakpoint-debugger-*.jar`。也可以用 `--backend-jar <path>` 指定 jar，或用 `--backend-dir <dir>` 指定查找目录。找不到 jar 时会直接报错，不会调用 Maven 或尝试编译。
+
+只打开桌面端、不检查后端：
+
+```powershell
+cd python-debugger
+python run_desktop.py --backend none
+```
+
+`none` 适合先打开 UI、再手动调试后端 jar 的场景；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`external` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求；只有 `jar` 模式会关闭桌面端自己启动的后端进程，`external` 不会关闭外部进程，`none` 不管理后端运行时。
 
 启动 Java Demo：
 
@@ -58,7 +67,7 @@ cd java-demo
 
 推荐开发验证顺序：
 
-1. 启动或打开桌面端，确认 Python 后端可用。
+1. 先启动后端，再打开桌面端并确认后端可用。
 2. 启动 Java Demo。
 3. 在桌面端创建或打开 Session，再点击“开始调试”。
 4. 通过脚本、接口工具或真实业务流量触发 Java Demo 接口。
@@ -111,7 +120,7 @@ Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收�
 
 ## 手工验证脚本
 
-仓库提供两个 bash 脚本用于验证新的接口唯一性和断点语义，默认 Python 后端为 `http://127.0.0.1:18601`，Java Demo 为 `http://127.0.0.1:8080`：
+仓库提供两个 bash 脚本用于验证新的接口唯一性和断点语义，默认断点后端为 `http://127.0.0.1:18601`，Java Demo 为 `http://127.0.0.1:8080`：
 
 ```bash
 bash scripts/test_object_cmd_discovery.sh
@@ -137,16 +146,15 @@ mvn test
 ```
 ## Java 后端
 
-后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端启动时会优先复用已有 `18601` 后端，若不可用则自动拉起 `java-debugger`。
+后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认使用外部后端，不再自动拉起 `java-debugger` 或 Maven。
 
 Java 后端默认通过 `micro-breakpoint.demo-base-url=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `micro-breakpoint.demo-request-timeout-ms` 控制。
-桌面端自动拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。
+桌面端通过 `--backend jar` 拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。
 
 启动 Java 后端：
 
 ```powershell
-cd java-debugger
-mvn spring-boot:run
+java -jar .\backend\micro-breakpoint-debugger.jar
 ```
 
 打包后端：

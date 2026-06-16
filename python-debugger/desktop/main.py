@@ -11,10 +11,14 @@ from desktop.bridge import Bridge
 from desktop.config import BACKEND_URL
 
 
-def main():
-    backend = DesktopBackendRuntime()
+def main(backend_mode="external", backend_jar=None, backend_dir=None, qt_argv=None):
+    backend = DesktopBackendRuntime(
+        backend_mode=backend_mode,
+        backend_jar=backend_jar,
+        backend_dir=backend_dir,
+    )
     backend.start()
-    app = QApplication(sys.argv)
+    app = QApplication(qt_argv or sys.argv)
     app.setFont(QFont("Microsoft YaHei UI", 10))
     app.aboutToQuit.connect(backend.stop)
     engine = QQmlApplicationEngine()

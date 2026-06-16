@@ -28,6 +28,7 @@ def test_call_all_demo_apis_script_covers_java_demo_rest_endpoints():
 def test_debugger_ports_are_configured_for_18601():
     python_config = (ROOT / "python-debugger" / "desktop" / "config.py").read_text(encoding="utf-8")
     run_backend = (ROOT / "python-debugger" / "run_backend.py").read_text(encoding="utf-8")
+    run_desktop = (ROOT / "python-debugger" / "run_desktop.py").read_text(encoding="utf-8")
     bridge = (ROOT / "python-debugger" / "desktop" / "bridge.py").read_text(encoding="utf-8")
     runtime = (ROOT / "python-debugger" / "desktop" / "backend_runtime.py").read_text(encoding="utf-8")
     settings_page = (ROOT / "python-debugger" / "desktop" / "qml" / "SettingsTab.qml").read_text(encoding="utf-8")
@@ -38,8 +39,13 @@ def test_debugger_ports_are_configured_for_18601():
 
     assert "BACKEND_PORT = 18601" in python_config
     assert "BACKEND_PORT" in run_backend
+    assert 'default="external"' in run_desktop
+    assert '"jar"' in run_desktop
+    assert '"none"' in run_desktop
     assert "BACKEND_URL" in bridge
     assert "BACKEND_PORT" in runtime
+    assert "spring-boot:run" not in runtime
+    assert "mvn" not in runtime.lower()
     assert "page.backendUrl" in settings_page
     assert "http://127.0.0.1:18601" in java_yml
     assert "enabled: false" in java_yml

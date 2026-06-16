@@ -85,7 +85,11 @@ def seed_backend(base):
 
 def main():
     temp_dir = TemporaryDirectory()
-    runtime = DesktopBackendRuntime(port=5052, app_config={"TESTING": True, "DATABASE": str(Path(temp_dir.name) / "debugger.sqlite3")})
+    runtime = DesktopBackendRuntime(
+        port=5052,
+        app_config={"TESTING": True, "DATABASE": str(Path(temp_dir.name) / "debugger.sqlite3")},
+        backend_mode="jar",
+    )
     runtime.start()
     print("backend ready", flush=True)
     seed_backend(runtime.url)

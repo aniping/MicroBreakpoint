@@ -1,7 +1,6 @@
 import logging
 import os
 from pathlib import Path
-import shutil
 import subprocess
 from time import monotonic, sleep
 
@@ -11,12 +10,19 @@ from desktop.config import BACKEND_HOST, BACKEND_PORT
 
 
 class DesktopBackendRuntime:
-    def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None, command=None):
+    BACKEND_MODES = {"external", "jar", "none"}
+
+    def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None,
+            backend_mode="external", backend_jar=None, backend_dir=None):
         self.host = host
         self.port = port
         self.app_config = app_config
         self.url = f"http://{host}:{port}"
-        self.command = command
+        if backend_mode not in self.BACKEND_MODES:
+            raise ValueError(f"Unsupported backend mode: {backend_mode}")
+        self.backend_mode = backend_mode
+        self.backend_jar = backend_jar
+        self.backend_dir = backend_dir
         self._process = None
         self._owned = False
 
@@ -26,13 +32,22 @@ class DesktopBackendRuntime:
 
     def start(self, timeout=8.0):
         self._enable_console_logging()
-        if self.is_ready():
-            self._log(f"reuse Java backend at {self.url}")
+        if self.backend_mode == "none":
+            self._log(f"skip backend startup at {self.url}")
             return False
+        if self.is_ready():
+            self._log(f"reuse backend at {self.url}")
+            return False
+        if self.backend_mode == "external":
+            raise RuntimeError(
+                f"External backend is not ready at {self.url}. "
+                "Start the backend manually, use --backend jar, or use --backend none."
+            )
+        command = self._backend_command()
         self._log(f"start Java backend at {self.url}")
         self._process = subprocess.Popen(
-            self.command or self._backend_command(),
-            cwd=self._java_backend_dir(),
+            command,
+            cwd=Path(command[-1]).parent,
             env=self._backend_env(),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
@@ -47,7 +62,8 @@ class DesktopBackendRuntime:
         return True
 
     def stop(self):
-        self._stop_debug_session()
+        if self.backend_mode != "none":
+            self._stop_debug_session()
         if not self._owned or self._process is None:
             return
         self._log(f"stop Java backend at {self.url}")
@@ -77,15 +93,40 @@ class DesktopBackendRuntime:
     def _log(self, message):
         print(f"[MicroBreakpoint] {message}", flush=True)
 
-    def _java_backend_dir(self):
-        return Path(__file__).resolve().parents[2] / "java-debugger"
-
     def _backend_command(self):
-        jar = self._java_backend_dir() / "target" / "micro-breakpoint-debugger-0.1.0.jar"
-        if jar.exists():
-            return ["java", "-jar", str(jar)]
-        mvn = shutil.which("mvn.cmd") or shutil.which("mvn") or "mvn"
-        return [mvn, "-q", "-DskipTests", "spring-boot:run"]
+        return ["java", "-jar", str(self._resolve_backend_jar())]
+
+    def _resolve_backend_jar(self):
+        explicit_jar = self.backend_jar or os.environ.get("MICRO_BREAKPOINT_BACKEND_JAR")
+        if explicit_jar:
+            jar = Path(explicit_jar).expanduser().resolve()
+            if not jar.is_file():
+                raise RuntimeError(f"Backend jar not found: {jar}")
+            return jar
+
+        backend_dir = self._resolve_backend_dir()
+        preferred = backend_dir / "micro-breakpoint-debugger.jar"
+        if preferred.is_file():
+            return preferred.resolve()
+
+        jars = sorted(path.resolve() for path in backend_dir.glob("micro-breakpoint-debugger-*.jar") if path.is_file())
+        if len(jars) == 1:
+            return jars[0]
+        if len(jars) > 1:
+            raise RuntimeError(
+                f"Multiple backend jars found in {backend_dir}. "
+                "Use --backend-jar to choose one."
+            )
+        raise RuntimeError(
+            f"Backend jar not found in {backend_dir}. "
+            "Put micro-breakpoint-debugger.jar there or use --backend-jar."
+        )
+
+    def _resolve_backend_dir(self):
+        configured_dir = self.backend_dir or os.environ.get("MICRO_BREAKPOINT_BACKEND_DIR")
+        if configured_dir:
+            return Path(configured_dir).expanduser().resolve()
+        return (Path.cwd() / "backend").resolve()
 
     def _backend_env(self):
         env = os.environ.copy()

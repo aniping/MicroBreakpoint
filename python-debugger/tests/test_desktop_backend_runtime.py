@@ -1,57 +1,119 @@
-import sqlite3
-import socket
 import os
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
-import requests
+import pytest
 
+import desktop.backend_runtime as backend_runtime
 from desktop.backend_runtime import DesktopBackendRuntime
+from run_desktop import parse_args
 
 
-def test_desktop_backend_runtime_starts_and_stops(tmp_path):
-    runtime = DesktopBackendRuntime(port=free_port(), app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
-    assert runtime.start(timeout=10.0) is True
-    assert runtime.owned is True
-    assert runtime.is_ready() is True
+def test_desktop_backend_runtime_defaults_to_external():
+    runtime = DesktopBackendRuntime(port=free_port())
+
+    assert runtime.backend_mode == "external"
+
+
+def test_run_desktop_cli_defaults_to_external():
+    args = parse_args([])
+
+    assert args.backend == "external"
+    assert args.backend_jar is None
+    assert args.backend_dir is None
+
+
+def test_run_desktop_cli_accepts_jar_options():
+    args = parse_args(["--backend", "jar", "--backend-jar", "app.jar", "--backend-dir", "backend"])
+
+    assert args.backend == "jar"
+    assert args.backend_jar == "app.jar"
+    assert args.backend_dir == "backend"
+
+
+def test_external_backend_runtime_reuses_ready_backend_and_stops_debug_session():
+    server, state = start_backend_state_server()
+    runtime = DesktopBackendRuntime(port=server.server_port)
+    try:
+        assert runtime.start(timeout=1.0) is False
+        assert runtime.owned is False
+        runtime.stop()
+        assert state["stop_called"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_external_backend_runtime_fails_when_backend_is_missing(monkeypatch):
+    runtime = DesktopBackendRuntime(port=free_port())
+
+    monkeypatch.setattr(
+        backend_runtime.subprocess,
+        "Popen",
+        lambda *args, **kwargs: pytest.fail("Popen should not be called"),
+    )
+
+    with pytest.raises(RuntimeError, match="External backend is not ready"):
+        runtime.start(timeout=0.1)
+
+
+def test_none_backend_runtime_skips_readiness_and_shutdown(monkeypatch):
+    runtime = DesktopBackendRuntime(port=free_port(), backend_mode="none")
+
+    monkeypatch.setattr(runtime, "is_ready", pytest.fail)
+    monkeypatch.setattr(runtime, "_stop_debug_session", pytest.fail)
+
+    assert runtime.start(timeout=0.1) is False
     runtime.stop()
     assert runtime.owned is False
 
 
-def test_desktop_backend_runtime_stops_active_debug_session(tmp_path):
-    db_path = tmp_path / "debugger.sqlite3"
-    demo_server, demo_state = start_demo_switch_server()
-    demo_base_url = f"http://127.0.0.1:{demo_server.server_port}"
-    runtime = DesktopBackendRuntime(port=free_port(), app_config={
-        "TESTING": True,
-        "DATABASE": str(db_path),
-        "DEMO_BASE_URL": demo_base_url,
-        "DEMO_REQUEST_TIMEOUT_MS": 200,
-    })
-    try:
-        assert runtime.start(timeout=10.0) is True
-        response = requests.post(f"{runtime.url}/api/debug/start", json={}, timeout=3)
-        assert response.ok
-        assert response.json()["debugging"] is True
-        assert demo_state["enabled"] is True
-    finally:
-        runtime.stop()
-        demo_server.shutdown()
-        demo_server.server_close()
+def test_jar_backend_runtime_starts_resolved_jar_and_stops_owned_process(tmp_path, monkeypatch):
+    jar = tmp_path / "backend" / "micro-breakpoint-debugger.jar"
+    jar.parent.mkdir()
+    jar.write_text("", encoding="utf-8")
+    process = FakeProcess()
+    started = {}
 
-    with sqlite3.connect(db_path) as db:
-        row = db.execute("SELECT mode, status, debugging, end_time FROM debug_session").fetchone()
+    def fake_popen(command, cwd, env, creationflags):
+        started["command"] = command
+        started["cwd"] = cwd
+        started["env"] = env
+        started["creationflags"] = creationflags
+        return process
 
-    assert row[0] == "idle"
-    assert row[1] == "idle"
-    assert row[2] == 0
-    assert row[3]
+    runtime = DesktopBackendRuntime(
+        port=free_port(),
+        app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")},
+        backend_mode="jar",
+        backend_jar=jar,
+    )
+    ready = [False, True]
+    monkeypatch.setattr(runtime, "is_ready", lambda: ready.pop(0))
+    monkeypatch.setattr(backend_runtime.subprocess, "Popen", fake_popen)
+
+    assert runtime.start(timeout=1.0) is True
+    assert runtime.owned is True
+    assert started["command"] == ["java", "-jar", str(jar.resolve())]
+    assert started["cwd"] == jar.parent.resolve()
+    assert started["env"]["SERVER_PORT"] == str(runtime.port)
+    assert started["env"]["MICRO_BREAKPOINT_PARENT_PID"] == str(os.getpid())
+
+    runtime.stop()
+    assert process.terminated is True
+    assert runtime.owned is False
 
 
-def test_desktop_backend_runtime_prints_console_lifecycle_logs(tmp_path, capsys):
-    runtime = DesktopBackendRuntime(port=free_port(), app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")})
+def test_jar_backend_runtime_prints_console_lifecycle_logs(tmp_path, monkeypatch, capsys):
+    jar = tmp_path / "micro-breakpoint-debugger.jar"
+    jar.write_text("", encoding="utf-8")
+    runtime = DesktopBackendRuntime(port=free_port(), backend_mode="jar", backend_jar=jar)
+    ready = [False, True]
+    monkeypatch.setattr(runtime, "is_ready", lambda: ready.pop(0))
+    monkeypatch.setattr(backend_runtime.subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
 
-    assert runtime.start(timeout=10.0) is True
+    assert runtime.start(timeout=1.0) is True
     runtime.stop()
 
     output = capsys.readouterr().out
@@ -69,24 +131,107 @@ def test_desktop_backend_runtime_passes_parent_pid_to_java(tmp_path):
     assert env["MICRO_BREAKPOINT_PARENT_PID"] == str(os.getpid())
 
 
+def test_backend_command_uses_default_named_jar(tmp_path, monkeypatch):
+    backend_dir = tmp_path / "backend"
+    jar = backend_dir / "micro-breakpoint-debugger.jar"
+    backend_dir.mkdir()
+    jar.write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    runtime = DesktopBackendRuntime(backend_mode="jar")
+
+    assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+
+
+def test_backend_command_uses_single_versioned_jar(tmp_path):
+    backend_dir = tmp_path / "backend"
+    jar = backend_dir / "micro-breakpoint-debugger-0.1.0.jar"
+    backend_dir.mkdir()
+    jar.write_text("", encoding="utf-8")
+    runtime = DesktopBackendRuntime(backend_mode="jar", backend_dir=backend_dir)
+
+    assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+
+
+def test_backend_command_uses_explicit_jar_before_backend_dir(tmp_path):
+    explicit = tmp_path / "chosen.jar"
+    explicit.write_text("", encoding="utf-8")
+    backend_dir = tmp_path / "backend"
+    backend_dir.mkdir()
+    (backend_dir / "micro-breakpoint-debugger.jar").write_text("", encoding="utf-8")
+    runtime = DesktopBackendRuntime(backend_mode="jar", backend_jar=explicit, backend_dir=backend_dir)
+
+    assert runtime._backend_command() == ["java", "-jar", str(explicit.resolve())]
+
+
+def test_backend_command_uses_environment_jar(tmp_path, monkeypatch):
+    jar = tmp_path / "env.jar"
+    jar.write_text("", encoding="utf-8")
+    monkeypatch.setenv("MICRO_BREAKPOINT_BACKEND_JAR", str(jar))
+    runtime = DesktopBackendRuntime(backend_mode="jar")
+
+    assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+
+
+def test_backend_command_fails_when_jar_is_missing(tmp_path):
+    runtime = DesktopBackendRuntime(backend_mode="jar", backend_dir=tmp_path)
+
+    with pytest.raises(RuntimeError, match="Backend jar not found"):
+        runtime._backend_command()
+
+
+def test_backend_command_fails_when_multiple_versioned_jars_exist(tmp_path):
+    (tmp_path / "micro-breakpoint-debugger-0.1.0.jar").write_text("", encoding="utf-8")
+    (tmp_path / "micro-breakpoint-debugger-0.2.0.jar").write_text("", encoding="utf-8")
+    runtime = DesktopBackendRuntime(backend_mode="jar", backend_dir=tmp_path)
+
+    with pytest.raises(RuntimeError, match="Multiple backend jars"):
+        runtime._backend_command()
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
 
 
-def start_demo_switch_server():
-    state = {"enabled": False}
+class FakeProcess:
+    def __init__(self):
+        self.terminated = False
+        self.killed = False
+
+    def terminate(self):
+        self.terminated = True
+
+    def wait(self, timeout):
+        return 0
+
+    def kill(self):
+        self.killed = True
+
+
+def start_backend_state_server():
+    state = {"stop_called": False}
 
     class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            if self.path != "/api/demo/debugger/enabled":
+        def do_GET(self):
+            if self.path != "/api/debug/state":
                 self.send_response(404)
                 self.end_headers()
                 return
-            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            state["enabled"] = b'"enabled":true' in body.replace(b" ", b"")
-            payload = (b'{"success":true,"enabled":' + str(state["enabled"]).lower().encode("ascii") + b"}")
+            payload = b'{"debugging":false}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json;charset=UTF-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_POST(self):
+            if self.path != "/api/debug/stop":
+                self.send_response(404)
+                self.end_headers()
+                return
+            state["stop_called"] = True
+            payload = b'{"success":true}'
             self.send_response(200)
             self.send_header("Content-Type", "application/json;charset=UTF-8")
             self.send_header("Content-Length", str(len(payload)))

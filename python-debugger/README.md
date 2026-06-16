@@ -2,20 +2,18 @@
 
 ## Java 后端迁移说明
 
-当前默认后端为仓库根目录下的 `java-debugger/` Spring Boot 服务，端口仍为 `18601`。本目录继续提供 PySide6/QML 桌面端；`python run_desktop.py` 会复用已有 Java 后端，若端口不可用则自动启动 `java-debugger`。`run_backend.py` 仅作为 legacy Flask 后端保留，便于对照旧实现。
-桌面端自动拉起 Java 后端时会传入当前桌面进程 PID；Java 后端会启用父进程 watchdog，检测到桌面进程异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，因此不会被桌面端误停。
+当前后端为 Java Spring Boot 服务，端口仍为 `18601`。本目录继续提供 PySide6/QML 桌面端；`python run_desktop.py` 默认使用 `external` 模式，只检查已有后端是否可用，不会自动启动后端，也不会调用 Maven 编译。`run_backend.py` 仅作为 legacy Flask 后端保留，便于对照旧实现。
+桌面端通过 `--backend jar` 拉起 Java 后端时会传入当前桌面进程 PID；Java 后端会启用父进程 watchdog，检测到桌面进程异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，因此不会被桌面端误停。
 
 常用命令：
 
 ```powershell
-cd ..\java-debugger
-mvn spring-boot:run
-
-cd ..\python-debugger
 python run_desktop.py
+python run_desktop.py --backend jar
+python run_desktop.py --backend none
 ```
 
-Flask 后端端口 `18601`，桌面端使用 PySide6/QML。
+断点后端端口 `18601`，桌面端使用 PySide6/QML。
 
 ## Conda 环境
 
@@ -24,10 +22,10 @@ conda env create -f ..\environment.yml
 conda activate micro-breakpoint
 ```
 
-## 启动后端
+## 手动启动后端
 
 ```powershell
-python run_backend.py
+java -jar .\backend\micro-breakpoint-debugger.jar
 ```
 
 ## 启动桌面端
@@ -36,9 +34,23 @@ python run_backend.py
 python run_desktop.py
 ```
 
-桌面端会自动拉起 Flask 后端；`run_backend.py` 仍保留给后端单独启动和调试使用。若 `http://127.0.0.1:18601` 已经可用，桌面端会复用该后端。
-通过控制台运行 `python run_desktop.py` 时，会输出内置后端启动、复用、停止日志，并保留 Flask 访问日志，便于排查接口请求。
-退出桌面端时会先调用 `/api/debug/stop`，释放暂停中的断点请求并把当前会话写回空闲状态；下次启动会恢复上次打开的会话，但默认仍进入“接口列表”页。如果复用了外部后端，只停止调试状态，不关闭外部后端进程。
+桌面端默认使用 `external` 后端模式：不会自动启动后端，也不会编译后端；启动前只检查 `http://127.0.0.1:18601/api/debug/state` 是否可用。
+
+显式使用本地 jar：
+
+```powershell
+python run_desktop.py --backend jar
+```
+
+`--backend jar` 会优先查找当前运行目录下的 `backend/micro-breakpoint-debugger.jar`，否则允许唯一一个 `backend/micro-breakpoint-debugger-*.jar`。也可以用 `--backend-jar <path>` 指定 jar，或用 `--backend-dir <dir>` 指定查找目录。找不到 jar 时会直接报错，不会调用 Maven 或尝试编译。
+
+只打开桌面端、不检查后端：
+
+```powershell
+python run_desktop.py --backend none
+```
+
+`none` 适合先打开 UI、再手动调试后端 jar 的场景；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`external` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求；只有 `jar` 模式会关闭桌面端自己启动的后端进程，`external` 不会关闭外部进程，`none` 不管理后端运行时。
 
 ## 主题与外观
 
