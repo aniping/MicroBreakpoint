@@ -39,9 +39,13 @@ def test_debugger_ports_are_configured_for_18601():
 
     assert "BACKEND_PORT = 18601" in python_config
     assert "BACKEND_PORT" in run_backend
-    assert 'default="external"' in run_desktop
+    assert 'default="internal"' in run_desktop
+    assert '"internal"' in run_desktop
     assert '"jar"' in run_desktop
-    assert '"none"' in run_desktop
+    assert '"external"' in run_desktop
+    assert '"none"' not in run_desktop
+    assert "MICRO_BREAKPOINT_DATABASE" in run_backend
+    assert "SERVER_PORT" in run_backend
     assert "BACKEND_URL" in bridge
     assert "BACKEND_PORT" in runtime
     assert "spring-boot:run" not in runtime

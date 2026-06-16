@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
+import sys
 from time import monotonic, sleep
 
 import requests
@@ -10,10 +11,10 @@ from desktop.config import BACKEND_HOST, BACKEND_PORT
 
 
 class DesktopBackendRuntime:
-    BACKEND_MODES = {"external", "jar", "none"}
+    BACKEND_MODES = {"internal", "jar", "external"}
 
     def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None,
-            backend_mode="external", backend_jar=None, backend_dir=None):
+            backend_mode="internal", backend_jar=None, backend_dir=None):
         self.host = host
         self.port = port
         self.app_config = app_config
@@ -32,22 +33,17 @@ class DesktopBackendRuntime:
 
     def start(self, timeout=8.0):
         self._enable_console_logging()
-        if self.backend_mode == "none":
+        if self.backend_mode == "external":
             self._log(f"skip backend startup at {self.url}")
             return False
         if self.is_ready():
             self._log(f"reuse backend at {self.url}")
             return False
-        if self.backend_mode == "external":
-            raise RuntimeError(
-                f"External backend is not ready at {self.url}. "
-                "Start the backend manually, use --backend jar, or use --backend none."
-            )
         command = self._backend_command()
-        self._log(f"start Java backend at {self.url}")
+        self._log(f"start {self.backend_mode} backend at {self.url}")
         self._process = subprocess.Popen(
             command,
-            cwd=Path(command[-1]).parent,
+            cwd=self._backend_cwd(command),
             env=self._backend_env(),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
@@ -58,18 +54,18 @@ class DesktopBackendRuntime:
             self._terminate_process()
             self._owned = False
             raise
-        self._log(f"Java backend ready at {self.url}")
+        self._log(f"{self.backend_mode} backend ready at {self.url}")
         return True
 
     def stop(self):
-        if self.backend_mode != "none":
+        if self.backend_mode != "external":
             self._stop_debug_session()
         if not self._owned or self._process is None:
             return
-        self._log(f"stop Java backend at {self.url}")
+        self._log(f"stop {self.backend_mode} backend at {self.url}")
         self._terminate_process()
         self._owned = False
-        self._log("Java backend stopped")
+        self._log(f"{self.backend_mode} backend stopped")
 
     def _terminate_process(self):
         if self._process is None:
@@ -94,7 +90,17 @@ class DesktopBackendRuntime:
         print(f"[MicroBreakpoint] {message}", flush=True)
 
     def _backend_command(self):
+        if self.backend_mode == "internal":
+            return [sys.executable, "run_backend.py"]
         return ["java", "-jar", str(self._resolve_backend_jar())]
+
+    def _backend_cwd(self, command):
+        if self.backend_mode == "internal":
+            return self._python_backend_dir()
+        return Path(command[-1]).parent
+
+    def _python_backend_dir(self):
+        return Path(__file__).resolve().parents[1]
 
     def _resolve_backend_jar(self):
         explicit_jar = self.backend_jar or os.environ.get("MICRO_BREAKPOINT_BACKEND_JAR")
@@ -169,4 +175,4 @@ class DesktopBackendRuntime:
             if self.is_ready():
                 return
             sleep(0.1)
-        raise RuntimeError(f"Java backend did not start at {self.url}")
+        raise RuntimeError(f"{self.backend_mode} backend did not start at {self.url}")

@@ -11,7 +11,7 @@ from desktop.bridge import Bridge
 from desktop.config import BACKEND_URL
 
 
-def main(backend_mode="external", backend_jar=None, backend_dir=None, qt_argv=None):
+def main(backend_mode="internal", backend_jar=None, backend_dir=None, qt_argv=None):
     backend = DesktopBackendRuntime(
         backend_mode=backend_mode,
         backend_jar=backend_jar,

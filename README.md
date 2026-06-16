@@ -31,7 +31,7 @@ cd python-debugger
 python run_desktop.py
 ```
 
-桌面端默认使用 `external` 后端模式：不会自动启动后端，也不会编译后端；启动前只检查 `http://127.0.0.1:18601/api/debug/state` 是否可用。需要先手动启动后端，或改用下面的显式模式。
+桌面端默认使用 `internal` 后端模式，会自动启动本项目自带的 Python Flask 后端 `run_backend.py`。如果 `18601` 端口已有可用后端，桌面端会直接复用。
 
 使用当前运行目录下 `backend/` 文件夹中的 jar 作为后端：
 
@@ -42,14 +42,14 @@ python run_desktop.py --backend jar
 
 `--backend jar` 会优先查找 `backend/micro-breakpoint-debugger.jar`，否则允许唯一一个 `backend/micro-breakpoint-debugger-*.jar`。也可以用 `--backend-jar <path>` 指定 jar，或用 `--backend-dir <dir>` 指定查找目录。找不到 jar 时会直接报错，不会调用 Maven 或尝试编译。
 
-只打开桌面端、不检查后端：
+使用外部后端或先打开桌面端再手动调试后端：
 
 ```powershell
 cd python-debugger
-python run_desktop.py --backend none
+python run_desktop.py --backend external
 ```
 
-`none` 适合先打开 UI、再手动调试后端 jar 的场景；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`external` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求；只有 `jar` 模式会关闭桌面端自己启动的后端进程，`external` 不会关闭外部进程，`none` 不管理后端运行时。
+`external` 不启动后端、不检查后端，也不管理后端关闭；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`internal` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求，并关闭桌面端自己启动的后端进程；`external` 不会触碰外部进程。
 
 启动 Java Demo：
 
@@ -67,7 +67,7 @@ cd java-demo
 
 推荐开发验证顺序：
 
-1. 先启动后端，再打开桌面端并确认后端可用。
+1. 打开桌面端，默认会启动内置 Python 后端；如需调试外部后端，使用 `--backend external`。
 2. 启动 Java Demo。
 3. 在桌面端创建或打开 Session，再点击“开始调试”。
 4. 通过脚本、接口工具或真实业务流量触发 Java Demo 接口。
@@ -146,7 +146,7 @@ mvn test
 ```
 ## Java 后端
 
-后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认使用外部后端，不再自动拉起 `java-debugger` 或 Maven。
+后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
 
 Java 后端默认通过 `micro-breakpoint.demo-base-url=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `micro-breakpoint.demo-request-timeout-ms` 控制。
 桌面端通过 `--backend jar` 拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。

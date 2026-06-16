@@ -1,6 +1,8 @@
 import os
 import socket
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from threading import Thread
 
 import pytest
@@ -10,18 +12,24 @@ from desktop.backend_runtime import DesktopBackendRuntime
 from run_desktop import parse_args
 
 
-def test_desktop_backend_runtime_defaults_to_external():
+def test_desktop_backend_runtime_defaults_to_internal():
     runtime = DesktopBackendRuntime(port=free_port())
 
-    assert runtime.backend_mode == "external"
+    assert runtime.backend_mode == "internal"
 
 
-def test_run_desktop_cli_defaults_to_external():
+def test_run_desktop_cli_defaults_to_internal():
     args = parse_args([])
 
-    assert args.backend == "external"
+    assert args.backend == "internal"
     assert args.backend_jar is None
     assert args.backend_dir is None
+
+
+def test_run_desktop_cli_accepts_backend_modes():
+    assert parse_args(["--backend", "internal"]).backend == "internal"
+    assert parse_args(["--backend", "jar"]).backend == "jar"
+    assert parse_args(["--backend", "external"]).backend == "external"
 
 
 def test_run_desktop_cli_accepts_jar_options():
@@ -32,9 +40,57 @@ def test_run_desktop_cli_accepts_jar_options():
     assert args.backend_dir == "backend"
 
 
-def test_external_backend_runtime_reuses_ready_backend_and_stops_debug_session():
+def test_external_backend_runtime_skips_readiness_and_shutdown(monkeypatch):
+    runtime = DesktopBackendRuntime(port=free_port(), backend_mode="external")
+
+    monkeypatch.setattr(runtime, "is_ready", pytest.fail)
+    monkeypatch.setattr(runtime, "_stop_debug_session", pytest.fail)
+    monkeypatch.setattr(
+        backend_runtime.subprocess,
+        "Popen",
+        lambda *args, **kwargs: pytest.fail("Popen should not be called"),
+    )
+
+    assert runtime.start(timeout=0.1) is False
+    runtime.stop()
+    assert runtime.owned is False
+
+
+def test_internal_backend_runtime_starts_flask_backend_and_stops_owned_process(tmp_path, monkeypatch):
+    process = FakeProcess()
+    started = {}
+
+    def fake_popen(command, cwd, env, creationflags):
+        started["command"] = command
+        started["cwd"] = cwd
+        started["env"] = env
+        started["creationflags"] = creationflags
+        return process
+
+    runtime = DesktopBackendRuntime(
+        port=free_port(),
+        app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")},
+        backend_mode="internal",
+    )
+    ready = [False, True]
+    monkeypatch.setattr(runtime, "is_ready", lambda: ready.pop(0))
+    monkeypatch.setattr(backend_runtime.subprocess, "Popen", fake_popen)
+
+    assert runtime.start(timeout=1.0) is True
+    assert runtime.owned is True
+    assert started["command"] == [sys.executable, "run_backend.py"]
+    assert started["cwd"] == Path(__file__).resolve().parents[1]
+    assert started["env"]["SERVER_PORT"] == str(runtime.port)
+    assert started["env"]["MICRO_BREAKPOINT_DATABASE"] == str(tmp_path / "debugger.sqlite3")
+
+    runtime.stop()
+    assert process.terminated is True
+    assert runtime.owned is False
+
+
+def test_internal_backend_runtime_reuses_ready_backend_and_stops_debug_session():
     server, state = start_backend_state_server()
-    runtime = DesktopBackendRuntime(port=server.server_port)
+    runtime = DesktopBackendRuntime(port=server.server_port, backend_mode="internal")
     try:
         assert runtime.start(timeout=1.0) is False
         assert runtime.owned is False
@@ -45,28 +101,11 @@ def test_external_backend_runtime_reuses_ready_backend_and_stops_debug_session()
         server.server_close()
 
 
-def test_external_backend_runtime_fails_when_backend_is_missing(monkeypatch):
-    runtime = DesktopBackendRuntime(port=free_port())
+def test_internal_backend_command_uses_run_backend():
+    runtime = DesktopBackendRuntime(backend_mode="internal")
 
-    monkeypatch.setattr(
-        backend_runtime.subprocess,
-        "Popen",
-        lambda *args, **kwargs: pytest.fail("Popen should not be called"),
-    )
-
-    with pytest.raises(RuntimeError, match="External backend is not ready"):
-        runtime.start(timeout=0.1)
-
-
-def test_none_backend_runtime_skips_readiness_and_shutdown(monkeypatch):
-    runtime = DesktopBackendRuntime(port=free_port(), backend_mode="none")
-
-    monkeypatch.setattr(runtime, "is_ready", pytest.fail)
-    monkeypatch.setattr(runtime, "_stop_debug_session", pytest.fail)
-
-    assert runtime.start(timeout=0.1) is False
-    runtime.stop()
-    assert runtime.owned is False
+    assert runtime._backend_command() == [sys.executable, "run_backend.py"]
+    assert runtime._backend_cwd(runtime._backend_command()) == Path(__file__).resolve().parents[1]
 
 
 def test_jar_backend_runtime_starts_resolved_jar_and_stops_owned_process(tmp_path, monkeypatch):
@@ -117,10 +156,10 @@ def test_jar_backend_runtime_prints_console_lifecycle_logs(tmp_path, monkeypatch
     runtime.stop()
 
     output = capsys.readouterr().out
-    assert "[MicroBreakpoint] start Java backend at" in output
-    assert "[MicroBreakpoint] Java backend ready at" in output
-    assert "[MicroBreakpoint] stop Java backend at" in output
-    assert "[MicroBreakpoint] Java backend stopped" in output
+    assert "[MicroBreakpoint] start jar backend at" in output
+    assert "[MicroBreakpoint] jar backend ready at" in output
+    assert "[MicroBreakpoint] stop jar backend at" in output
+    assert "[MicroBreakpoint] jar backend stopped" in output
 
 
 def test_desktop_backend_runtime_passes_parent_pid_to_java(tmp_path):

@@ -8,9 +8,9 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Start the Micro Breakpoint desktop client.")
     parser.add_argument(
         "--backend",
-        choices=("external", "jar", "none"),
-        default="external",
-        help="Backend startup mode. Default: external.",
+        choices=("internal", "jar", "external"),
+        default="internal",
+        help="Backend startup mode. Default: internal.",
     )
     parser.add_argument("--backend-jar", help="Jar file to start when --backend jar is used.")
     parser.add_argument("--backend-dir", help="Directory to search for a backend jar when --backend jar is used.")

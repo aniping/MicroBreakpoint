@@ -2,7 +2,7 @@
 
 ## Java 后端迁移说明
 
-当前后端为 Java Spring Boot 服务，端口仍为 `18601`。本目录继续提供 PySide6/QML 桌面端；`python run_desktop.py` 默认使用 `external` 模式，只检查已有后端是否可用，不会自动启动后端，也不会调用 Maven 编译。`run_backend.py` 仅作为 legacy Flask 后端保留，便于对照旧实现。
+当前后端端口仍为 `18601`。本目录继续提供 PySide6/QML 桌面端；`python run_desktop.py` 默认使用 `internal` 模式，自动启动本项目自带的 Python Flask 后端 `run_backend.py`。需要使用 Java jar 或外部调试后端时，通过启动参数显式选择。
 桌面端通过 `--backend jar` 拉起 Java 后端时会传入当前桌面进程 PID；Java 后端会启用父进程 watchdog，检测到桌面进程异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，因此不会被桌面端误停。
 
 常用命令：
@@ -10,7 +10,7 @@
 ```powershell
 python run_desktop.py
 python run_desktop.py --backend jar
-python run_desktop.py --backend none
+python run_desktop.py --backend external
 ```
 
 断点后端端口 `18601`，桌面端使用 PySide6/QML。
@@ -22,7 +22,7 @@ conda env create -f ..\environment.yml
 conda activate micro-breakpoint
 ```
 
-## 手动启动后端
+## 手动启动 Java 后端
 
 ```powershell
 java -jar .\backend\micro-breakpoint-debugger.jar
@@ -34,7 +34,7 @@ java -jar .\backend\micro-breakpoint-debugger.jar
 python run_desktop.py
 ```
 
-桌面端默认使用 `external` 后端模式：不会自动启动后端，也不会编译后端；启动前只检查 `http://127.0.0.1:18601/api/debug/state` 是否可用。
+桌面端默认使用 `internal` 后端模式，会自动启动本项目自带的 Python Flask 后端。若 `18601` 端口已有可用后端，桌面端会直接复用。
 
 显式使用本地 jar：
 
@@ -44,13 +44,13 @@ python run_desktop.py --backend jar
 
 `--backend jar` 会优先查找当前运行目录下的 `backend/micro-breakpoint-debugger.jar`，否则允许唯一一个 `backend/micro-breakpoint-debugger-*.jar`。也可以用 `--backend-jar <path>` 指定 jar，或用 `--backend-dir <dir>` 指定查找目录。找不到 jar 时会直接报错，不会调用 Maven 或尝试编译。
 
-只打开桌面端、不检查后端：
+使用外部后端或先打开桌面端再手动调试后端：
 
 ```powershell
-python run_desktop.py --backend none
+python run_desktop.py --backend external
 ```
 
-`none` 适合先打开 UI、再手动调试后端 jar 的场景；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`external` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求；只有 `jar` 模式会关闭桌面端自己启动的后端进程，`external` 不会关闭外部进程，`none` 不管理后端运行时。
+`external` 不启动后端、不检查后端，也不管理后端关闭；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`internal` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求，并关闭桌面端自己启动的后端进程；`external` 不会触碰外部进程。
 
 ## 主题与外观
 
