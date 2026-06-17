@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
+import sys
 from threading import Thread
 from time import monotonic, sleep
 
@@ -154,7 +155,7 @@ class DesktopBackendRuntime:
         configured_dir = self.backend_dir or os.environ.get("MICRO_BREAKPOINT_BACKEND_DIR")
         if configured_dir:
             return Path(configured_dir).expanduser().resolve()
-        return (Path.cwd() / "backend").resolve()
+        return (self._app_base_dir() / "backend").resolve()
 
     def _backend_env(self):
         env = os.environ.copy()
@@ -176,7 +177,12 @@ class DesktopBackendRuntime:
         database = (self.app_config or {}).get("DATABASE")
         if database:
             return str(database)
-        return str((Path(__file__).resolve().parents[1] / "data" / "debugger.sqlite3").resolve())
+        return str((self._app_base_dir() / "data" / "debugger.sqlite3").resolve())
+
+    def _app_base_dir(self):
+        if getattr(sys, "frozen", False):
+            return Path(sys.executable).resolve().parent
+        return Path(__file__).resolve().parents[1]
 
     def _stop_debug_session(self):
         try:

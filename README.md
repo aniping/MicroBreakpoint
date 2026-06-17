@@ -164,6 +164,15 @@ cd java-debugger
 mvn -DskipTests package
 ```
 
+打包桌面端：
+
+```powershell
+cd python-debugger
+conda run -n micro-breakpoint python -m PyInstaller MicroBreakpoint.spec
+```
+
+PyInstaller 产物位于 `python-debugger/dist/MicroBreakpoint`。打包后默认 `internal` 后端使用 exe 所在目录下的 `data/debugger.sqlite3`；`--backend jar` 使用同一个数据库路径，并默认查找 exe 所在目录下的 `backend/micro-breakpoint-debugger.jar` 或唯一一个 `backend/micro-breakpoint-debugger-*.jar`。
+
 验证命令：
 
 ```powershell

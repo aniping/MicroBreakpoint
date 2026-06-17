@@ -192,14 +192,29 @@ def test_desktop_backend_runtime_passes_parent_pid_to_java(tmp_path):
 
 
 def test_backend_command_uses_default_named_jar(tmp_path, monkeypatch):
-    backend_dir = tmp_path / "backend"
+    app_dir = tmp_path / "app"
+    work_dir = tmp_path / "work"
+    backend_dir = app_dir / "backend"
     jar = backend_dir / "micro-breakpoint-debugger.jar"
-    backend_dir.mkdir()
+    backend_dir.mkdir(parents=True)
+    work_dir.mkdir()
     jar.write_text("", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(work_dir)
     runtime = DesktopBackendRuntime(backend_mode="jar")
+    monkeypatch.setattr(runtime, "_app_base_dir", lambda: app_dir)
 
     assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+
+
+def test_backend_runtime_uses_exe_dir_when_frozen(tmp_path, monkeypatch):
+    exe = tmp_path / "MicroBreakpoint.exe"
+    exe.write_text("", encoding="utf-8")
+    monkeypatch.setattr(backend_runtime.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(backend_runtime.sys, "executable", str(exe))
+    runtime = DesktopBackendRuntime(backend_mode="internal")
+
+    assert runtime._database_path() == str((tmp_path / "data" / "debugger.sqlite3").resolve())
+    assert runtime._resolve_backend_dir() == (tmp_path / "backend").resolve()
 
 
 def test_backend_command_uses_single_versioned_jar(tmp_path):

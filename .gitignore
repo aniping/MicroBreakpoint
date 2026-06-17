@@ -18,6 +18,8 @@ env/
 
 target/
 *.class
+python-debugger/build/
+python-debugger/dist/
 
 logs/
 *.log

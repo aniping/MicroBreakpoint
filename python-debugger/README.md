@@ -44,7 +44,7 @@ python run_desktop.py
 python run_desktop.py --backend jar
 ```
 
-`--backend jar` 会优先查找当前运行目录下的 `backend/micro-breakpoint-debugger.jar`，否则允许唯一一个 `backend/micro-breakpoint-debugger-*.jar`。也可以用 `--backend-jar <path>` 指定 jar，或用 `--backend-dir <dir>` 指定查找目录。找不到 jar 时会直接报错，不会调用 Maven 或尝试编译。
+`--backend jar` 会优先查找应用目录下的 `backend/micro-breakpoint-debugger.jar`，否则允许唯一一个 `backend/micro-breakpoint-debugger-*.jar`。源码运行时应用目录为 `python-debugger`，打包后为 exe 所在目录。也可以用 `--backend-jar <path>` 指定 jar，或用 `--backend-dir <dir>` 指定查找目录。找不到 jar 时会直接报错，不会调用 Maven 或尝试编译。
 
 使用外部后端或先打开桌面端再手动调试后端：
 
@@ -53,6 +53,15 @@ python run_desktop.py --backend external
 ```
 
 `external` 不启动后端、不检查后端，也不管理后端关闭；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`internal` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求，并关闭桌面端自己启动的后端；`external` 不会触碰外部进程。
+
+## PyInstaller 打包
+
+```powershell
+cd python-debugger
+conda run -n micro-breakpoint python -m PyInstaller MicroBreakpoint.spec
+```
+
+产物位于 `python-debugger/dist/MicroBreakpoint`。默认 `internal` 后端使用应用目录下的 `data/debugger.sqlite3`；`jar` 后端会使用同一个数据库路径，并默认查找应用目录下的 `backend/`。如果已先执行 `mvn -DskipTests package`，且 `python-debugger/backend` 不存在，spec 会把 `java-debugger/target/micro-breakpoint-debugger-0.1.0.jar` 收进打包产物的 `backend/` 目录。
 
 ## 主题与外观
 
