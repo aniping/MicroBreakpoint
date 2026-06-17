@@ -4,6 +4,7 @@ from urllib.request import Request, urlopen
 
 from flask import Blueprint, current_app, jsonify, request
 
+from desktop.app_settings import build_debug_switch_url, debug_target_settings
 from app.services.debug_service import reset_debug, start_debug, state_response, stop_debug
 
 state_api = Blueprint("state_api", __name__, url_prefix="/api")
@@ -43,12 +44,12 @@ def reset():
 
 
 def set_demo_debugger_enabled(enabled):
-    base_url = (current_app.config.get("DEMO_BASE_URL") or "").strip()
-    if not base_url:
+    target = debug_target_settings(current_app.config.get("SETTINGS_FILE"))
+    url = build_debug_switch_url(target)
+    if not url:
         return {"success": False, "message": "Java Demo 地址未配置"}
-    url = base_url.rstrip("/") + "/api/demo/debugger/enabled"
     body = json.dumps({"enabled": enabled}).encode("utf-8")
-    timeout = max(0.001, int(current_app.config.get("DEMO_REQUEST_TIMEOUT_MS", 1000)) / 1000)
+    timeout = max(0.001, int(target.get("requestTimeoutMs", 1000)) / 1000)
     req = Request(
         url,
         data=body,

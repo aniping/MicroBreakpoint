@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from desktop.bridge import Bridge
@@ -6,20 +7,36 @@ from desktop.bridge import Bridge
 QML_ROOT = Path(__file__).resolve().parents[1] / "desktop" / "qml"
 
 
-def test_theme_mode_persists_between_bridge_instances():
-    bridge = Bridge()
-    original = bridge.getThemeMode()
-    try:
-        bridge.setThemeMode("light")
-        assert Bridge().getThemeMode() == "light"
+def test_theme_mode_persists_between_bridge_instances(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    bridge = Bridge(settings_file=settings_file)
 
-        bridge.setThemeMode("dark")
-        assert Bridge().getThemeMode() == "dark"
+    bridge.setThemeMode("light")
+    assert Bridge(settings_file=settings_file).getThemeMode() == "light"
 
-        bridge.setThemeMode("unexpected")
-        assert Bridge().getThemeMode() == "dark"
-    finally:
-        bridge.setThemeMode(original)
+    bridge.setThemeMode("dark")
+    assert Bridge(settings_file=settings_file).getThemeMode() == "dark"
+
+    bridge.setThemeMode("unexpected")
+    assert Bridge(settings_file=settings_file).getThemeMode() == "dark"
+
+
+def test_bridge_saves_app_settings_to_json(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    bridge = Bridge(settings_file=settings_file)
+    emitted = []
+    bridge.settingsChanged.connect(emitted.append)
+
+    saved = bridge.saveAppSettings('{"themeMode":"light","debugTarget":{"host":"10.0.0.5","port":"19090","debuggerSwitchPath":"debug/enabled","requestTimeoutMs":"2500"}}')
+
+    saved_data = json.loads(saved)
+    loaded_data = json.loads(Bridge(settings_file=settings_file).getAppSettings())
+    assert saved_data == loaded_data
+    assert loaded_data["themeMode"] == "light"
+    assert loaded_data["debugTarget"]["host"] == "10.0.0.5"
+    assert loaded_data["debugTarget"]["port"] == 19090
+    assert loaded_data["debugTarget"]["debuggerSwitchPath"] == "/debug/enabled"
+    assert emitted
 
 
 def test_call_record_filter_includes_interface_alias():
@@ -352,6 +369,7 @@ def test_main_has_persistent_interface_lock_switch():
 def test_main_uses_fixed_business_pages_and_title():
     qml = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
     call_qml = (QML_ROOT / "CallRecordPage.qml").read_text(encoding="utf-8")
+    settings_qml = (QML_ROOT / "SettingsTab.qml").read_text(encoding="utf-8")
 
     assert 'title: "组件化断点调试工具"' in qml
     assert "property int currentPage: 0" in qml
@@ -359,7 +377,14 @@ def test_main_uses_fixed_business_pages_and_title():
     assert 'text: "断点列表"' in qml
     assert 'text: "调用记录"' in qml
     assert 'text: "历史会话"' in qml
-    assert "SettingsTab" not in qml
+    assert 'text: "设置"' in qml
+    assert "SettingsTab" in qml
+    assert "bridge.getAppSettings()" in qml
+    assert "bridge.saveAppSettings(payload)" in qml
+    assert "服务 IP / Host" in settings_qml
+    assert "断点启用接口" in settings_qml
+    assert "请求超时(ms)" in settings_qml
+    assert "settingsSaveRequested(JSON.stringify(next))" in settings_qml
     assert "确认清空当前会话的数据吗？该操作会删除当前会话的接口、调用记录和相关断点。" in qml
     assert "bridge.clearCurrentSession()" in qml
     assert "确认清空当前会话的调用记录吗？接口列表、参数样本和断点会保留。" in call_qml

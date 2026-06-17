@@ -8,6 +8,7 @@ from time import monotonic, sleep
 
 import requests
 
+from desktop.app_settings import ensure_settings_file, settings_path
 from desktop.config import BACKEND_HOST, BACKEND_PORT
 
 
@@ -102,7 +103,13 @@ class DesktopBackendRuntime:
         print(f"[MicroBreakpoint] {message}", flush=True)
 
     def _backend_command(self):
-        return ["java", "-jar", str(self._resolve_backend_jar())]
+        ensure_settings_file(self._settings_path())
+        return [
+            "java",
+            f"-Dmicro-breakpoint.settings-file={self._settings_path()}",
+            "-jar",
+            str(self._resolve_backend_jar()),
+        ]
 
     def _start_internal_backend(self):
         from app import create_app
@@ -123,6 +130,7 @@ class DesktopBackendRuntime:
     def _internal_app_config(self):
         config = dict(self.app_config or {})
         config.setdefault("DATABASE", self._database_path())
+        config.setdefault("SETTINGS_FILE", self._settings_path())
         return config
 
     def _resolve_backend_jar(self):
@@ -165,12 +173,6 @@ class DesktopBackendRuntime:
         payload_root = (self.app_config or {}).get("PAYLOAD_ROOT")
         if payload_root:
             env["MICRO_BREAKPOINT_PAYLOAD_ROOT"] = str(payload_root)
-        demo_base_url = (self.app_config or {}).get("DEMO_BASE_URL")
-        if demo_base_url:
-            env["MICRO_BREAKPOINT_DEMO_BASE_URL"] = str(demo_base_url)
-        demo_request_timeout_ms = (self.app_config or {}).get("DEMO_REQUEST_TIMEOUT_MS")
-        if demo_request_timeout_ms:
-            env["MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS"] = str(demo_request_timeout_ms)
         return env
 
     def _database_path(self):
@@ -178,6 +180,12 @@ class DesktopBackendRuntime:
         if database:
             return str(database)
         return str((self._app_base_dir() / "data" / "debugger.sqlite3").resolve())
+
+    def _settings_path(self):
+        configured = (self.app_config or {}).get("SETTINGS_FILE")
+        if configured:
+            return str(Path(configured).expanduser().resolve())
+        return str(settings_path(self._app_base_dir()))
 
     def _app_base_dir(self):
         if getattr(sys, "frozen", False):

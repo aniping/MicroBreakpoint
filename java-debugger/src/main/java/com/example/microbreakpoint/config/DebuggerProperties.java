@@ -7,9 +7,8 @@ public class DebuggerProperties {
 
     private String database = "../python-debugger/data/debugger.sqlite3";
     private String payloadRoot;
+    private String settingsFile = "../python-debugger/data/settings.json";
     private int breakpointTimeoutSeconds = 300;
-    private String demoBaseUrl = "http://127.0.0.1:8080";
-    private int demoRequestTimeoutMs = 1000;
     private Long parentPid;
     private long parentCheckIntervalMs = 2000;
     private boolean parentWatchdogExitEnabled = true;
@@ -30,28 +29,20 @@ public class DebuggerProperties {
         this.payloadRoot = payloadRoot;
     }
 
+    public String getSettingsFile() {
+        return settingsFile;
+    }
+
+    public void setSettingsFile(String settingsFile) {
+        this.settingsFile = settingsFile;
+    }
+
     public int getBreakpointTimeoutSeconds() {
         return breakpointTimeoutSeconds;
     }
 
     public void setBreakpointTimeoutSeconds(int breakpointTimeoutSeconds) {
         this.breakpointTimeoutSeconds = breakpointTimeoutSeconds;
-    }
-
-    public String getDemoBaseUrl() {
-        return demoBaseUrl;
-    }
-
-    public void setDemoBaseUrl(String demoBaseUrl) {
-        this.demoBaseUrl = demoBaseUrl;
-    }
-
-    public int getDemoRequestTimeoutMs() {
-        return demoRequestTimeoutMs;
-    }
-
-    public void setDemoRequestTimeoutMs(int demoRequestTimeoutMs) {
-        this.demoRequestTimeoutMs = demoRequestTimeoutMs;
     }
 
     public Long getParentPid() {

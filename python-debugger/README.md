@@ -36,7 +36,7 @@ python run_desktop.py
 
 桌面端默认使用 `internal` 后端模式，会在当前桌面进程内直接创建本项目自带的 Python Flask 后端。若 `18601` 端口已有可用后端，桌面端会直接复用。
 
-内置 Python Flask 后端默认通过 `MICRO_BREAKPOINT_DEMO_BASE_URL=http://127.0.0.1:8080` 请求 Java Demo 的 `/api/demo/debugger/enabled`，在“开始调试 / 停止调试”时打开或关闭 Demo 上报开关；请求超时由 `MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS` 控制，默认 `1000` 毫秒。Demo 不在线时，“开始调试”会失败并保持未调试状态。
+桌面端“设置”页可配置被调试业务服务的 IP/Host、端口、断点启用接口和请求超时；配置自动保存到应用目录下的 `data/settings.json`。内置 Python Flask 后端和 `--backend jar` 拉起的 Java 后端都会读取这份配置，在“开始调试 / 停止调试”时打开或关闭业务服务断点开关；业务服务不在线时，“开始调试”会失败并保持未调试状态。
 
 显式使用本地 jar：
 
@@ -68,6 +68,24 @@ conda run -n micro-breakpoint python -m PyInstaller MicroBreakpoint.spec
 桌面端支持暗色模式和亮色模式。可以通过顶部标题栏右侧的主题按钮快速切换。
 
 主题选择会持久化保存，重启桌面端后保持上次选择。默认主题为暗色。
+
+## 调试服务配置
+
+左侧“设置”页会自动保存被调试业务服务的断点开关配置。源码运行时配置文件为 `python-debugger/data/settings.json`，打包后为 exe 所在目录下的 `data/settings.json`。
+
+```json
+{
+  "themeMode": "dark",
+  "debugTarget": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "debuggerSwitchPath": "/api/demo/debugger/enabled",
+    "requestTimeoutMs": 1000
+  }
+}
+```
+
+`internal` 后端会直接读取该文件；`--backend jar` 会把同一文件路径传给 Java 后端。手动启动外部 Java 后端时，可添加 `-Dmicro-breakpoint.settings-file=<settings.json 路径>` 使用同一份配置。
 
 ## Session 归档与锁定接口
 

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +28,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
-import com.example.microbreakpoint.config.DebuggerProperties;
-
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "micro-breakpoint.database=target/test-data/debugger-flow.sqlite3",
         "micro-breakpoint.payload-root=target/test-data/payloads",
@@ -37,18 +37,14 @@ class DebuggerFlowTest {
 
     private static final AtomicBoolean DEMO_DEBUGGER_ENABLED = new AtomicBoolean(false);
     private static final HttpServer DEMO_SERVER = startDemoServer();
-    private static final String DEMO_BASE_URL = "http://127.0.0.1:" + DEMO_SERVER.getAddress().getPort();
+    private static final Path SETTINGS_FILE = Path.of("target/test-data/debugger-flow-settings.json");
 
     @Autowired
     private TestRestTemplate rest;
 
-    @Autowired
-    private DebuggerProperties properties;
-
     @DynamicPropertySource
     static void demoProperties(DynamicPropertyRegistry registry) {
-        registry.add("micro-breakpoint.demo-base-url", () -> DEMO_BASE_URL);
-        registry.add("micro-breakpoint.demo-request-timeout-ms", () -> "200");
+        registry.add("micro-breakpoint.settings-file", () -> SETTINGS_FILE.toString());
     }
 
     @AfterAll
@@ -58,7 +54,7 @@ class DebuggerFlowTest {
 
     @BeforeEach
     void reset() {
-        properties.setDemoBaseUrl(DEMO_BASE_URL);
+        writeSettings(DEMO_SERVER.getAddress().getPort(), 200);
         rest.postForObject("/api/debug/stop", Map.of(), Map.class);
         rest.exchange("/api/sessions", HttpMethod.DELETE, HttpEntity.EMPTY, Map.class);
         rest.postForObject("/api/interfaces/lock", Map.of("locked", false), Map.class);
@@ -120,7 +116,7 @@ class DebuggerFlowTest {
 
     @Test
     void debugStartFailsWhenDemoSwitchIsUnavailable() {
-        properties.setDemoBaseUrl("http://127.0.0.1:1");
+        writeSettings(1, 50);
 
         ResponseEntity<Map<String, Object>> response = rest.exchange("/api/debug/start", HttpMethod.POST,
                 new HttpEntity<>(Map.of()), new ParameterizedTypeReference<>() {
@@ -130,6 +126,20 @@ class DebuggerFlowTest {
         assertThat(response.getBody()).containsEntry("success", false).containsEntry("debugging", false);
         assertThat(String.valueOf(response.getBody().get("message"))).contains("Java Demo");
         assertThat(get("/api/debug/state")).containsEntry("debugging", false).containsEntry("mode", "idle");
+    }
+
+    private static void writeSettings(int port, int timeoutMs) {
+        try {
+            Files.createDirectories(SETTINGS_FILE.getParent());
+            String json = "{\"debugTarget\":{\"host\":\"127.0.0.1\",\"port\":"
+                    + port
+                    + ",\"debuggerSwitchPath\":\"/api/demo/debugger/enabled\",\"requestTimeoutMs\":"
+                    + timeoutMs
+                    + "}}";
+            Files.writeString(SETTINGS_FILE, json, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test

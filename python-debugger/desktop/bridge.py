@@ -2,9 +2,10 @@ import json
 from pathlib import Path
 
 import requests
-from PySide6.QtCore import QObject, QSettings, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QApplication, QFileDialog
 
+from desktop.app_settings import ensure_settings_file, load_settings, save_settings
 from desktop.config import BACKEND_URL
 
 
@@ -15,14 +16,15 @@ class Bridge(QObject):
     breakpointsChanged = Signal(str)
     sessionsChanged = Signal(str)
     resultChanged = Signal(str)
+    settingsChanged = Signal(str)
     themeChanged = Signal(str)
     importDuplicate = Signal(str)
     userNotice = Signal(str)
 
-    def __init__(self):
+    def __init__(self, settings_file=None):
         super().__init__()
         self.backend = BACKEND_URL
-        self.settings = QSettings("MicroBreakpoint", "Desktop")
+        self.settings_file = settings_file
         self.callsPage = 1
         self.callsPageSize = 50
         self.callsTotal = 0
@@ -94,15 +96,34 @@ class Bridge(QObject):
 
     @Slot(result=str)
     def getThemeMode(self):
-        value = self.settings.value("theme/mode", "dark")
+        value = load_settings(self.settings_file).get("themeMode", "dark")
         return "light" if value == "light" else "dark"
 
     @Slot(str)
     def setThemeMode(self, mode):
         theme_mode = "light" if mode == "light" else "dark"
-        self.settings.setValue("theme/mode", theme_mode)
-        self.settings.sync()
+        settings = load_settings(self.settings_file)
+        settings["themeMode"] = theme_mode
+        saved = save_settings(settings, self.settings_file)
         self.themeChanged.emit(theme_mode)
+        self.settingsChanged.emit(json.dumps(saved, ensure_ascii=False))
+
+    @Slot(result=str)
+    def getAppSettings(self):
+        settings = ensure_settings_file(self.settings_file)
+        return json.dumps(settings, ensure_ascii=False)
+
+    @Slot(str, result=str)
+    def saveAppSettings(self, payload):
+        try:
+            settings = json.loads(payload or "{}")
+        except ValueError:
+            settings = {}
+        saved = save_settings(settings, self.settings_file)
+        theme_mode = saved.get("themeMode", "dark")
+        self.settingsChanged.emit(json.dumps(saved, ensure_ascii=False))
+        self.themeChanged.emit("light" if theme_mode == "light" else "dark")
+        return json.dumps(saved, ensure_ascii=False)
 
     @Slot()
     def startRecord(self):

@@ -8,6 +8,7 @@ import pytest
 
 from app import create_app
 from app.db.database import get_db
+import desktop.app_settings as app_settings
 
 
 def make_before(call_id="call-1", object_name="SA", cmd="start", slot_id=1, params=None):
@@ -37,8 +38,10 @@ def make_client(tmp_path):
 @pytest.fixture(autouse=True)
 def demo_switch_server(monkeypatch):
     server, state = start_demo_switch_server()
-    monkeypatch.setenv("MICRO_BREAKPOINT_DEMO_BASE_URL", f"http://127.0.0.1:{server.server_port}")
-    monkeypatch.setenv("MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS", "200")
+    monkeypatch.setitem(app_settings.DEFAULT_SETTINGS["debugTarget"], "host", "127.0.0.1")
+    monkeypatch.setitem(app_settings.DEFAULT_SETTINGS["debugTarget"], "port", server.server_port)
+    monkeypatch.setitem(app_settings.DEFAULT_SETTINGS["debugTarget"], "debuggerSwitchPath", "/api/demo/debugger/enabled")
+    monkeypatch.setitem(app_settings.DEFAULT_SETTINGS["debugTarget"], "requestTimeoutMs", 200)
     try:
         yield state
     finally:
@@ -152,11 +155,19 @@ def test_debug_start_and_stop_toggle_demo_switch(tmp_path, demo_switch_server):
 
 
 def test_debug_start_fails_when_demo_switch_is_unavailable(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    app_settings.save_settings({
+        "debugTarget": {
+            "host": "127.0.0.1",
+            "port": 1,
+            "debuggerSwitchPath": "/api/demo/debugger/enabled",
+            "requestTimeoutMs": 50,
+        },
+    }, settings_file)
     app = create_app({
         "TESTING": True,
         "DATABASE": str(tmp_path / "debugger.sqlite3"),
-        "DEMO_BASE_URL": "http://127.0.0.1:1",
-        "DEMO_REQUEST_TIMEOUT_MS": 50,
+        "SETTINGS_FILE": str(settings_file),
     })
     client = app.test_client()
 

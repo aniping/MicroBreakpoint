@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.microbreakpoint.config.DebuggerProperties;
+import com.example.microbreakpoint.config.AppSettings;
 import com.example.microbreakpoint.service.DebugService;
 
 @CrossOrigin
@@ -28,11 +28,11 @@ public class DebugController {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final DebugService debugService;
-    private final DebuggerProperties properties;
+    private final AppSettings appSettings;
 
-    public DebugController(DebugService debugService, DebuggerProperties properties) {
+    public DebugController(DebugService debugService, AppSettings appSettings) {
         this.debugService = debugService;
-        this.properties = properties;
+        this.appSettings = appSettings;
     }
 
     @GetMapping("/state")
@@ -70,18 +70,18 @@ public class DebugController {
     }
 
     private Map<String, Object> setDemoDebuggerEnabled(boolean enabled) {
-        String baseUrl = properties.getDemoBaseUrl();
-        if (baseUrl == null || baseUrl.isBlank()) {
+        AppSettings.DebugTarget target = appSettings.debugTarget();
+        String url = target.debugSwitchUrl();
+        if (url == null || url.isBlank()) {
             return DebugService.mapOf("success", false, "message", "Java Demo 地址未配置");
         }
-        String url = trimTrailingSlash(baseUrl) + "/api/demo/debugger/enabled";
         HttpURLConnection connection = null;
         try {
             byte[] body = OBJECT_MAPPER.writeValueAsString(Map.of("enabled", enabled))
                     .getBytes(StandardCharsets.UTF_8);
             connection = (HttpURLConnection) new URL(url).openConnection();
             connection.setRequestMethod("POST");
-            int timeoutMs = Math.max(1, properties.getDemoRequestTimeoutMs());
+            int timeoutMs = Math.max(1, target.requestTimeoutMs());
             connection.setConnectTimeout(timeoutMs);
             connection.setReadTimeout(timeoutMs);
             connection.setDoOutput(true);
@@ -105,14 +105,6 @@ public class DebugController {
                 connection.disconnect();
             }
         }
-    }
-
-    private static String trimTrailingSlash(String value) {
-        String result = value.trim();
-        while (result.endsWith("/")) {
-            result = result.substring(0, result.length() - 1);
-        }
-        return result;
     }
 
     private static String readResponse(HttpURLConnection connection, int status) {

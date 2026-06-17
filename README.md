@@ -80,6 +80,24 @@ cd java-demo
 
 主题系统集中管理窗口背景、顶部栏、工具栏、侧边栏、面板、文字、输入框、状态标签和 JSON 查看区域的颜色，避免各页面散落大面积硬编码颜色。
 
+## 调试服务配置
+
+左侧“设置”页会自动保存被调试业务服务的断点开关配置，源码运行时文件为 `python-debugger/data/settings.json`，打包后为 exe 所在目录下的 `data/settings.json`。默认内容如下：
+
+```json
+{
+  "themeMode": "dark",
+  "debugTarget": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "debuggerSwitchPath": "/api/demo/debugger/enabled",
+    "requestTimeoutMs": 1000
+  }
+}
+```
+
+`debuggerSwitchPath` 使用 `POST`，请求体为 `{"enabled": true}` 或 `{"enabled": false}`。桌面端拉起 Java 后端时会把同一份 settings 文件路径传给后端；手动启动外部 Java 后端时，如需复用桌面配置，可添加 `-Dmicro-breakpoint.settings-file=<settings.json 路径>`。
+
 ## Session 归档与接口锁定
 
 `.mbrec` 是组件化断点调试工具的会话归档文件。历史会话页可以导出当前会话，并在导出时填写归档名称和备注；导入 `.mbrec` 会创建一个新的本地会话，不会合并到当前会话，也不会覆盖原有历史。首次导入前后端会先停止当前调试并释放所有真实 paused 调用，导入完成后自动打开新导入的会话；归档里的历史 paused 调用会作为 `imported_paused` 保存，只用于回看，不会进入当前暂停计数，也不能继续执行。
@@ -148,7 +166,7 @@ mvn test
 
 后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认在进程内启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
 
-内置 Python Flask 后端默认通过 `MICRO_BREAKPOINT_DEMO_BASE_URL=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS` 控制。Java 后端使用对应的 `micro-breakpoint.demo-base-url` 和 `micro-breakpoint.demo-request-timeout-ms` 配置。
+桌面端“设置”页可配置被调试业务服务的 IP/Host、端口、断点启用接口和请求超时；配置自动保存到应用目录下的 `data/settings.json`。内置 Python Flask 后端和桌面端拉起的 Java 后端都会读取这份配置，在“开始调试 / 停止调试”时请求业务服务断点开关。
 桌面端通过 `--backend jar` 拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。
 
 启动 Java 后端：

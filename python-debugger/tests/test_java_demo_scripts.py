@@ -32,6 +32,7 @@ def test_debugger_ports_are_configured_for_18601():
     run_desktop = (ROOT / "python-debugger" / "run_desktop.py").read_text(encoding="utf-8")
     bridge = (ROOT / "python-debugger" / "desktop" / "bridge.py").read_text(encoding="utf-8")
     runtime = (ROOT / "python-debugger" / "desktop" / "backend_runtime.py").read_text(encoding="utf-8")
+    app_settings = (ROOT / "python-debugger" / "desktop" / "app_settings.py").read_text(encoding="utf-8")
     settings_page = (ROOT / "python-debugger" / "desktop" / "qml" / "SettingsTab.qml").read_text(encoding="utf-8")
     java_yml = (ROOT / "java-demo" / "src" / "main" / "resources" / "application.yml").read_text(encoding="utf-8")
     java_settings = (ROOT / "java-demo" / "src" / "main" / "java" / "com" / "example" / "instrumentdemo" / "debuger" / "DebuggerSettings.java").read_text(encoding="utf-8")
@@ -46,13 +47,18 @@ def test_debugger_ports_are_configured_for_18601():
     assert '"external"' in run_desktop
     assert '"none"' not in run_desktop
     assert "MICRO_BREAKPOINT_DATABASE" in run_backend
-    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" in run_backend
-    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" in run_backend
-    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" in flask_app
-    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" in flask_app
+    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in run_backend
+    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" not in run_backend
+    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in flask_app
+    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" not in flask_app
     assert "SERVER_PORT" in run_backend
     assert "BACKEND_URL" in bridge
+    assert "getAppSettings" in bridge
+    assert "saveAppSettings" in bridge
     assert "BACKEND_PORT" in runtime
+    assert "micro-breakpoint.settings-file" in runtime
+    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in runtime
+    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" not in runtime
     assert "create_app" in runtime
     assert "make_server" in runtime
     assert "run_backend.py" not in runtime
@@ -60,15 +66,21 @@ def test_debugger_ports_are_configured_for_18601():
     assert "sys.executable" in runtime
     assert "spring-boot:run" not in runtime
     assert "mvn" not in runtime.lower()
+    assert "settings.json" in app_settings
+    assert "debugTarget" in app_settings
     assert "page.backendUrl" in settings_page
+    assert "服务 IP / Host" in settings_page
+    assert "断点启用接口" in settings_page
+    assert "settingsSaveRequested" in settings_page
     assert "http://127.0.0.1:18601" in java_yml
     assert "enabled: false" in java_yml
     assert "http://127.0.0.1:18601" in java_settings
     assert "public static volatile boolean enabled = false" in java_settings
     assert "${debugger.enabled:false}" in java_config
     assert "${debugger.server-url:http://127.0.0.1:18601}" in java_config
-    assert "demo-base-url: http://127.0.0.1:8080" in java_debugger_yml
-    assert "demo-request-timeout-ms: 1000" in java_debugger_yml
+    assert "settings-file: ../python-debugger/data/settings.json" in java_debugger_yml
+    assert "demo-base-url" not in java_debugger_yml
+    assert "demo-request-timeout-ms" not in java_debugger_yml
 
 
 def test_object_cmd_bash_scripts_cover_discovery_and_breakpoints():

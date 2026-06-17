@@ -12,12 +12,6 @@ def app_config_from_env():
     payload_root = os.environ.get("MICRO_BREAKPOINT_PAYLOAD_ROOT")
     if payload_root:
         config["PAYLOAD_ROOT"] = payload_root
-    demo_base_url = os.environ.get("MICRO_BREAKPOINT_DEMO_BASE_URL")
-    if demo_base_url:
-        config["DEMO_BASE_URL"] = demo_base_url
-    demo_request_timeout_ms = os.environ.get("MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS")
-    if demo_request_timeout_ms:
-        config["DEMO_REQUEST_TIMEOUT_MS"] = int(demo_request_timeout_ms)
     return config or None
 
 

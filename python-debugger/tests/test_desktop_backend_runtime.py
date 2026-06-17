@@ -99,6 +99,7 @@ def test_internal_backend_runtime_uses_default_python_debugger_database():
 
     expected = os.path.join("python-debugger", "data", "debugger.sqlite3")
     assert config["DATABASE"].endswith(expected)
+    assert config["SETTINGS_FILE"].endswith(os.path.join("python-debugger", "data", "settings.json"))
 
 
 def test_internal_backend_runtime_serves_flask_app(tmp_path):
@@ -155,10 +156,12 @@ def test_jar_backend_runtime_starts_resolved_jar_and_stops_owned_process(tmp_pat
 
     assert runtime.start(timeout=1.0) is True
     assert runtime.owned is True
-    assert started["command"] == ["java", "-jar", str(jar.resolve())]
+    assert started["command"] == expected_java_command(runtime, jar)
     assert started["cwd"] == jar.parent.resolve()
     assert started["env"]["SERVER_PORT"] == str(runtime.port)
     assert started["env"]["MICRO_BREAKPOINT_PARENT_PID"] == str(os.getpid())
+    assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in started["env"]
+    assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" not in started["env"]
 
     runtime.stop()
     assert process.terminated is True
@@ -168,7 +171,12 @@ def test_jar_backend_runtime_starts_resolved_jar_and_stops_owned_process(tmp_pat
 def test_jar_backend_runtime_prints_console_lifecycle_logs(tmp_path, monkeypatch, capsys):
     jar = tmp_path / "micro-breakpoint-debugger.jar"
     jar.write_text("", encoding="utf-8")
-    runtime = DesktopBackendRuntime(port=free_port(), backend_mode="jar", backend_jar=jar)
+    runtime = DesktopBackendRuntime(
+        port=free_port(),
+        app_config={"SETTINGS_FILE": str(tmp_path / "settings.json")},
+        backend_mode="jar",
+        backend_jar=jar,
+    )
     ready = [False, True]
     monkeypatch.setattr(runtime, "is_ready", lambda: ready.pop(0))
     monkeypatch.setattr(backend_runtime.subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
@@ -203,7 +211,7 @@ def test_backend_command_uses_default_named_jar(tmp_path, monkeypatch):
     runtime = DesktopBackendRuntime(backend_mode="jar")
     monkeypatch.setattr(runtime, "_app_base_dir", lambda: app_dir)
 
-    assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+    assert runtime._backend_command() == expected_java_command(runtime, jar)
 
 
 def test_backend_runtime_uses_exe_dir_when_frozen(tmp_path, monkeypatch):
@@ -222,9 +230,13 @@ def test_backend_command_uses_single_versioned_jar(tmp_path):
     jar = backend_dir / "micro-breakpoint-debugger-0.1.0.jar"
     backend_dir.mkdir()
     jar.write_text("", encoding="utf-8")
-    runtime = DesktopBackendRuntime(backend_mode="jar", backend_dir=backend_dir)
+    runtime = DesktopBackendRuntime(
+        app_config={"SETTINGS_FILE": str(tmp_path / "settings.json")},
+        backend_mode="jar",
+        backend_dir=backend_dir,
+    )
 
-    assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+    assert runtime._backend_command() == expected_java_command(runtime, jar)
 
 
 def test_backend_command_uses_explicit_jar_before_backend_dir(tmp_path):
@@ -233,22 +245,34 @@ def test_backend_command_uses_explicit_jar_before_backend_dir(tmp_path):
     backend_dir = tmp_path / "backend"
     backend_dir.mkdir()
     (backend_dir / "micro-breakpoint-debugger.jar").write_text("", encoding="utf-8")
-    runtime = DesktopBackendRuntime(backend_mode="jar", backend_jar=explicit, backend_dir=backend_dir)
+    runtime = DesktopBackendRuntime(
+        app_config={"SETTINGS_FILE": str(tmp_path / "settings.json")},
+        backend_mode="jar",
+        backend_jar=explicit,
+        backend_dir=backend_dir,
+    )
 
-    assert runtime._backend_command() == ["java", "-jar", str(explicit.resolve())]
+    assert runtime._backend_command() == expected_java_command(runtime, explicit)
 
 
 def test_backend_command_uses_environment_jar(tmp_path, monkeypatch):
     jar = tmp_path / "env.jar"
     jar.write_text("", encoding="utf-8")
     monkeypatch.setenv("MICRO_BREAKPOINT_BACKEND_JAR", str(jar))
-    runtime = DesktopBackendRuntime(backend_mode="jar")
+    runtime = DesktopBackendRuntime(
+        app_config={"SETTINGS_FILE": str(tmp_path / "settings.json")},
+        backend_mode="jar",
+    )
 
-    assert runtime._backend_command() == ["java", "-jar", str(jar.resolve())]
+    assert runtime._backend_command() == expected_java_command(runtime, jar)
 
 
 def test_backend_command_fails_when_jar_is_missing(tmp_path):
-    runtime = DesktopBackendRuntime(backend_mode="jar", backend_dir=tmp_path)
+    runtime = DesktopBackendRuntime(
+        app_config={"SETTINGS_FILE": str(tmp_path / "settings.json")},
+        backend_mode="jar",
+        backend_dir=tmp_path,
+    )
 
     with pytest.raises(RuntimeError, match="Backend jar not found"):
         runtime._backend_command()
@@ -257,7 +281,11 @@ def test_backend_command_fails_when_jar_is_missing(tmp_path):
 def test_backend_command_fails_when_multiple_versioned_jars_exist(tmp_path):
     (tmp_path / "micro-breakpoint-debugger-0.1.0.jar").write_text("", encoding="utf-8")
     (tmp_path / "micro-breakpoint-debugger-0.2.0.jar").write_text("", encoding="utf-8")
-    runtime = DesktopBackendRuntime(backend_mode="jar", backend_dir=tmp_path)
+    runtime = DesktopBackendRuntime(
+        app_config={"SETTINGS_FILE": str(tmp_path / "settings.json")},
+        backend_mode="jar",
+        backend_dir=tmp_path,
+    )
 
     with pytest.raises(RuntimeError, match="Multiple backend jars"):
         runtime._backend_command()
@@ -320,3 +348,12 @@ def start_backend_state_server():
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, state
+
+
+def expected_java_command(runtime, jar):
+    return [
+        "java",
+        f"-Dmicro-breakpoint.settings-file={runtime._settings_path()}",
+        "-jar",
+        str(jar.resolve()),
+    ]

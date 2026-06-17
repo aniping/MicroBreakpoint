@@ -36,6 +36,7 @@ ApplicationWindow {
     property var interfaceItems: []
     property var breakpointItems: []
     property var sessionItems: []
+    property var appSettings: ({themeMode: "dark", debugTarget: {host: "127.0.0.1", port: 8080, debuggerSwitchPath: "/api/demo/debugger/enabled", requestTimeoutMs: 1000}})
     property string resultText: ""
     property string callBreakpointFilter: ""
     property string selectedCallId: ""
@@ -76,7 +77,8 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        root.themeMode = bridge.getThemeMode()
+        root.appSettings = JSON.parse(bridge.getAppSettings())
+        root.themeMode = root.appSettings.themeMode || bridge.getThemeMode()
         bridge.refreshAll()
     }
 
@@ -95,6 +97,10 @@ ApplicationWindow {
         function onSessionsChanged(payload) { sessionItems = JSON.parse(payload).items || [] }
         function onResultChanged(payload) { resultText = payload }
         function onThemeChanged(mode) { root.themeMode = mode }
+        function onSettingsChanged(payload) {
+            root.appSettings = JSON.parse(payload)
+            root.themeMode = root.appSettings.themeMode || root.themeMode
+        }
         function onUserNotice(message) {
             noticeDialog.message = message
             noticeDialog.open()
@@ -349,6 +355,7 @@ ApplicationWindow {
                     MbNavButton { appTheme: theme; text: "断点列表"; iconText: "◎"; selected: currentPage === 1; onClicked: currentPage = 1 }
                     MbNavButton { appTheme: theme; text: "调用记录"; iconText: "☷"; selected: currentPage === 2; onClicked: currentPage = 2 }
                     MbNavButton { appTheme: theme; text: "历史会话"; iconText: "◷"; selected: currentPage === 3; onClicked: currentPage = 3 }
+                    MbNavButton { appTheme: theme; text: "设置"; iconText: "◇"; selected: currentPage === 4; onClicked: currentPage = 4 }
                     Item { Layout.fillHeight: true }
                 }
             }
@@ -390,6 +397,14 @@ ApplicationWindow {
                     canClearSessions: !stateData.debugging
                     debugging: !!stateData.debugging
                     pausedCount: Number(stateData.pausedCount || 0)
+                }
+                SettingsTab {
+                    appTheme: theme
+                    themeMode: root.themeMode
+                    backendUrl: backendApiUrl
+                    settingsData: root.appSettings
+                    onThemeModeRequested: function(mode) { bridge.setThemeMode(mode) }
+                    onSettingsSaveRequested: function(payload) { bridge.saveAppSettings(payload) }
                 }
             }
         }
