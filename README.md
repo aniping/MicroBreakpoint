@@ -31,7 +31,7 @@ cd python-debugger
 python run_desktop.py
 ```
 
-桌面端默认使用 `internal` 后端模式，会自动启动本项目自带的 Python Flask 后端 `run_backend.py`。如果 `18601` 端口已有可用后端，桌面端会直接复用。
+桌面端默认使用 `internal` 后端模式，会在当前桌面进程内直接创建本项目自带的 Python Flask 后端。如果 `18601` 端口已有可用后端，桌面端会直接复用。
 
 使用当前运行目录下 `backend/` 文件夹中的 jar 作为后端：
 
@@ -49,7 +49,7 @@ cd python-debugger
 python run_desktop.py --backend external
 ```
 
-`external` 不启动后端、不检查后端，也不管理后端关闭；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`internal` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求，并关闭桌面端自己启动的后端进程；`external` 不会触碰外部进程。
+`external` 不启动后端、不检查后端，也不管理后端关闭；后端未启动时，请求失败会按现有界面错误提示显示。退出桌面端时，`internal` 和 `jar` 会先调用 `/api/debug/stop` 释放暂停请求，并关闭桌面端自己启动的后端；`external` 不会触碰外部进程。
 
 启动 Java Demo：
 
@@ -146,7 +146,7 @@ mvn test
 ```
 ## Java 后端
 
-后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
+后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认在进程内启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
 
 内置 Python Flask 后端默认通过 `MICRO_BREAKPOINT_DEMO_BASE_URL=http://127.0.0.1:8080` 联动 Java Demo 调试开关，请求超时由 `MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS` 控制。Java 后端使用对应的 `micro-breakpoint.demo-base-url` 和 `micro-breakpoint.demo-request-timeout-ms` 配置。
 桌面端通过 `--backend jar` 拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。

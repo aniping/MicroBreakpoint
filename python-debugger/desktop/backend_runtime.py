@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
-import sys
+from threading import Thread
 from time import monotonic, sleep
 
 import requests
@@ -25,6 +25,8 @@ class DesktopBackendRuntime:
         self.backend_jar = backend_jar
         self.backend_dir = backend_dir
         self._process = None
+        self._server = None
+        self._thread = None
         self._owned = False
 
     @property
@@ -39,19 +41,22 @@ class DesktopBackendRuntime:
         if self.is_ready():
             self._log(f"reuse backend at {self.url}")
             return False
-        command = self._backend_command()
         self._log(f"start {self.backend_mode} backend at {self.url}")
-        self._process = subprocess.Popen(
-            command,
-            cwd=self._backend_cwd(command),
-            env=self._backend_env(),
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        if self.backend_mode == "internal":
+            self._start_internal_backend()
+        else:
+            command = self._backend_command()
+            self._process = subprocess.Popen(
+                command,
+                cwd=Path(command[-1]).parent,
+                env=self._backend_env(),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
         self._owned = True
         try:
             self._wait_until_ready(timeout)
         except Exception:
-            self._terminate_process()
+            self._terminate_owned_backend()
             self._owned = False
             raise
         self._log(f"{self.backend_mode} backend ready at {self.url}")
@@ -60,12 +65,18 @@ class DesktopBackendRuntime:
     def stop(self):
         if self.backend_mode != "external":
             self._stop_debug_session()
-        if not self._owned or self._process is None:
+        if not self._owned:
             return
         self._log(f"stop {self.backend_mode} backend at {self.url}")
-        self._terminate_process()
+        self._terminate_owned_backend()
         self._owned = False
         self._log(f"{self.backend_mode} backend stopped")
+
+    def _terminate_owned_backend(self):
+        if self._server is not None:
+            self._shutdown_internal_backend()
+            return
+        self._terminate_process()
 
     def _terminate_process(self):
         if self._process is None:
@@ -90,17 +101,28 @@ class DesktopBackendRuntime:
         print(f"[MicroBreakpoint] {message}", flush=True)
 
     def _backend_command(self):
-        if self.backend_mode == "internal":
-            return [sys.executable, "run_backend.py"]
         return ["java", "-jar", str(self._resolve_backend_jar())]
 
-    def _backend_cwd(self, command):
-        if self.backend_mode == "internal":
-            return self._python_backend_dir()
-        return Path(command[-1]).parent
+    def _start_internal_backend(self):
+        from app import create_app
+        from werkzeug.serving import make_server
 
-    def _python_backend_dir(self):
-        return Path(__file__).resolve().parents[1]
+        app = create_app(self._internal_app_config())
+        self._server = make_server(self.host, self.port, app, threaded=True)
+        self._thread = Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+
+    def _shutdown_internal_backend(self):
+        self._server.shutdown()
+        if self._thread is not None:
+            self._thread.join(timeout=8)
+        self._server = None
+        self._thread = None
+
+    def _internal_app_config(self):
+        config = dict(self.app_config or {})
+        config.setdefault("DATABASE", self._database_path())
+        return config
 
     def _resolve_backend_jar(self):
         explicit_jar = self.backend_jar or os.environ.get("MICRO_BREAKPOINT_BACKEND_JAR")

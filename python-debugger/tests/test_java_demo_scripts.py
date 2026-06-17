@@ -53,6 +53,10 @@ def test_debugger_ports_are_configured_for_18601():
     assert "SERVER_PORT" in run_backend
     assert "BACKEND_URL" in bridge
     assert "BACKEND_PORT" in runtime
+    assert "create_app" in runtime
+    assert "make_server" in runtime
+    assert "run_backend.py" not in runtime
+    assert "sys.executable" not in runtime
     assert "spring-boot:run" not in runtime
     assert "mvn" not in runtime.lower()
     assert "page.backendUrl" in settings_page

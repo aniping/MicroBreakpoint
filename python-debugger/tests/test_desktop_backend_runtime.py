@@ -1,11 +1,10 @@
 import os
 import socket
-import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from threading import Thread
 
 import pytest
+import requests
 
 import desktop.backend_runtime as backend_runtime
 from desktop.backend_runtime import DesktopBackendRuntime
@@ -56,16 +55,17 @@ def test_external_backend_runtime_skips_readiness_and_shutdown(monkeypatch):
     assert runtime.owned is False
 
 
-def test_internal_backend_runtime_starts_flask_backend_and_stops_owned_process(tmp_path, monkeypatch):
-    process = FakeProcess()
-    started = {}
+def test_internal_backend_runtime_starts_flask_backend_and_stops_owned_server(tmp_path, monkeypatch):
+    started = {"called": False}
+    stopped = {"called": False}
 
-    def fake_popen(command, cwd, env, creationflags):
-        started["command"] = command
-        started["cwd"] = cwd
-        started["env"] = env
-        started["creationflags"] = creationflags
-        return process
+    def fake_start():
+        started["called"] = True
+        runtime._server = object()
+
+    def fake_stop():
+        stopped["called"] = True
+        runtime._server = None
 
     runtime = DesktopBackendRuntime(
         port=free_port(),
@@ -74,18 +74,46 @@ def test_internal_backend_runtime_starts_flask_backend_and_stops_owned_process(t
     )
     ready = [False, True]
     monkeypatch.setattr(runtime, "is_ready", lambda: ready.pop(0))
-    monkeypatch.setattr(backend_runtime.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(runtime, "_start_internal_backend", fake_start)
+    monkeypatch.setattr(runtime, "_shutdown_internal_backend", fake_stop)
+    monkeypatch.setattr(
+        backend_runtime.subprocess,
+        "Popen",
+        lambda *args, **kwargs: pytest.fail("Popen should not be called"),
+    )
 
     assert runtime.start(timeout=1.0) is True
     assert runtime.owned is True
-    assert started["command"] == [sys.executable, "run_backend.py"]
-    assert started["cwd"] == Path(__file__).resolve().parents[1]
-    assert started["env"]["SERVER_PORT"] == str(runtime.port)
-    assert started["env"]["MICRO_BREAKPOINT_DATABASE"] == str(tmp_path / "debugger.sqlite3")
+    assert started["called"] is True
+    assert runtime._process is None
 
     runtime.stop()
-    assert process.terminated is True
+    assert stopped["called"] is True
     assert runtime.owned is False
+
+
+def test_internal_backend_runtime_uses_default_python_debugger_database():
+    runtime = DesktopBackendRuntime(port=free_port(), backend_mode="internal")
+
+    config = runtime._internal_app_config()
+
+    expected = os.path.join("python-debugger", "data", "debugger.sqlite3")
+    assert config["DATABASE"].endswith(expected)
+
+
+def test_internal_backend_runtime_serves_flask_app(tmp_path):
+    runtime = DesktopBackendRuntime(
+        port=free_port(),
+        app_config={"TESTING": True, "DATABASE": str(tmp_path / "debugger.sqlite3")},
+        backend_mode="internal",
+    )
+    try:
+        assert runtime.start(timeout=10.0) is True
+        response = requests.get(f"{runtime.url}/api/debug/state", timeout=3)
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+    finally:
+        runtime.stop()
 
 
 def test_internal_backend_runtime_reuses_ready_backend_and_stops_debug_session():
@@ -99,13 +127,6 @@ def test_internal_backend_runtime_reuses_ready_backend_and_stops_debug_session()
     finally:
         server.shutdown()
         server.server_close()
-
-
-def test_internal_backend_command_uses_run_backend():
-    runtime = DesktopBackendRuntime(backend_mode="internal")
-
-    assert runtime._backend_command() == [sys.executable, "run_backend.py"]
-    assert runtime._backend_cwd(runtime._backend_command()) == Path(__file__).resolve().parents[1]
 
 
 def test_jar_backend_runtime_starts_resolved_jar_and_stops_owned_process(tmp_path, monkeypatch):
