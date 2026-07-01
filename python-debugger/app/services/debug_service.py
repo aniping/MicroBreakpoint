@@ -2076,16 +2076,18 @@ def declare_breakpoint_rule(payload):
     }
     db = get_db()
     duplicate = find_duplicate_breakpoint(db, rule_data)
+    reused = False
     if duplicate:
         rule_id = duplicate["id"]
         db.execute("UPDATE breakpoint SET enabled=1, updated_at=? WHERE id=?", (now_iso(), rule_id))
         db.commit()
+        reused = True
     else:
         created = create_breakpoint(rule_data)
         if not created.get("success"):
             return agent_rule_error(created.get("message") or "断点规则注册失败")
         rule_id = created["breakpointId"]
-    return agent_rule_response(rule_id, object_name, cmd_name, observation_hint(session_id, object_name, cmd_name))
+    return agent_rule_response(rule_id, object_name, cmd_name, observation_hint(session_id, object_name, cmd_name), reused)
 
 
 def normalize_agent_conditions(raw_conditions):
@@ -2116,13 +2118,13 @@ def observation_hint(session_id, object_name, cmd_name):
     return {"state": "unobserved", "message": "当前尚未见过匹配调用；规则已生效。"}
 
 
-def agent_rule_response(rule_id, object_name, cmd_name, hint):
+def agent_rule_response(rule_id, object_name, cmd_name, hint, reused=False):
     return {
         "ok": True,
         "status": "armed",
         "breakpoint_rule_id": rule_id,
-        "message": "断点规则已注册；目标调用出现时会自动暂停。",
-        "meta": {"observation_hint": hint},
+        "message": "已复用已有断点规则；目标调用出现时会自动暂停。" if reused else "断点规则已注册；目标调用出现时会自动暂停。",
+        "meta": {"observation_hint": hint, "reused": reused},
         "entities": [
             {
                 "type": "breakpoint_rule",

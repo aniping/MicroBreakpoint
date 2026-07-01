@@ -224,11 +224,15 @@ class DebuggerFlowTest {
         Map<String, Object> meta = (Map<String, Object>) declared.get("meta");
         Map<String, Object> hint = (Map<String, Object>) meta.get("observation_hint");
         assertThat(hint).containsEntry("state", "unobserved");
+        assertThat(meta).containsEntry("reused", false);
 
         Map<String, Object> duplicate = post("/api/agent/breakpoints", Map.of(
                 "target", Map.of("object", "VNA", "command", "initialize"),
                 "match", Map.of("type", "interface")));
         assertThat(duplicate).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
+        Map<String, Object> duplicateMeta = (Map<String, Object>) duplicate.get("meta");
+        assertThat(duplicateMeta).containsEntry("reused", true);
+        assertThat(String.valueOf(duplicate.get("message"))).contains("复用");
 
         Map<String, Object> rules = get("/api/agent/breakpoints");
         assertThat(rules).containsEntry("ok", true);
@@ -376,6 +380,9 @@ class DebuggerFlowTest {
                                 "value", 5),
                                 Map.of("path", "parameters.mode", "op", "exists")))));
         assertThat(duplicate).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
+        Map<String, Object> duplicateMeta = (Map<String, Object>) duplicate.get("meta");
+        assertThat(duplicateMeta).containsEntry("reused", true);
+        assertThat(String.valueOf(duplicate.get("message"))).contains("复用");
 
         Map<String, Object> below = post("/api/calls/before",
                 makeBefore("psu-voltage-low", "PSU", "set_voltage", 1, Map.of("voltage", 4.5, "mode", "fast")));

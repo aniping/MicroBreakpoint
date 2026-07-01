@@ -814,6 +814,7 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert declared["ok"] is True
     assert declared["status"] == "armed"
     assert declared["meta"]["observation_hint"]["state"] == "unobserved"
+    assert declared["meta"]["reused"] is False
     assert declared["breakpoint_rule_id"]
 
     duplicate = client.post(
@@ -824,6 +825,8 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
         },
     ).get_json()
     assert duplicate["breakpoint_rule_id"] == declared["breakpoint_rule_id"]
+    assert duplicate["meta"]["reused"] is True
+    assert "复用" in duplicate["message"]
 
     rules = client.get("/api/agent/breakpoints").get_json()
     assert rules["ok"] is True
@@ -998,6 +1001,8 @@ def test_agent_parameter_breakpoint_compares_values_at_runtime(tmp_path):
         },
     ).get_json()
     assert duplicate["breakpoint_rule_id"] == declared["breakpoint_rule_id"]
+    assert duplicate["meta"]["reused"] is True
+    assert "复用" in duplicate["message"]
 
     below = client.post(
         "/api/calls/before",

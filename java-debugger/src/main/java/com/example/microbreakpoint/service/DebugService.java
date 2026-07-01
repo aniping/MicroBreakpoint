@@ -803,9 +803,11 @@ public class DebugService {
                 "hitMode", "always");
         Map<String, Object> duplicate = findDuplicateBreakpoint(ruleData);
         String ruleId;
+        boolean reused = false;
         if (duplicate != null) {
             ruleId = str(duplicate.get("id"));
             jdbc.update("UPDATE breakpoint SET enabled=1, updated_at=? WHERE id=?", TextUtil.nowIso(), ruleId);
+            reused = true;
         } else {
             Map<String, Object> created = createBreakpoint(ruleData);
             if (!Boolean.TRUE.equals(created.get("success"))) {
@@ -813,17 +815,17 @@ public class DebugService {
             }
             ruleId = str(created.get("breakpointId"));
         }
-        return agentRuleResponse(ruleId, objectName, cmdName, observationHint(sid, objectName, cmdName));
+        return agentRuleResponse(ruleId, objectName, cmdName, observationHint(sid, objectName, cmdName), reused);
     }
 
     private Map<String, Object> agentRuleResponse(String ruleId, String objectName, String cmdName,
-            Map<String, Object> observationHint) {
+            Map<String, Object> observationHint, boolean reused) {
         return mapOf(
                 "ok", true,
                 "status", "armed",
                 "breakpoint_rule_id", ruleId,
-                "message", "断点规则已注册；目标调用出现时会自动暂停。",
-                "meta", mapOf("observation_hint", observationHint),
+                "message", reused ? "已复用已有断点规则；目标调用出现时会自动暂停。" : "断点规则已注册；目标调用出现时会自动暂停。",
+                "meta", mapOf("observation_hint", observationHint, "reused", reused),
                 "entities", List.of(mapOf(
                         "type", "breakpoint_rule",
                         "id", ruleId,
