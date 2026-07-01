@@ -1,5 +1,6 @@
 from app.db.database import get_db
 from app.services.debug_service import STATE, row_to_dict
+from app.services.payload_store import payload_fragment_by_id
 
 
 def analyze_interactions(payload):
@@ -26,6 +27,8 @@ def analyze_interactions(payload):
     since = filters.get("since") or filters.get("from") or payload.get("since") or payload.get("from") or ""
     until = filters.get("until") or filters.get("to") or payload.get("until") or payload.get("to") or ""
     limit = max(1, min(50, int_or_default(filters.get("limit", payload.get("limit")), 20)))
+    field_filter = field_filter_from(filters, payload)
+    query_limit = 200 if field_filter["field_path"] else limit
 
     clauses = ["session_id=?"]
     args = [session_id]
@@ -55,10 +58,17 @@ def analyze_interactions(payload):
             WHERE {' AND '.join(clauses)}
             ORDER BY updated_at DESC, id DESC
             LIMIT ?""",
-        args + [limit],
+        args + [query_limit],
     ).fetchall()
 
-    interactions = [interaction(row_to_dict(row)) for row in rows]
+    interactions = []
+    for row in rows:
+        item = row_to_dict(row)
+        if not matches_field_filter(item, field_filter):
+            continue
+        interactions.append(interaction(item))
+        if len(interactions) >= limit:
+            break
     entities = []
     status_counts = {}
     for item in interactions:
@@ -76,6 +86,8 @@ def analyze_interactions(payload):
                 "exception_only": exception_only,
                 "since": since,
                 "until": until,
+                "field_path": field_filter["field_path"],
+                "field_value": field_filter["field_value"] if field_filter["has_field_value"] else None,
             },
         },
         "entities": entities,
@@ -168,6 +180,63 @@ def summary_fields(summary, path_prefix, payload_ref):
             "value_summary": value.strip(),
         })
     return result
+
+
+def field_filter_from(filters, payload):
+    field_path = (
+        filters.get("field_path")
+        or filters.get("fieldPath")
+        or payload.get("field_path")
+        or payload.get("fieldPath")
+        or ""
+    )
+    has_field_value = any(key in filters for key in ("field_value", "fieldValue", "value")) or any(
+        key in payload for key in ("field_value", "fieldValue")
+    )
+    field_value = filters.get("field_value", filters.get("fieldValue", filters.get("value")))
+    if field_value is None and "field_value" in payload:
+        field_value = payload.get("field_value")
+    if field_value is None and "fieldValue" in payload:
+        field_value = payload.get("fieldValue")
+    return {
+        "field_path": str(field_path or "").strip(),
+        "has_field_value": has_field_value,
+        "field_value": field_value,
+    }
+
+
+def matches_field_filter(row, field_filter):
+    field_path = field_filter["field_path"]
+    if not field_path:
+        return True
+    for payload_ref in payload_refs_for_field(row, field_path):
+        fragment = payload_fragment_by_id(get_db(), payload_ref, field_path)
+        if not fragment.get("ok"):
+            continue
+        if not field_filter["has_field_value"]:
+            return True
+        if values_equal(fragment.get("value"), field_filter["field_value"]):
+            return True
+    return False
+
+
+def payload_refs_for_field(row, field_path):
+    path = str(field_path or "")
+    if path.startswith(("response.", "result.")):
+        refs = [row.get("result_payload_id")]
+    elif path.startswith(("request.", "parameters.", "params.")):
+        refs = [row.get("params_payload_id")]
+    else:
+        refs = [row.get("params_payload_id"), row.get("result_payload_id")]
+    return [ref for ref in refs if ref]
+
+
+def values_equal(actual, expected):
+    if actual == expected:
+        return True
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        return float(actual) == float(expected)
+    return str(actual) == str(expected)
 
 
 def differences(left, right):

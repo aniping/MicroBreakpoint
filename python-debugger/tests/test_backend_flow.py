@@ -926,6 +926,16 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     )
     assert any(item["type"] == "interaction" and item["id"] == "agent-vna-init" for item in analysis["entities"])
 
+    filtered_analysis = client.post(
+        "/api/agent/interactions/analyze",
+        json={
+            "target": {"object": "VNA", "command": "initialize"},
+            "filters": {"field_path": "request.parameters.scenario", "field_value": "vna-initialize"},
+        },
+    ).get_json()
+    assert filtered_analysis["ok"] is True
+    assert [item["interaction_id"] for item in filtered_analysis["interactions"]] == ["agent-vna-init"]
+
     compared = client.post(
         "/api/agent/interactions/compare",
         json={"interaction_ids": ["agent-vna-init-disabled", "agent-vna-init"]},

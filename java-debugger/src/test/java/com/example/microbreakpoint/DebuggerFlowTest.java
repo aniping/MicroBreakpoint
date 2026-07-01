@@ -322,6 +322,15 @@ class DebuggerFlowTest {
             assertThat(entity).containsEntry("id", "agent-vna-init");
         });
 
+        Map<String, Object> filteredAnalysis = post("/api/agent/interactions/analyze", Map.of(
+                "target", Map.of("object", "VNA", "command", "initialize"),
+                "filters", Map.of("field_path", "request.parameters.scenario",
+                        "field_value", "vna-initialize")));
+        assertThat(filteredAnalysis).containsEntry("ok", true);
+        assertThat(items(filteredAnalysis, "interactions"))
+                .extracting(item -> item.get("interaction_id"))
+                .containsExactly("agent-vna-init");
+
         Map<String, Object> compared = post("/api/agent/interactions/compare", Map.of(
                 "interaction_ids", List.of("agent-vna-init-disabled", "agent-vna-init")));
         assertThat(compared).containsEntry("ok", true);

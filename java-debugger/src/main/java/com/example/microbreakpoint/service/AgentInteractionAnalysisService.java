@@ -14,10 +14,12 @@ import com.example.microbreakpoint.util.Jsons;
 public class AgentInteractionAnalysisService {
 
     private final DebugService debugService;
+    private final PayloadService payloadService;
     private final JdbcTemplate jdbc;
 
-    public AgentInteractionAnalysisService(DebugService debugService) {
+    public AgentInteractionAnalysisService(DebugService debugService, PayloadService payloadService) {
         this.debugService = debugService;
+        this.payloadService = payloadService;
         this.jdbc = debugService.jdbc();
     }
 
@@ -39,6 +41,8 @@ public class AgentInteractionAnalysisService {
         String until = str(firstNonNull(filters.get("until"), filters.get("to"), payload.get("until"),
                 payload.get("to")));
         int limit = Math.max(1, Math.min(50, intValue(firstNonNull(filters.get("limit"), payload.get("limit")), 20)));
+        Map<String, Object> fieldFilter = fieldFilter(filters, payload);
+        int queryLimit = str(fieldFilter.get("field_path")).isBlank() ? limit : 200;
 
         StringBuilder sql = new StringBuilder("""
                 SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
@@ -73,12 +77,15 @@ public class AgentInteractionAnalysisService {
             args.add(until);
         }
         sql.append(" ORDER BY updated_at DESC, id DESC LIMIT ?");
-        args.add(limit);
+        args.add(queryLimit);
 
         List<Map<String, Object>> interactions = new ArrayList<>();
         List<Map<String, Object>> entities = new ArrayList<>();
         Map<String, Integer> statusCounts = new LinkedHashMap<>();
         for (Map<String, Object> row : jdbc.queryForList(sql.toString(), args.toArray())) {
+            if (!matchesFieldFilter(row, fieldFilter)) {
+                continue;
+            }
             Map<String, Object> interaction = interaction(row);
             interactions.add(interaction);
             statusCounts.merge(str(row.get("status")), 1, Integer::sum);
@@ -86,15 +93,22 @@ public class AgentInteractionAnalysisService {
                     interaction.get("status")));
             addPayloadEntity(entities, interaction.get("request_payload_ref"), interaction.get("label") + " request");
             addPayloadEntity(entities, interaction.get("response_payload_ref"), interaction.get("label") + " response");
+            if (interactions.size() >= limit) {
+                break;
+            }
         }
 
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("returned_count", interactions.size());
         summary.put("status_counts", statusCounts);
-        summary.put("filters", Map.of(
-                "exception_only", exceptionOnly,
-                "since", since,
-                "until", until));
+        Map<String, Object> returnedFilters = new LinkedHashMap<>();
+        returnedFilters.put("exception_only", exceptionOnly);
+        returnedFilters.put("since", since);
+        returnedFilters.put("until", until);
+        returnedFilters.put("field_path", fieldFilter.get("field_path"));
+        returnedFilters.put("field_value", Boolean.TRUE.equals(fieldFilter.get("has_field_value"))
+                ? fieldFilter.get("field_value") : null);
+        summary.put("filters", returnedFilters);
         return Map.of("ok", true, "interactions", interactions, "summary", summary, "entities", entities);
     }
 
@@ -188,6 +202,76 @@ public class AgentInteractionAnalysisService {
             result.add(item);
         }
         return result;
+    }
+
+    private Map<String, Object> fieldFilter(Map<String, Object> filters, Map<String, Object> payload) {
+        String fieldPath = str(firstNonNull(filters.get("field_path"), filters.get("fieldPath"),
+                payload.get("field_path"), payload.get("fieldPath")));
+        boolean hasFieldValue = filters.containsKey("field_value")
+                || filters.containsKey("fieldValue")
+                || filters.containsKey("value")
+                || payload.containsKey("field_value")
+                || payload.containsKey("fieldValue");
+        Object fieldValue = firstNonNull(filters.get("field_value"), filters.get("fieldValue"), filters.get("value"),
+                payload.get("field_value"), payload.get("fieldValue"));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("field_path", fieldPath.trim());
+        result.put("has_field_value", hasFieldValue);
+        result.put("field_value", fieldValue);
+        return result;
+    }
+
+    private boolean matchesFieldFilter(Map<String, Object> row, Map<String, Object> fieldFilter) {
+        String fieldPath = str(fieldFilter.get("field_path"));
+        if (fieldPath.isBlank()) {
+            return true;
+        }
+        for (Object payloadRef : payloadRefsForField(row, fieldPath)) {
+            Map<String, Object> request = new LinkedHashMap<>();
+            request.put("payload_ref", payloadRef);
+            request.put("field_path", fieldPath);
+            Map<String, Object> fragment = payloadService.payloadFragment(request);
+            if (!Boolean.TRUE.equals(fragment.get("ok"))) {
+                continue;
+            }
+            if (!Boolean.TRUE.equals(fieldFilter.get("has_field_value"))) {
+                return true;
+            }
+            if (valuesEqual(fragment.get("value"), fieldFilter.get("field_value"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<Object> payloadRefsForField(Map<String, Object> row, String fieldPath) {
+        String path = str(fieldPath);
+        List<Object> refs = new ArrayList<>();
+        if (path.startsWith("response.") || path.startsWith("result.")) {
+            addPayloadRef(refs, row.get("result_payload_id"));
+        } else if (path.startsWith("request.") || path.startsWith("parameters.") || path.startsWith("params.")) {
+            addPayloadRef(refs, row.get("params_payload_id"));
+        } else {
+            addPayloadRef(refs, row.get("params_payload_id"));
+            addPayloadRef(refs, row.get("result_payload_id"));
+        }
+        return refs;
+    }
+
+    private void addPayloadRef(List<Object> refs, Object payloadRef) {
+        if (!str(payloadRef).isBlank()) {
+            refs.add(payloadRef);
+        }
+    }
+
+    private boolean valuesEqual(Object actual, Object expected) {
+        if (actual == expected) {
+            return true;
+        }
+        if (actual instanceof Number actualNumber && expected instanceof Number expectedNumber) {
+            return Double.compare(actualNumber.doubleValue(), expectedNumber.doubleValue()) == 0;
+        }
+        return str(actual).equals(str(expected));
     }
 
     private List<Map<String, Object>> differences(Map<String, Object> left, Map<String, Object> right) {
