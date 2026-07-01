@@ -101,6 +101,33 @@ class DebuggerFlowTest {
     }
 
     @Test
+    void agentAnalyzeInteractionsFiltersExceptionAndTimeWindow() {
+        createAndStart();
+
+        post("/api/calls/before", makeBefore("analyze-ok", "VNA", "set", 1, Map.of("mode", "ok")));
+        finish("analyze-ok", true, 5);
+        post("/api/calls/before", makeBefore("analyze-error", "VNA", "set", 1, Map.of("mode", "bad")));
+        finish("analyze-error", false, 30);
+
+        Map<String, Object> exceptionOnly = post("/api/agent/interactions/analyze", Map.of(
+                "target", Map.of("object", "VNA", "command", "set"),
+                "filters", Map.of("exception_only", true)));
+        assertThat(items(exceptionOnly, "interactions"))
+                .extracting(item -> item.get("interaction_id"))
+                .containsExactly("analyze-error");
+        Map<String, Object> summary = (Map<String, Object>) exceptionOnly.get("summary");
+        assertThat((Map<String, Object>) summary.get("status_counts")).containsEntry("exception", 1);
+        assertThat((Map<String, Object>) summary.get("filters")).containsEntry("exception_only", true);
+
+        Map<String, Object> futureWindow = post("/api/agent/interactions/analyze", Map.of(
+                "target", Map.of("object", "VNA", "command", "set"),
+                "filters", Map.of("since", "2999-01-01T00:00:00")));
+        assertThat(items(futureWindow, "interactions")).isEmpty();
+        Map<String, Object> futureSummary = (Map<String, Object>) futureWindow.get("summary");
+        assertThat(futureSummary).containsEntry("returned_count", 0);
+    }
+
+    @Test
     void debugStartAndStopToggleDemoDebuggerSwitch() {
         assertThat(DEMO_DEBUGGER_ENABLED.get()).isFalse();
 

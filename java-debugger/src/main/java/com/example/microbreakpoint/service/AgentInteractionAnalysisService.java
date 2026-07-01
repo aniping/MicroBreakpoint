@@ -32,6 +32,12 @@ public class AgentInteractionAnalysisService {
         String objectName = str(firstNonNull(target.get("object"), target.get("objectName")));
         String cmdName = str(firstNonNull(target.get("command"), target.get("cmdName")));
         String status = str(firstNonNull(filters.get("status"), payload.get("status")));
+        boolean exceptionOnly = bool(firstNonNull(filters.get("exception_only"), filters.get("exceptionOnly"),
+                payload.get("exception_only"), payload.get("exceptionOnly")));
+        String since = str(firstNonNull(filters.get("since"), filters.get("from"), payload.get("since"),
+                payload.get("from")));
+        String until = str(firstNonNull(filters.get("until"), filters.get("to"), payload.get("until"),
+                payload.get("to")));
         int limit = Math.max(1, Math.min(50, intValue(firstNonNull(filters.get("limit"), payload.get("limit")), 20)));
 
         StringBuilder sql = new StringBuilder("""
@@ -55,6 +61,17 @@ public class AgentInteractionAnalysisService {
             sql.append(" AND status=?");
             args.add(status);
         }
+        if (exceptionOnly) {
+            sql.append(" AND (status='exception' OR exception_type IS NOT NULL OR exception_message IS NOT NULL)");
+        }
+        if (!since.isBlank()) {
+            sql.append(" AND created_at>=?");
+            args.add(since);
+        }
+        if (!until.isBlank()) {
+            sql.append(" AND created_at<=?");
+            args.add(until);
+        }
         sql.append(" ORDER BY updated_at DESC, id DESC LIMIT ?");
         args.add(limit);
 
@@ -74,6 +91,10 @@ public class AgentInteractionAnalysisService {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("returned_count", interactions.size());
         summary.put("status_counts", statusCounts);
+        summary.put("filters", Map.of(
+                "exception_only", exceptionOnly,
+                "since", since,
+                "until", until));
         return Map.of("ok", true, "interactions", interactions, "summary", summary, "entities", entities);
     }
 
@@ -207,6 +228,17 @@ public class AgentInteractionAnalysisService {
         } catch (RuntimeException e) {
             return defaultValue;
         }
+    }
+
+    private boolean bool(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        String text = str(value).trim().toLowerCase();
+        return "1".equals(text) || "true".equals(text) || "yes".equals(text) || "on".equals(text);
     }
 
     private String str(Object value) {

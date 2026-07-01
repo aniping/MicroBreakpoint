@@ -17,6 +17,14 @@ def analyze_interactions(payload):
     object_name = target.get("object") or target.get("objectName") or ""
     cmd_name = target.get("command") or target.get("cmdName") or ""
     status = filters.get("status") or payload.get("status") or ""
+    exception_only = bool_value(
+        filters.get(
+            "exception_only",
+            filters.get("exceptionOnly", payload.get("exception_only", payload.get("exceptionOnly"))),
+        )
+    )
+    since = filters.get("since") or filters.get("from") or payload.get("since") or payload.get("from") or ""
+    until = filters.get("until") or filters.get("to") or payload.get("until") or payload.get("to") or ""
     limit = max(1, min(50, int_or_default(filters.get("limit", payload.get("limit")), 20)))
 
     clauses = ["session_id=?"]
@@ -30,6 +38,14 @@ def analyze_interactions(payload):
     if status:
         clauses.append("status=?")
         args.append(status)
+    if exception_only:
+        clauses.append("(status='exception' OR exception_type IS NOT NULL OR exception_message IS NOT NULL)")
+    if since:
+        clauses.append("created_at>=?")
+        args.append(since)
+    if until:
+        clauses.append("created_at<=?")
+        args.append(until)
 
     rows = get_db().execute(
         f"""SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
@@ -56,6 +72,11 @@ def analyze_interactions(payload):
         "summary": {
             "returned_count": len(interactions),
             "status_counts": status_counts,
+            "filters": {
+                "exception_only": exception_only,
+                "since": since,
+                "until": until,
+            },
         },
         "entities": entities,
     }
@@ -154,3 +175,11 @@ def int_or_default(value, default):
         return int(value if value is not None else default)
     except (TypeError, ValueError):
         return default
+
+
+def bool_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")

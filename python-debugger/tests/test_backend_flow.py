@@ -565,6 +565,37 @@ def test_call_list_sql_filter_keyword_status_object(tmp_path):
     assert {item["call_id"] for item in by_keyword["items"]} == {"vna-acquire", "sg-acquire"}
 
 
+def test_agent_analyze_interactions_filters_exception_and_time_window(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    client.post("/api/calls/before", json=make_before("analyze-ok", object_name="VNA", cmd="set", params={"mode": "ok"}))
+    finish(client, "analyze-ok")
+    client.post("/api/calls/before", json=make_before("analyze-error", object_name="VNA", cmd="set", params={"mode": "bad"}))
+    finish(client, "analyze-error", success=False, cost_ms=30)
+
+    exception_only = client.post(
+        "/api/agent/interactions/analyze",
+        json={
+            "target": {"object": "VNA", "command": "set"},
+            "filters": {"exception_only": True},
+        },
+    ).get_json()
+    assert [item["interaction_id"] for item in exception_only["interactions"]] == ["analyze-error"]
+    assert exception_only["summary"]["status_counts"] == {"exception": 1}
+    assert exception_only["summary"]["filters"]["exception_only"] is True
+
+    future_window = client.post(
+        "/api/agent/interactions/analyze",
+        json={
+            "target": {"object": "VNA", "command": "set"},
+            "filters": {"since": "2999-01-01T00:00:00"},
+        },
+    ).get_json()
+    assert future_window["interactions"] == []
+    assert future_window["summary"]["returned_count"] == 0
+
+
 def test_interface_list_sql_pagination(tmp_path):
     client = make_client(tmp_path)
 
