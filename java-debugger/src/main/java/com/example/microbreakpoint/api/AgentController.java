@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +27,17 @@ public class AgentController {
     public ResponseEntity<Map<String, Object>> declareBreakpoint(
             @RequestBody(required = false) Map<String, Object> body) {
         Map<String, Object> result = debugService.declareBreakpointRule(body == null ? Map.of() : body);
+        return ResponseEntity.status(Boolean.TRUE.equals(result.get("ok")) ? 200 : 400).body(result);
+    }
+
+    @PostMapping("/interactions/paused/search")
+    public Map<String, Object> pausedInteractions(@RequestBody(required = false) Map<String, Object> body) {
+        return debugService.listPausedInteractions(body == null ? Map.of() : body);
+    }
+
+    @PostMapping("/interactions/{interactionId}/continue")
+    public ResponseEntity<Map<String, Object>> continueInteraction(@PathVariable String interactionId) {
+        Map<String, Object> result = debugService.continuePausedInteraction(interactionId);
         return ResponseEntity.status(Boolean.TRUE.equals(result.get("ok")) ? 200 : 400).body(result);
     }
 }

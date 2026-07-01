@@ -2074,6 +2074,95 @@ def agent_rule_error(message):
     }
 
 
+def list_paused_interactions(payload):
+    session_id = payload.get("sessionId") or STATE["sessionId"]
+    if not session_id:
+        return {"ok": True, "interactions": [], "entities": [], "message": "请先新建或选择会话"}
+    target = payload.get("target") if isinstance(payload.get("target"), dict) else {}
+    breakpoint_rule_id = str(payload.get("breakpoint_rule_id") or "")
+    object_name = str(target.get("object") or target.get("objectName") or "")
+    cmd_name = str(target.get("command") or target.get("cmdName") or "")
+    clauses = ["session_id=?", "status='paused'"]
+    args = [session_id]
+    if breakpoint_rule_id:
+        clauses.append("breakpoint_id=?")
+        args.append(breakpoint_rule_id)
+    if object_name:
+        clauses.append("object_name=?")
+        args.append(object_name)
+    if cmd_name:
+        clauses.append("cmd_name=?")
+        args.append(cmd_name)
+    rows = get_db().execute(
+        f"""SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
+                   params_summary, updated_at
+            FROM call_record
+            WHERE {' AND '.join(clauses)}
+            ORDER BY updated_at DESC, id DESC""",
+        args,
+    ).fetchall()
+    interactions = [agent_interaction(row_to_dict(row)) for row in rows]
+    entities = []
+    for item in interactions:
+        if item.get("breakpoint_rule_id"):
+            entities.append({
+                "type": "breakpoint_rule",
+                "id": item["breakpoint_rule_id"],
+                "label": item["label"],
+                "status": "armed",
+            })
+        entities.append({
+            "type": "interaction",
+            "id": item["interaction_id"],
+            "label": item["label"],
+            "status": item["status"],
+        })
+    return {
+        "ok": True,
+        "interactions": interactions,
+        "entities": entities,
+        "message": "已查询到暂停交互。" if interactions else "目标调用尚未命中断点。",
+    }
+
+
+def continue_paused_interaction(interaction_id):
+    continued = continue_call(interaction_id)
+    if not continued.get("success"):
+        return {
+            "ok": False,
+            "status": "invalid_request",
+            "interaction_id": interaction_id,
+            "message": continued.get("message") or "暂停交互无法继续。",
+            "entities": [],
+        }
+    return {
+        "ok": True,
+        "status": "continued",
+        "interaction_id": interaction_id,
+        "message": "暂停交互已继续执行。",
+        "entities": [
+            {
+                "type": "interaction",
+                "id": interaction_id,
+                "label": interaction_id,
+                "status": "continued",
+            }
+        ],
+    }
+
+
+def agent_interaction(row):
+    label = f"{row.get('object_name')}.{row.get('cmd_name')}"
+    return {
+        "interaction_id": row.get("call_id"),
+        "breakpoint_rule_id": row.get("breakpoint_id"),
+        "label": label,
+        "status": row.get("status"),
+        "request_summary": row.get("params_summary"),
+        "paused_at": row.get("updated_at"),
+    }
+
+
 def breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode):
     condition = {}
     condition["objectName"] = object_name

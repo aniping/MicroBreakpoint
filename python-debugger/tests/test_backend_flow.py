@@ -792,6 +792,22 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     ).get_json()
     assert paused["action"] == "pause"
 
+    paused_interactions = client.post(
+        "/api/agent/interactions/paused/search",
+        json={
+            "breakpoint_rule_id": declared["breakpoint_rule_id"],
+            "target": {"object": "VNA", "command": "initialize"},
+        },
+    ).get_json()
+    assert paused_interactions["ok"] is True
+    assert len(paused_interactions["interactions"]) == 1
+    assert paused_interactions["interactions"][0]["interaction_id"] == "agent-vna-init"
+
+    continued = client.post("/api/agent/interactions/agent-vna-init/continue").get_json()
+    assert continued["ok"] is True
+    assert continued["status"] == "continued"
+    assert client.get("/api/calls/agent-vna-init").get_json()["status"] == "continued"
+
 
 def test_breakpoint_dedup_uses_business_identity_and_disables_command_breakpoint(tmp_path):
     client = make_client(tmp_path)

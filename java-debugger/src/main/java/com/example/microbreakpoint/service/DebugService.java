@@ -861,6 +861,94 @@ public class DebugService {
         return result;
     }
 
+    public Map<String, Object> listPausedInteractions(Map<String, Object> payload) {
+        String sid = str(firstNonNull(payload.get("sessionId"), sessionId));
+        if (sid.isBlank()) {
+            return mapOf("ok", true, "interactions", List.of(), "entities", List.of(),
+                    "message", "请先新建或选择会话");
+        }
+        Map<String, Object> target = Jsons.object(payload.get("target"));
+        String breakpointRuleId = str(payload.get("breakpoint_rule_id"));
+        String objectName = str(firstNonNull(target.get("object"), target.get("objectName")));
+        String cmdName = str(firstNonNull(target.get("command"), target.get("cmdName")));
+        StringBuilder sql = new StringBuilder("""
+                SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
+                       params_summary, updated_at
+                FROM call_record
+                WHERE session_id=? AND status='paused'
+                """);
+        List<Object> args = new ArrayList<>();
+        args.add(sid);
+        if (!breakpointRuleId.isBlank()) {
+            sql.append(" AND breakpoint_id=?");
+            args.add(breakpointRuleId);
+        }
+        if (!objectName.isBlank()) {
+            sql.append(" AND object_name=?");
+            args.add(objectName);
+        }
+        if (!cmdName.isBlank()) {
+            sql.append(" AND cmd_name=?");
+            args.add(cmdName);
+        }
+        sql.append(" ORDER BY updated_at DESC, id DESC");
+        List<Map<String, Object>> interactions = new ArrayList<>();
+        List<Map<String, Object>> entities = new ArrayList<>();
+        for (Map<String, Object> row : jdbc.queryForList(sql.toString(), args.toArray())) {
+            Map<String, Object> interaction = agentInteraction(row);
+            interactions.add(interaction);
+            String ruleId = str(row.get("breakpoint_id"));
+            if (!ruleId.isBlank()) {
+                entities.add(mapOf(
+                        "type", "breakpoint_rule",
+                        "id", ruleId,
+                        "label", interaction.get("label"),
+                        "status", "armed"));
+            }
+            entities.add(mapOf(
+                    "type", "interaction",
+                    "id", interaction.get("interaction_id"),
+                    "label", interaction.get("label"),
+                    "status", interaction.get("status")));
+        }
+        return mapOf("ok", true, "interactions", interactions, "entities", entities,
+                "message", interactions.isEmpty() ? "目标调用尚未命中断点。" : "已查询到暂停交互。");
+    }
+
+    public Map<String, Object> continuePausedInteraction(String interactionId) {
+        Map<String, Object> continued = continueCall(interactionId);
+        if (!Boolean.TRUE.equals(continued.get("success"))) {
+            return mapOf(
+                    "ok", false,
+                    "status", "invalid_request",
+                    "interaction_id", interactionId,
+                    "message", strOr(continued.get("message"), "暂停交互无法继续。"),
+                    "entities", List.of());
+        }
+        return mapOf(
+                "ok", true,
+                "status", "continued",
+                "interaction_id", interactionId,
+                "message", "暂停交互已继续执行。",
+                "entities", List.of(mapOf(
+                        "type", "interaction",
+                        "id", interactionId,
+                        "label", interactionId,
+                        "status", "continued")));
+    }
+
+    private Map<String, Object> agentInteraction(Map<String, Object> row) {
+        String objectName = str(row.get("object_name"));
+        String cmdName = str(row.get("cmd_name"));
+        return mapOf(
+                "interaction_id", row.get("call_id"),
+                "breakpoint_rule_id", row.get("breakpoint_id"),
+                "label", objectName + "." + cmdName,
+                "status", row.get("status"),
+                "request_summary", row.get("params_summary"),
+                "paused_at", row.get("updated_at"));
+    }
+
     public Map<String, Object> breakpointFromInterface(String interfaceId, Map<String, Object> body) {
         Map<String, Object> row = first("SELECT * FROM discovered_interface WHERE id=?", interfaceId);
         if (row == null) {
