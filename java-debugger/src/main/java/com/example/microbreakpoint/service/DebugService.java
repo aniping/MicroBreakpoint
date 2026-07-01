@@ -769,6 +769,98 @@ public class DebugService {
         return mapOf("success", true, "breakpointId", breakpointId, "disabledCommandBreakpointCount", disabled);
     }
 
+    public synchronized Map<String, Object> declareBreakpointRule(Map<String, Object> payload) {
+        String sid = str(firstNonNull(payload.get("sessionId"), sessionId));
+        if (sid.isBlank()) {
+            return agentRuleError("请先新建或选择会话");
+        }
+        Map<String, Object> target = Jsons.object(payload.get("target"));
+        Map<String, Object> match = Jsons.object(payload.get("match"));
+        String objectName = strOr(firstNonNull(target.get("object"), target.get("objectName")), UNCATEGORIZED_OBJECT);
+        String cmdName = strOr(firstNonNull(target.get("command"), target.get("cmdName")), UNKNOWN_COMMAND);
+        String displayName = str(firstNonNull(target.get("display_name"), target.get("displayName")));
+        String matchType = strOr(match.get("type"), "interface");
+        String matchMode = "parameters".equals(matchType) ? "params_condition" : "command_only";
+        Object conditions = "params_condition".equals(matchMode)
+                ? normalizeAgentConditions(match.get("conditions"))
+                : List.of();
+        Map<String, Object> ruleData = mapOf(
+                "sessionId", sid,
+                "objectName", objectName,
+                "cmdName", cmdName,
+                "displayName", displayName,
+                "name", displayName.isBlank() ? objectName + " " + cmdName : displayName,
+                "enabled", true,
+                "matchMode", matchMode,
+                "conditions", conditions,
+                "sourceType", "agent",
+                "sourceSessionId", sid,
+                "hitMode", "always");
+        Map<String, Object> duplicate = findDuplicateBreakpoint(ruleData);
+        String ruleId;
+        if (duplicate != null) {
+            ruleId = str(duplicate.get("id"));
+            jdbc.update("UPDATE breakpoint SET enabled=1, updated_at=? WHERE id=?", TextUtil.nowIso(), ruleId);
+        } else {
+            Map<String, Object> created = createBreakpoint(ruleData);
+            if (!Boolean.TRUE.equals(created.get("success"))) {
+                return agentRuleError(strOr(created.get("message"), "断点规则注册失败"));
+            }
+            ruleId = str(created.get("breakpointId"));
+        }
+        return agentRuleResponse(ruleId, objectName, cmdName, observationHint(sid, objectName, cmdName));
+    }
+
+    private Map<String, Object> agentRuleResponse(String ruleId, String objectName, String cmdName,
+            Map<String, Object> observationHint) {
+        return mapOf(
+                "ok", true,
+                "status", "armed",
+                "breakpoint_rule_id", ruleId,
+                "message", "断点规则已注册；目标调用出现时会自动暂停。",
+                "meta", mapOf("observation_hint", observationHint),
+                "entities", List.of(mapOf(
+                        "type", "breakpoint_rule",
+                        "id", ruleId,
+                        "label", objectName + "." + cmdName,
+                        "status", "armed")));
+    }
+
+    private Map<String, Object> agentRuleError(String message) {
+        return mapOf(
+                "ok", false,
+                "status", "invalid_request",
+                "message", message,
+                "entities", List.of());
+    }
+
+    private Map<String, Object> observationHint(String sid, String objectName, String cmdName) {
+        int count = count("SELECT COUNT(*) FROM call_record WHERE session_id=? AND object_name=? AND cmd_name=?",
+                sid, objectName, cmdName);
+        String state = count > 0 ? "observed" : "unobserved";
+        String message = count > 0
+                ? "当前会话已经见过匹配调用；规则已生效。"
+                : "当前尚未见过匹配调用；规则已生效。";
+        return mapOf("state", state, "message", message);
+    }
+
+    private List<Map<String, Object>> normalizeAgentConditions(Object rawConditions) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        List<?> conditions = rawConditions instanceof List<?> list ? list : List.of();
+        for (Object item : conditions) {
+            Map<String, Object> condition = Jsons.object(item);
+            String path = str(condition.get("path"));
+            if (path.startsWith("parameters.")) {
+                path = "params." + path.substring("parameters.".length());
+            }
+            result.add(mapOf(
+                    "path", path,
+                    "operator", firstNonNull(condition.get("operator"), condition.get("op"), "eq"),
+                    "value", condition.get("value")));
+        }
+        return result;
+    }
+
     public Map<String, Object> breakpointFromInterface(String interfaceId, Map<String, Object> body) {
         Map<String, Object> row = first("SELECT * FROM discovered_interface WHERE id=?", interfaceId);
         if (row == null) {

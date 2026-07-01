@@ -1980,6 +1980,100 @@ def create_breakpoint(data):
     return result
 
 
+def declare_breakpoint_rule(payload):
+    session_id = payload.get("sessionId") or STATE["sessionId"]
+    if not session_id:
+        return agent_rule_error("请先新建或选择会话")
+    target = payload.get("target") if isinstance(payload.get("target"), dict) else {}
+    match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+    object_name = target.get("object") or target.get("objectName") or UNCATEGORIZED_OBJECT
+    cmd_name = target.get("command") or target.get("cmdName") or UNKNOWN_COMMAND
+    display_name = target.get("display_name") or target.get("displayName") or ""
+    match_type = match.get("type") or "interface"
+    match_mode = "params_condition" if match_type == "parameters" else "command_only"
+    conditions = normalize_agent_conditions(match.get("conditions")) if match_mode == "params_condition" else []
+    rule_data = {
+        "sessionId": session_id,
+        "objectName": object_name,
+        "cmdName": cmd_name,
+        "displayName": display_name,
+        "name": display_name or f"{object_name} {cmd_name}",
+        "enabled": True,
+        "matchMode": match_mode,
+        "conditions": conditions,
+        "sourceType": "agent",
+        "sourceSessionId": session_id,
+        "hitMode": "always",
+    }
+    db = get_db()
+    duplicate = find_duplicate_breakpoint(db, rule_data)
+    if duplicate:
+        rule_id = duplicate["id"]
+        db.execute("UPDATE breakpoint SET enabled=1, updated_at=? WHERE id=?", (now_iso(), rule_id))
+        db.commit()
+    else:
+        created = create_breakpoint(rule_data)
+        if not created.get("success"):
+            return agent_rule_error(created.get("message") or "断点规则注册失败")
+        rule_id = created["breakpointId"]
+    return agent_rule_response(rule_id, object_name, cmd_name, observation_hint(session_id, object_name, cmd_name))
+
+
+def normalize_agent_conditions(raw_conditions):
+    if not isinstance(raw_conditions, list):
+        return []
+    result = []
+    for item in raw_conditions:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path") or "")
+        if path.startswith("parameters."):
+            path = "params." + path[len("parameters."):]
+        result.append({
+            "path": path,
+            "operator": item.get("operator", item.get("op", "eq")),
+            "value": item.get("value"),
+        })
+    return result
+
+
+def observation_hint(session_id, object_name, cmd_name):
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM call_record WHERE session_id=? AND object_name=? AND cmd_name=?",
+        (session_id, object_name, cmd_name),
+    ).fetchone()[0]
+    if count:
+        return {"state": "observed", "message": "当前会话已经见过匹配调用；规则已生效。"}
+    return {"state": "unobserved", "message": "当前尚未见过匹配调用；规则已生效。"}
+
+
+def agent_rule_response(rule_id, object_name, cmd_name, hint):
+    return {
+        "ok": True,
+        "status": "armed",
+        "breakpoint_rule_id": rule_id,
+        "message": "断点规则已注册；目标调用出现时会自动暂停。",
+        "meta": {"observation_hint": hint},
+        "entities": [
+            {
+                "type": "breakpoint_rule",
+                "id": rule_id,
+                "label": f"{object_name}.{cmd_name}",
+                "status": "armed",
+            }
+        ],
+    }
+
+
+def agent_rule_error(message):
+    return {
+        "ok": False,
+        "status": "invalid_request",
+        "message": message,
+        "entities": [],
+    }
+
+
 def breakpoint_condition(data, object_name, cmd_name, slot_id, match_mode):
     condition = {}
     condition["objectName"] = object_name

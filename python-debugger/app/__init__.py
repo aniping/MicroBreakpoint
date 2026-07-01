@@ -3,6 +3,7 @@ from pathlib import Path
 from flask import Flask
 from flask_cors import CORS
 
+from app.api.agent_api import agent_api
 from app.api.breakpoint_api import bp_api
 from app.api.call_api import call_api
 from app.api.interface_api import interface_api
@@ -41,4 +42,5 @@ def create_app(test_config=None):
     app.register_blueprint(payload_api)
     app.register_blueprint(interface_api)
     app.register_blueprint(bp_api)
+    app.register_blueprint(agent_api)
     return app

@@ -114,6 +114,8 @@ cd java-demo
 
 断点唯一性以业务属性为准：命令断点按 `session_id + object_name + cmd_name + match_mode` 去重；条件断点按 `session_id + object_name + cmd_name + slot_key + match_mode` 继续比较 `params_fingerprint` 或规范化后的 `conditions_json`。`method_name`、`class_name`、`service_name` 只作为 Java 上报辅助信息保存和展示。
 
+Agent 场景应优先使用 `POST /api/agent/breakpoints` 声明 `BreakpointRule`，而不是先查询接口再拼接底层断点 API。请求使用业务目标，例如 `target.object + target.command`；`match.type=interface` 会注册命令级规则，`match.type=parameters` 会注册参数条件规则。重复声明同一规则会返回已有 `breakpoint_rule_id` 并保持规则启用；返回中的 `meta.observation_hint` 只用于解释当前会话是否见过目标调用，不参与规则创建、启用或运行时匹配决策。
+
 ## 大 Payload 存储与查看
 
 Java 侧仍可完整上报 `params` 和 `result`，Python 后端会完整接收并保存，但列表、日志和 QML 主模型只进入轻量摘要链路。`call_record` 只保留 `params_summary/result_summary`、前 8KB `preview`、大小、hash、截断标识和 payload 引用；`/api/calls` 使用 SQL 级过滤、排序和分页，默认只返回 50 条轻量调用记录，可通过 `pageSize=20/50/100` 分页浏览，不返回完整 `params/result/rawArgs`。`/api/interfaces` 同样使用 SQL 级分页，避免把整个 Session 的接口记录加载到 Python 内存。

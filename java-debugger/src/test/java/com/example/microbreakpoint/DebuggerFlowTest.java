@@ -177,6 +177,31 @@ class DebuggerFlowTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void agentDeclareBreakpointRuleRegistersWithoutObservedInterface() {
+        createAndStart();
+
+        Map<String, Object> declared = post("/api/agent/breakpoints", Map.of(
+                "target", Map.of("object", "VNA", "command", "initialize"),
+                "match", Map.of("type", "interface")));
+        assertThat(declared).containsEntry("ok", true);
+        assertThat(declared).containsEntry("status", "armed");
+        assertThat(declared).containsKey("breakpoint_rule_id");
+        Map<String, Object> meta = (Map<String, Object>) declared.get("meta");
+        Map<String, Object> hint = (Map<String, Object>) meta.get("observation_hint");
+        assertThat(hint).containsEntry("state", "unobserved");
+
+        Map<String, Object> duplicate = post("/api/agent/breakpoints", Map.of(
+                "target", Map.of("object", "VNA", "command", "initialize"),
+                "match", Map.of("type", "interface")));
+        assertThat(duplicate).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
+
+        Map<String, Object> paused = post("/api/calls/before",
+                makeBefore("agent-vna-init", "VNA", "initialize", 1, Map.of("scenario", "vna-initialize")));
+        assertThat(paused).containsEntry("action", "pause");
+    }
+
+    @Test
     void paramsSnapshotBreakpointMatchesSlotAndParams() {
         createAndStart();
         post("/api/calls/before", makeBefore("seed-call", "VNA", "create", 1, Map.of("mode", "A")));

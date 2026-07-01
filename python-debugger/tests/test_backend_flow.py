@@ -761,6 +761,38 @@ def test_command_and_params_snapshot_breakpoints(tmp_path):
     assert missed["action"] == "continue"
 
 
+def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    declared = client.post(
+        "/api/agent/breakpoints",
+        json={
+            "target": {"object": "VNA", "command": "initialize"},
+            "match": {"type": "interface"},
+        },
+    ).get_json()
+    assert declared["ok"] is True
+    assert declared["status"] == "armed"
+    assert declared["meta"]["observation_hint"]["state"] == "unobserved"
+    assert declared["breakpoint_rule_id"]
+
+    duplicate = client.post(
+        "/api/agent/breakpoints",
+        json={
+            "target": {"object": "VNA", "command": "initialize"},
+            "match": {"type": "interface"},
+        },
+    ).get_json()
+    assert duplicate["breakpoint_rule_id"] == declared["breakpoint_rule_id"]
+
+    paused = client.post(
+        "/api/calls/before",
+        json=make_before("agent-vna-init", object_name="VNA", cmd="initialize", params={"scenario": "vna-initialize"}),
+    ).get_json()
+    assert paused["action"] == "pause"
+
+
 def test_breakpoint_dedup_uses_business_identity_and_disables_command_breakpoint(tmp_path):
     client = make_client(tmp_path)
     create_and_start(client)
