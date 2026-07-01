@@ -227,6 +227,39 @@ public class PayloadService {
         return searchPayloadFromRow(row, query, row.get("call_id"), row.get("payload_type"), payloadId);
     }
 
+    public Map<String, Object> payloadFragment(Map<String, Object> payload) {
+        String payloadRef = stringValue(firstNonNull(payload.get("payload_ref"), payload.get("payloadRef"),
+                payload.get("payload_id"), payload.get("payloadId")));
+        String fieldPath = stringValue(firstNonNull(payload.get("field_path"), payload.get("fieldPath")));
+        if (payloadRef.isBlank() || fieldPath.isBlank()) {
+            return payloadFragmentError("invalid_request", payloadRef, fieldPath, "payload_ref 和 field_path 不能为空。");
+        }
+        Map<String, Object> row = exportPayloadById(payloadRef);
+        if (row == null) {
+            return payloadFragmentError("not_found", payloadRef, fieldPath, "payload 不存在。");
+        }
+        Object root = Jsons.loads(readPayloadText(row), null);
+        Map<String, Object> lookup = lookupPayloadFragment(root, fieldPath, stringValue(row.get("payload_type")));
+        if (!Boolean.TRUE.equals(lookup.get("found"))) {
+            return payloadFragmentError("not_found", payloadRef, fieldPath, "未找到指定 payload 字段。");
+        }
+        Map<String, Object> entity = new LinkedHashMap<>();
+        entity.put("type", "payload_fragment");
+        entity.put("id", payloadRef + "#" + fieldPath);
+        entity.put("label", fieldPath);
+        entity.put("status", "available");
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ok", true);
+        result.put("status", "available");
+        result.put("payload_ref", payloadRef);
+        result.put("field_path", fieldPath);
+        result.put("resolved_field_path", lookup.get("resolved_field_path"));
+        result.put("value", lookup.get("value"));
+        result.put("entities", List.of(entity));
+        return result;
+    }
+
     public Map<String, Object> searchPayloadFromRow(Map<String, Object> row, String query, Object callId,
             Object payloadType, Object payloadId) {
         String needle = query == null ? "" : query;
@@ -255,6 +288,121 @@ public class PayloadService {
         result.put("payloadId", payloadId);
         result.put("query", needle);
         result.put("matches", matches);
+        return result;
+    }
+
+    private Map<String, Object> lookupPayloadFragment(Object root, String fieldPath, String payloadType) {
+        for (String candidate : fieldPathCandidates(fieldPath, payloadType)) {
+            Map<String, Object> found = lookupField(root, fieldSegments(candidate));
+            if (Boolean.TRUE.equals(found.get("found"))) {
+                found.put("resolved_field_path", candidate);
+                return found;
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("found", false);
+        return result;
+    }
+
+    private List<String> fieldPathCandidates(String fieldPath, String payloadType) {
+        String path = stringValue(fieldPath).trim();
+        List<String> candidates = new ArrayList<>();
+        addCandidate(candidates, path);
+        for (String prefix : List.of("request.", "response.")) {
+            if (path.startsWith(prefix)) {
+                addCandidate(candidates, path.substring(prefix.length()));
+            }
+        }
+        if ("params".equals(payloadType)) {
+            for (String prefix : List.of("request.parameters.", "request.params.", "parameters.", "params.")) {
+                if (path.startsWith(prefix)) {
+                    addCandidate(candidates, path.substring(prefix.length()));
+                }
+            }
+        }
+        if ("result".equals(payloadType)) {
+            for (String prefix : List.of("response.result.", "result.")) {
+                if (path.startsWith(prefix)) {
+                    addCandidate(candidates, path.substring(prefix.length()));
+                }
+            }
+        }
+        return candidates;
+    }
+
+    private void addCandidate(List<String> candidates, String value) {
+        String candidate = stringValue(value).replaceAll("^[.\\s]+|[.\\s]+$", "");
+        if (!candidates.contains(candidate)) {
+            candidates.add(candidate);
+        }
+    }
+
+    private List<String> fieldSegments(String path) {
+        List<String> segments = new ArrayList<>();
+        for (String part : stringValue(path).split("\\.")) {
+            String rest = part.trim();
+            while (!rest.isBlank()) {
+                int bracket = rest.indexOf('[');
+                if (bracket < 0) {
+                    segments.add(cleanSegment(rest));
+                    break;
+                }
+                if (bracket > 0) {
+                    segments.add(cleanSegment(rest.substring(0, bracket)));
+                }
+                int close = rest.indexOf(']', bracket);
+                if (close < 0) {
+                    segments.add(cleanSegment(rest.substring(bracket + 1)));
+                    break;
+                }
+                segments.add(cleanSegment(rest.substring(bracket + 1, close)));
+                rest = rest.substring(close + 1).trim();
+            }
+        }
+        return segments.stream().filter(segment -> !segment.isBlank()).toList();
+    }
+
+    private String cleanSegment(String value) {
+        String segment = stringValue(value).trim();
+        if (segment.length() >= 2 && (segment.charAt(0) == '\'' || segment.charAt(0) == '"')
+                && segment.charAt(segment.length() - 1) == segment.charAt(0)) {
+            return segment.substring(1, segment.length() - 1);
+        }
+        return segment;
+    }
+
+    private Map<String, Object> lookupField(Object root, List<String> segments) {
+        Object current = root;
+        for (String segment : segments) {
+            if (current instanceof Map<?, ?> map) {
+                if (!map.containsKey(segment)) {
+                    return Map.of("found", false);
+                }
+                current = map.get(segment);
+            } else if (current instanceof List<?> list) {
+                try {
+                    current = list.get(Integer.parseInt(segment));
+                } catch (RuntimeException e) {
+                    return Map.of("found", false);
+                }
+            } else {
+                return Map.of("found", false);
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("found", true);
+        result.put("value", current);
+        return result;
+    }
+
+    private Map<String, Object> payloadFragmentError(String status, String payloadRef, String fieldPath, String message) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ok", false);
+        result.put("status", status);
+        result.put("payload_ref", payloadRef);
+        result.put("field_path", fieldPath);
+        result.put("message", message);
+        result.put("entities", List.of());
         return result;
     }
 
@@ -431,6 +579,19 @@ public class PayloadService {
             return text;
         }
         return new String(bytes, 0, limit, StandardCharsets.UTF_8);
+    }
+
+    private Object firstNonNull(Object... values) {
+        for (Object value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private int intValue(Object value, int defaultValue) {

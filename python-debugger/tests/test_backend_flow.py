@@ -279,7 +279,7 @@ def test_payload_chunk_by_id_and_export(tmp_path):
     client = make_client(tmp_path)
 
     create_and_start(client)
-    big_params = {"data": ["payload-export-by-id"] + ["z" * 1024] * 80}
+    big_params = {"voltage": 5.0, "data": ["payload-export-by-id"] + ["z" * 1024] * 80}
     client.post("/api/calls/before", json=make_before("payload-id-export", object_name="VNA", cmd="export", params=big_params))
 
     detail = client.get("/api/calls/payload-id-export").get_json()
@@ -288,6 +288,14 @@ def test_payload_chunk_by_id_and_export(tmp_path):
     assert chunk["success"] is True
     assert chunk["size"] == detail["params_size"]
     assert "payload-export-by-id" in chunk["content"]
+
+    fragment = client.post(
+        "/api/agent/payloads/fragment",
+        json={"payload_ref": payload_id, "field_path": "request.parameters.voltage"},
+    ).get_json()
+    assert fragment["ok"] is True
+    assert fragment["status"] == "available"
+    assert fragment["value"] == 5.0
 
     exported = client.get(f"/api/payloads/{payload_id}/export")
     assert exported.status_code == 200

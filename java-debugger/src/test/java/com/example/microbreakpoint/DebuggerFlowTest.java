@@ -146,7 +146,7 @@ class DebuggerFlowTest {
     void largePayloadIsChunkedAndSearchable() {
         createAndStart();
         post("/api/calls/before", makeBefore("large-call", "VNA", "acquire", 1,
-                Map.of("data", List.of("payload-needle", "x".repeat(80_000)))));
+                Map.of("voltage", 5.0, "data", List.of("payload-needle", "x".repeat(80_000)))));
         finish("large-call", true, 10);
 
         Map<String, Object> detail = get("/api/calls/large-call");
@@ -157,6 +157,13 @@ class DebuggerFlowTest {
         Map<String, Object> chunk = get("/api/calls/large-call/payload?type=params&offset=0&limit=4096");
         assertThat(chunk).containsEntry("success", true);
         assertThat(chunk).containsEntry("hasMore", true);
+
+        Map<String, Object> fragment = post("/api/agent/payloads/fragment", Map.of(
+                "payload_ref", detail.get("paramsPayloadId"),
+                "field_path", "request.parameters.voltage"));
+        assertThat(fragment).containsEntry("ok", true);
+        assertThat(fragment).containsEntry("status", "available");
+        assertThat(((Number) fragment.get("value")).doubleValue()).isEqualTo(5.0);
 
         Map<String, Object> search = get("/api/calls/large-call/payload/search?type=params&q=payload-needle");
         assertThat(items(search, "matches")).isNotEmpty();

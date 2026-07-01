@@ -264,6 +264,57 @@ def search_payload_by_id(db, payload_id, query, limit=20):
     return search_payload_from_row(row, query, limit, payload_id=payload_id)
 
 
+def payload_fragment_by_id(db, payload_ref, field_path):
+    payload_ref = str(payload_ref or "").strip()
+    field_path = str(field_path or "").strip()
+    if not payload_ref or not field_path:
+        return {
+            "ok": False,
+            "status": "invalid_request",
+            "payload_ref": payload_ref,
+            "field_path": field_path,
+            "message": "payload_ref 和 field_path 不能为空。",
+            "entities": [],
+        }
+    row = payload_by_id(db, payload_ref)
+    if not row:
+        return {
+            "ok": False,
+            "status": "not_found",
+            "payload_ref": payload_ref,
+            "field_path": field_path,
+            "message": "payload 不存在。",
+            "entities": [],
+        }
+    value = read_payload_value(row)
+    found, fragment, resolved_path = _lookup_payload_fragment(value, field_path, row["payload_type"] or "")
+    if not found:
+        return {
+            "ok": False,
+            "status": "not_found",
+            "payload_ref": payload_ref,
+            "field_path": field_path,
+            "message": "未找到指定 payload 字段。",
+            "entities": [],
+        }
+    return {
+        "ok": True,
+        "status": "available",
+        "payload_ref": payload_ref,
+        "field_path": field_path,
+        "resolved_field_path": resolved_path,
+        "value": fragment,
+        "entities": [
+            {
+                "type": "payload_fragment",
+                "id": f"{payload_ref}#{field_path}",
+                "label": field_path,
+                "status": "available",
+            }
+        ],
+    }
+
+
 def search_payload_from_row(row, query, limit=20, call_id=None, payload_type=None, payload_id=None):
     if not row:
         return None
@@ -358,6 +409,82 @@ def _file_payload_preview(path, encoding, offset, query_size):
     match = data[prefix_size:prefix_size + query_size].decode(encoding, errors="replace")
     suffix = data[prefix_size + query_size:].decode(encoding, errors="replace")
     return prefix[-SEARCH_PREVIEW_CHARS:] + match + suffix[:SEARCH_PREVIEW_CHARS]
+
+
+def _lookup_payload_fragment(root, field_path, payload_type):
+    for candidate in _field_path_candidates(field_path, payload_type):
+        found, value = _lookup_field(root, _field_segments(candidate))
+        if found:
+            return True, value, candidate
+    return False, None, ""
+
+
+def _field_path_candidates(field_path, payload_type):
+    path = str(field_path or "").strip()
+    candidates = []
+
+    def add(candidate):
+        candidate = str(candidate or "").strip(". ")
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    add(path)
+    for prefix in ("request.", "response."):
+        if path.startswith(prefix):
+            add(path[len(prefix):])
+    if payload_type == "params":
+        for prefix in ("request.parameters.", "request.params.", "parameters.", "params."):
+            if path.startswith(prefix):
+                add(path[len(prefix):])
+    if payload_type == "result":
+        for prefix in ("response.result.", "result."):
+            if path.startswith(prefix):
+                add(path[len(prefix):])
+    return candidates
+
+
+def _field_segments(path):
+    segments = []
+    for part in str(path or "").split("."):
+        rest = part.strip()
+        while rest:
+            bracket = rest.find("[")
+            if bracket < 0:
+                segments.append(_clean_segment(rest))
+                break
+            if bracket > 0:
+                segments.append(_clean_segment(rest[:bracket]))
+            close = rest.find("]", bracket)
+            if close < 0:
+                segments.append(_clean_segment(rest[bracket + 1:]))
+                break
+            segments.append(_clean_segment(rest[bracket + 1:close]))
+            rest = rest[close + 1:].strip()
+    return [segment for segment in segments if segment != ""]
+
+
+def _clean_segment(segment):
+    segment = str(segment or "").strip()
+    if len(segment) >= 2 and segment[0] in ("'", '"') and segment[-1] == segment[0]:
+        return segment[1:-1]
+    return segment
+
+
+def _lookup_field(value, segments):
+    current = value
+    for segment in segments:
+        if isinstance(current, dict):
+            if segment not in current:
+                return False, None
+            current = current[segment]
+        elif isinstance(current, list):
+            try:
+                current = current[int(segment)]
+            except (ValueError, IndexError):
+                return False, None
+        else:
+            return False, None
+    return True, current
 
 
 def preview_payload(value, serialized_text, content_format, truncated, content_size):

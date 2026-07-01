@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.microbreakpoint.service.DebugService;
+import com.example.microbreakpoint.service.PayloadService;
 
 @CrossOrigin
 @RestController
@@ -18,9 +19,11 @@ import com.example.microbreakpoint.service.DebugService;
 public class AgentController {
 
     private final DebugService debugService;
+    private final PayloadService payloadService;
 
-    public AgentController(DebugService debugService) {
+    public AgentController(DebugService debugService, PayloadService payloadService) {
         this.debugService = debugService;
+        this.payloadService = payloadService;
     }
 
     @PostMapping("/breakpoints")
@@ -39,5 +42,13 @@ public class AgentController {
     public ResponseEntity<Map<String, Object>> continueInteraction(@PathVariable String interactionId) {
         Map<String, Object> result = debugService.continuePausedInteraction(interactionId);
         return ResponseEntity.status(Boolean.TRUE.equals(result.get("ok")) ? 200 : 400).body(result);
+    }
+
+    @PostMapping("/payloads/fragment")
+    public ResponseEntity<Map<String, Object>> payloadFragment(
+            @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> result = payloadService.payloadFragment(body == null ? Map.of() : body);
+        int status = Boolean.TRUE.equals(result.get("ok")) ? 200 : "not_found".equals(result.get("status")) ? 404 : 400;
+        return ResponseEntity.status(status).body(result);
     }
 }
