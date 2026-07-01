@@ -880,7 +880,7 @@ public class DebugService {
         String cmdName = str(firstNonNull(target.get("command"), target.get("cmdName")));
         StringBuilder sql = new StringBuilder("""
                 SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
-                       params_summary, updated_at
+                       params_summary, params_payload_id, updated_at
                 FROM call_record
                 WHERE session_id=? AND status='paused'
                 """);
@@ -917,6 +917,13 @@ public class DebugService {
                     "id", interaction.get("interaction_id"),
                     "label", interaction.get("label"),
                     "status", interaction.get("status")));
+            if (!str(interaction.get("request_payload_ref")).isBlank()) {
+                entities.add(mapOf(
+                        "type", "payload",
+                        "id", interaction.get("request_payload_ref"),
+                        "label", interaction.get("label") + " request",
+                        "status", "available"));
+            }
         }
         return mapOf("ok", true, "interactions", interactions, "entities", entities,
                 "message", interactions.isEmpty() ? "目标调用尚未命中断点。" : "已查询到暂停交互。");
@@ -953,6 +960,7 @@ public class DebugService {
                 "label", objectName + "." + cmdName,
                 "status", row.get("status"),
                 "request_summary", row.get("params_summary"),
+                "request_payload_ref", row.get("params_payload_id"),
                 "paused_at", row.get("updated_at"));
     }
 

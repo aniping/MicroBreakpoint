@@ -2166,7 +2166,7 @@ def list_paused_interactions(payload):
         args.append(cmd_name)
     rows = get_db().execute(
         f"""SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
-                   params_summary, updated_at
+                   params_summary, params_payload_id, updated_at
             FROM call_record
             WHERE {' AND '.join(clauses)}
             ORDER BY updated_at DESC, id DESC""",
@@ -2188,6 +2188,13 @@ def list_paused_interactions(payload):
             "label": item["label"],
             "status": item["status"],
         })
+        if item.get("request_payload_ref"):
+            entities.append({
+                "type": "payload",
+                "id": item["request_payload_ref"],
+                "label": f"{item['label']} request",
+                "status": "available",
+            })
     return {
         "ok": True,
         "interactions": interactions,
@@ -2230,6 +2237,7 @@ def agent_interaction(row):
         "label": label,
         "status": row.get("status"),
         "request_summary": row.get("params_summary"),
+        "request_payload_ref": row.get("params_payload_id"),
         "paused_at": row.get("updated_at"),
     }
 

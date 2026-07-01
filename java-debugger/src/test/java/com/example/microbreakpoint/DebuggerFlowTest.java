@@ -346,6 +346,10 @@ class DebuggerFlowTest {
         List<Map<String, Object>> interactions = items(pausedInteractions, "interactions");
         assertThat(interactions).hasSize(1);
         assertThat(interactions.get(0)).containsEntry("interaction_id", "agent-vna-init");
+        assertThat(interactions.get(0).get("request_payload_ref")).isNotNull();
+        assertThat(items(pausedInteractions, "entities")).anySatisfy(entity -> assertThat(entity)
+                .containsEntry("type", "payload")
+                .containsEntry("id", interactions.get(0).get("request_payload_ref")));
 
         Map<String, Object> continued = post("/api/agent/interactions/agent-vna-init/continue", Map.of());
         assertThat(continued).containsEntry("ok", true);
