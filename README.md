@@ -122,6 +122,8 @@ Agent 读取和管理断点规则时应继续使用领域入口：`GET /api/agen
 
 自动化验收或 CLI 脚本需要同步等待断点命中时，可以使用 `POST /api/agent/interactions/wait-paused` 并传入 `timeout_ms`；超时返回 `ok:false` 和 `status:"timeout"`，不表示后端异常。真实用户对话默认不使用该接口阻塞等待。
 
+需要分析某个业务目标的历史交互时，Agent 应使用只读入口 `POST /api/agent/interactions/analyze`。该接口返回调用摘要、状态、异常摘要、耗时和 `request_payload_ref/response_payload_ref`，不默认读取完整 payload；后续字段展开继续通过 payload fragment 入口完成。
+
 需要展开入参或出参中的单个字段时，Agent 应使用 `POST /api/agent/payloads/fragment`，传入 `payload_ref` 和 `field_path`；后端返回字段值和 `payload_fragment` 实体引用，避免默认读取完整大 payload。
 
 ## 大 Payload 存储与查看

@@ -243,6 +243,20 @@ class DebuggerFlowTest {
         assertThat(waited).containsEntry("status", "paused");
         assertThat(waited).containsEntry("interaction_id", "agent-vna-init");
 
+        Map<String, Object> analysis = post("/api/agent/interactions/analyze", Map.of(
+                "target", Map.of("object", "VNA", "command", "initialize")));
+        assertThat(analysis).containsEntry("ok", true);
+        List<Map<String, Object>> analyzed = items(analysis, "interactions");
+        Map<String, Object> analyzedPaused = analyzed.stream()
+                .filter(item -> "agent-vna-init".equals(item.get("interaction_id")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(analyzedPaused.get("request_payload_ref")).isNotNull();
+        assertThat(items(analysis, "entities")).anySatisfy(entity -> {
+            assertThat(entity).containsEntry("type", "interaction");
+            assertThat(entity).containsEntry("id", "agent-vna-init");
+        });
+
         Map<String, Object> pausedInteractions = post("/api/agent/interactions/paused/search", Map.of(
                 "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
                 "target", Map.of("object", "VNA", "command", "initialize")));

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.microbreakpoint.service.AgentBreakpointService;
+import com.example.microbreakpoint.service.AgentInteractionAnalysisService;
 import com.example.microbreakpoint.service.AgentPausedInteractionService;
 import com.example.microbreakpoint.service.PayloadService;
 
@@ -26,12 +27,15 @@ public class AgentController {
     private final PayloadService payloadService;
     private final AgentBreakpointService agentBreakpointService;
     private final AgentPausedInteractionService agentPausedInteractionService;
+    private final AgentInteractionAnalysisService agentInteractionAnalysisService;
 
     public AgentController(PayloadService payloadService,
-            AgentBreakpointService agentBreakpointService, AgentPausedInteractionService agentPausedInteractionService) {
+            AgentBreakpointService agentBreakpointService, AgentPausedInteractionService agentPausedInteractionService,
+            AgentInteractionAnalysisService agentInteractionAnalysisService) {
         this.payloadService = payloadService;
         this.agentBreakpointService = agentBreakpointService;
         this.agentPausedInteractionService = agentPausedInteractionService;
+        this.agentInteractionAnalysisService = agentInteractionAnalysisService;
     }
 
     @PostMapping("/breakpoints")
@@ -81,6 +85,11 @@ public class AgentController {
     public ResponseEntity<Map<String, Object>> continueInteraction(@PathVariable String interactionId) {
         Map<String, Object> result = agentPausedInteractionService.continueInteraction(interactionId);
         return ResponseEntity.status(Boolean.TRUE.equals(result.get("ok")) ? 200 : 400).body(result);
+    }
+
+    @PostMapping("/interactions/analyze")
+    public Map<String, Object> analyzeInteractions(@RequestBody(required = false) Map<String, Object> body) {
+        return agentInteractionAnalysisService.analyze(body == null ? Map.of() : body);
     }
 
     @PostMapping("/payloads/fragment")

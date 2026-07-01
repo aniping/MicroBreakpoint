@@ -8,6 +8,7 @@ from app.services.agent_breakpoint_service import (
     list_breakpoint_rules,
     set_breakpoint_rule_enabled,
 )
+from app.services.agent_interaction_analysis_service import analyze_interactions
 from app.services.agent_paused_interaction_service import (
     continue_interaction,
     list_interactions,
@@ -68,6 +69,11 @@ def wait_paused():
 def continue_paused(interaction_id):
     result = continue_interaction(interaction_id)
     return jsonify(result), 200 if result.get("ok") else 400
+
+
+@agent_api.post("/interactions/analyze")
+def analyze():
+    return jsonify(analyze_interactions(request.get_json(silent=True) or {}))
 
 
 @agent_api.post("/payloads/fragment")

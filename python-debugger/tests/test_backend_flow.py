@@ -843,6 +843,16 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert waited["status"] == "paused"
     assert waited["interaction_id"] == "agent-vna-init"
 
+    analysis = client.post(
+        "/api/agent/interactions/analyze",
+        json={"target": {"object": "VNA", "command": "initialize"}},
+    ).get_json()
+    assert analysis["ok"] is True
+    analyzed = {item["interaction_id"]: item for item in analysis["interactions"]}
+    assert "agent-vna-init" in analyzed
+    assert analyzed["agent-vna-init"]["request_payload_ref"]
+    assert any(item["type"] == "interaction" and item["id"] == "agent-vna-init" for item in analysis["entities"])
+
     paused_interactions = client.post(
         "/api/agent/interactions/paused/search",
         json={
