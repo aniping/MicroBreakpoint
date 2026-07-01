@@ -75,6 +75,9 @@ def record_paused_interaction(breakpoint_rule_id, object_name, cmd_name, interac
             watch for watch in _watches.values()
             if watch_matches(watch, breakpoint_rule_id, object_name, cmd_name)
         ]
+        if not matched:
+            _event_sequence += 1
+            _events.append(paused_event(_event_sequence, None, breakpoint_rule_id, object_name, cmd_name, interaction_id))
         for watch in matched:
             _event_sequence += 1
             event = paused_event(_event_sequence, watch, breakpoint_rule_id, object_name, cmd_name, interaction_id)
@@ -85,19 +88,24 @@ def record_paused_interaction(breakpoint_rule_id, object_name, cmd_name, interac
 
 def paused_event(sequence, watch, breakpoint_rule_id, object_name, cmd_name, interaction_id):
     label = watch_label(object_name, cmd_name, breakpoint_rule_id)
-    return {
+    entities = []
+    if breakpoint_rule_id:
+        entities.append(entity("breakpoint_rule", breakpoint_rule_id, label, "armed"))
+    if watch:
+        entities.append(entity("paused_interaction_watch", watch["watch_id"], watch["label"], "triggered"))
+    entities.append(entity("interaction", interaction_id, label, "paused"))
+    event = {
         "sequence": sequence,
         "event_id": f"evt-{sequence}",
         "event": "interaction_paused",
-        "watch_id": watch["watch_id"],
         "breakpoint_rule_id": breakpoint_rule_id,
         "interaction_id": interaction_id,
         "created_at": now_iso(),
-        "entities": [
-            entity("paused_interaction_watch", watch["watch_id"], watch["label"], "triggered"),
-            entity("interaction", interaction_id, label, "paused"),
-        ],
+        "entities": entities,
     }
+    if watch:
+        event["watch_id"] = watch["watch_id"]
+    return event
 
 
 def event_entities(events):

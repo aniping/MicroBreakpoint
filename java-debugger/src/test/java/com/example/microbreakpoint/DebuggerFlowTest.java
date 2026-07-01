@@ -410,10 +410,21 @@ class DebuggerFlowTest {
                 makeBefore("psu-voltage-low", "PSU", "set_voltage", 1, Map.of("voltage", 4.5, "mode", "fast")));
         assertThat(below).containsEntry("action", "continue");
 
+        List<Map<String, Object>> eventsBefore = items(get("/api/agent/events"), "events");
+        String afterEventId = eventsBefore.isEmpty()
+                ? ""
+                : String.valueOf(eventsBefore.get(eventsBefore.size() - 1).get("event_id"));
         Map<String, Object> hit = post("/api/calls/before",
                 makeBefore("psu-voltage-high", "PSU", "set_voltage", 1, Map.of("voltage", 6.0, "mode", "fast")));
         assertThat(hit).containsEntry("action", "pause");
         assertThat(hit).containsEntry("breakpointId", declared.get("breakpoint_rule_id"));
+        Map<String, Object> eventsAfter = get(afterEventId.isBlank()
+                ? "/api/agent/events"
+                : "/api/agent/events?after_event_id=" + afterEventId);
+        assertThat(items(eventsAfter, "events")).anySatisfy(event -> assertThat(event)
+                .containsEntry("event", "interaction_paused")
+                .containsEntry("interaction_id", "psu-voltage-high")
+                .doesNotContainKey("watch_id"));
 
         Map<String, Object> explanation = post("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id")
                 + "/explain", Map.of("interaction_id", "psu-voltage-high"));

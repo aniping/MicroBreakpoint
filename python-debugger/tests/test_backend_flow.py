@@ -1033,12 +1033,21 @@ def test_agent_parameter_breakpoint_compares_values_at_runtime(tmp_path):
     ).get_json()
     assert below["action"] == "continue"
 
+    events_before = client.get("/api/agent/events").get_json()["events"]
+    after_event_id = events_before[-1]["event_id"] if events_before else ""
     hit = client.post(
         "/api/calls/before",
         json=make_before("psu-voltage-high", object_name="PSU", cmd="set_voltage", params={"voltage": 6.0, "mode": "fast"}),
     ).get_json()
     assert hit["action"] == "pause"
     assert hit["breakpointId"] == declared["breakpoint_rule_id"]
+    events_after = client.get("/api/agent/events", query_string={"after_event_id": after_event_id}).get_json()
+    assert any(
+        event["event"] == "interaction_paused"
+        and event["interaction_id"] == "psu-voltage-high"
+        and not event.get("watch_id")
+        for event in events_after["events"]
+    )
 
     explanation = client.post(
         f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/explain",

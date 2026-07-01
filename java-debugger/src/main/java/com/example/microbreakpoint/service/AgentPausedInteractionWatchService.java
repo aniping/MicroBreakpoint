@@ -71,10 +71,17 @@ public class AgentPausedInteractionWatchService {
     public synchronized void recordPaused(String breakpointRuleId, String objectName, String cmdName,
             String interactionId) {
         cleanupExpired();
-        for (Watch watch : new ArrayList<>(watches.values())) {
+        List<Watch> matched = new ArrayList<>();
+        for (Watch watch : watches.values()) {
             if (!watch.matches(breakpointRuleId, objectName, cmdName)) {
                 continue;
             }
+            matched.add(watch);
+        }
+        if (matched.isEmpty()) {
+            events.add(event(null, breakpointRuleId, objectName, cmdName, interactionId));
+        }
+        for (Watch watch : matched) {
             Map<String, Object> event = event(watch, breakpointRuleId, objectName, cmdName, interactionId);
             events.add(event);
             watches.remove(watch.watchId);
@@ -86,17 +93,26 @@ public class AgentPausedInteractionWatchService {
             String interactionId) {
         long sequence = eventSequence.incrementAndGet();
         String label = label(objectName, cmdName, breakpointRuleId);
+        List<Map<String, Object>> entities = new ArrayList<>();
+        if (!breakpointRuleId.isBlank()) {
+            entities.add(entity("breakpoint_rule", breakpointRuleId, label, "armed"));
+        }
+        if (watch != null) {
+            entities.add(entity("paused_interaction_watch", watch.watchId, watch.label, "triggered"));
+        }
+        entities.add(entity("interaction", interactionId, label, "paused"));
+
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("sequence", sequence);
         event.put("event_id", "evt-" + sequence);
         event.put("event", "interaction_paused");
-        event.put("watch_id", watch.watchId);
+        if (watch != null) {
+            event.put("watch_id", watch.watchId);
+        }
         event.put("breakpoint_rule_id", breakpointRuleId);
         event.put("interaction_id", interactionId);
         event.put("created_at", TextUtil.nowIso());
-        event.put("entities", List.of(
-                entity("paused_interaction_watch", watch.watchId, watch.label, "triggered"),
-                entity("interaction", interactionId, label, "paused")));
+        event.put("entities", entities);
         return event;
     }
 
