@@ -92,16 +92,20 @@ def compare_interactions(payload):
         return {"ok": False, "status": "not_found", "message": "交互记录不存在。", "entities": []}
     left = interaction(left_row)
     right = interaction(right_row)
+    entities = [
+        entity("interaction", left["interaction_id"], left["label"], left["status"]),
+        entity("interaction", right["interaction_id"], right["label"], right["status"]),
+    ]
+    for item in (left, right):
+        add_payload_entity(entities, item.get("request_payload_ref"), f"{item['label']} request")
+        add_payload_entity(entities, item.get("response_payload_ref"), f"{item['label']} response")
     return {
         "ok": True,
         "base_interaction_id": left["interaction_id"],
         "compared_interaction_id": right["interaction_id"],
         "interactions": [left, right],
         "differences": differences(left, right),
-        "entities": [
-            entity("interaction", left["interaction_id"], left["label"], left["status"]),
-            entity("interaction", right["interaction_id"], right["label"], right["status"]),
-        ],
+        "entities": entities,
     }
 
 

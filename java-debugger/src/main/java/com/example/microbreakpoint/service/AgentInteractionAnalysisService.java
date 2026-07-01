@@ -112,15 +112,20 @@ public class AgentInteractionAnalysisService {
         Map<String, Object> left = interaction(leftRow);
         Map<String, Object> right = interaction(rightRow);
         List<Map<String, Object>> differences = differences(left, right);
+        List<Map<String, Object>> entities = new ArrayList<>();
+        entities.add(entity("interaction", left.get("interaction_id"), left.get("label"), left.get("status")));
+        entities.add(entity("interaction", right.get("interaction_id"), right.get("label"), right.get("status")));
+        for (Map<String, Object> item : List.of(left, right)) {
+            addPayloadEntity(entities, item.get("request_payload_ref"), item.get("label") + " request");
+            addPayloadEntity(entities, item.get("response_payload_ref"), item.get("label") + " response");
+        }
         return Map.of(
                 "ok", true,
                 "base_interaction_id", left.get("interaction_id"),
                 "compared_interaction_id", right.get("interaction_id"),
                 "interactions", List.of(left, right),
                 "differences", differences,
-                "entities", List.of(
-                        entity("interaction", left.get("interaction_id"), left.get("label"), left.get("status")),
-                        entity("interaction", right.get("interaction_id"), right.get("label"), right.get("status"))));
+                "entities", entities);
     }
 
     private Map<String, Object> interactionRow(String interactionId) {

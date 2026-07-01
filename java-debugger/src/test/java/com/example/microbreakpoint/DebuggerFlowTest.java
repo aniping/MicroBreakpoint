@@ -321,7 +321,10 @@ class DebuggerFlowTest {
         assertThat(compared).containsEntry("ok", true);
         assertThat(items(compared, "differences")).isNotEmpty();
         assertThat(items(compared, "entities")).extracting(item -> item.get("id"))
-                .containsExactlyInAnyOrder("agent-vna-init-disabled", "agent-vna-init");
+                .contains("agent-vna-init-disabled", "agent-vna-init");
+        assertThat(items(compared, "entities")).anySatisfy(entity -> assertThat(entity)
+                .containsEntry("type", "payload")
+                .containsEntry("status", "available"));
 
         Map<String, Object> evidence = post("/api/agent/evidence", Map.of(
                 "interaction_ids", List.of("agent-vna-init-disabled", "agent-vna-init"),

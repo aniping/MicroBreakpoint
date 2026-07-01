@@ -926,7 +926,8 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     ).get_json()
     assert compared["ok"] is True
     assert compared["differences"]
-    assert {item["id"] for item in compared["entities"]} == {"agent-vna-init-disabled", "agent-vna-init"}
+    assert {"agent-vna-init-disabled", "agent-vna-init"}.issubset({item["id"] for item in compared["entities"]})
+    assert any(item["type"] == "payload" and item["status"] == "available" for item in compared["entities"])
 
     evidence = client.post(
         "/api/agent/evidence",
