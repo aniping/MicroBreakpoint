@@ -919,6 +919,11 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     analyzed = {item["interaction_id"]: item for item in analysis["interactions"]}
     assert "agent-vna-init" in analyzed
     assert analyzed["agent-vna-init"]["request_payload_ref"]
+    assert any(
+        item["field_path"] == "request.parameters.scenario"
+        and item["payload_ref"] == analyzed["agent-vna-init"]["request_payload_ref"]
+        for item in analyzed["agent-vna-init"]["field_index"]
+    )
     assert any(item["type"] == "interaction" and item["id"] == "agent-vna-init" for item in analysis["entities"])
 
     compared = client.post(

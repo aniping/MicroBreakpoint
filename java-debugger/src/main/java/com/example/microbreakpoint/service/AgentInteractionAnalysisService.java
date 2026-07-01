@@ -151,12 +151,43 @@ public class AgentInteractionAnalysisService {
         item.put("response_payload_ref", row.get("result_payload_id"));
         item.put("request_summary", row.get("params_summary"));
         item.put("response_summary", row.get("result_summary"));
+        item.put("field_index", fieldIndex(row));
         item.put("exception_summary", exceptionSummary(row));
         item.put("cost_ms", row.get("cost_ms"));
         item.put("started_at", row.get("created_at"));
         item.put("finished_at", row.get("finished_at"));
         item.put("updated_at", row.get("updated_at"));
         return item;
+    }
+
+    private List<Map<String, Object>> fieldIndex(Map<String, Object> row) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        result.addAll(summaryFields(row.get("params_summary"), "request.parameters", row.get("params_payload_id")));
+        result.addAll(summaryFields(row.get("result_summary"), "response.result", row.get("result_payload_id")));
+        return result;
+    }
+
+    private List<Map<String, Object>> summaryFields(Object summary, String pathPrefix, Object payloadRef) {
+        if (str(payloadRef).isBlank()) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (String part : str(summary).split(", ")) {
+            int separator = part.indexOf('=');
+            if (separator < 0) {
+                continue;
+            }
+            String key = part.substring(0, separator).trim();
+            if (key.isBlank() || "...".equals(key)) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("field_path", pathPrefix + "." + key);
+            item.put("payload_ref", payloadRef);
+            item.put("value_summary", part.substring(separator + 1).trim());
+            result.add(item);
+        }
+        return result;
     }
 
     private List<Map<String, Object>> differences(Map<String, Object> left, Map<String, Object> right) {

@@ -314,6 +314,9 @@ class DebuggerFlowTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(analyzedPaused.get("request_payload_ref")).isNotNull();
+        assertThat(items(analyzedPaused, "field_index")).anySatisfy(field -> assertThat(field)
+                .containsEntry("field_path", "request.parameters.scenario")
+                .containsEntry("payload_ref", analyzedPaused.get("request_payload_ref")));
         assertThat(items(analysis, "entities")).anySatisfy(entity -> {
             assertThat(entity).containsEntry("type", "interaction");
             assertThat(entity).containsEntry("id", "agent-vna-init");

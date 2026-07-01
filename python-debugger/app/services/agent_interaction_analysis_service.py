@@ -135,12 +135,39 @@ def interaction(row):
         "response_payload_ref": row.get("result_payload_id"),
         "request_summary": row.get("params_summary"),
         "response_summary": row.get("result_summary"),
+        "field_index": field_index(row),
         "exception_summary": exception_summary,
         "cost_ms": row.get("cost_ms"),
         "started_at": row.get("created_at"),
         "finished_at": row.get("finished_at"),
         "updated_at": row.get("updated_at"),
     }
+
+
+def field_index(row):
+    result = []
+    result.extend(summary_fields(row.get("params_summary"), "request.parameters", row.get("params_payload_id")))
+    result.extend(summary_fields(row.get("result_summary"), "response.result", row.get("result_payload_id")))
+    return result
+
+
+def summary_fields(summary, path_prefix, payload_ref):
+    if not payload_ref:
+        return []
+    result = []
+    for part in str(summary or "").split(", "):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        key = key.strip()
+        if not key or key == "...":
+            continue
+        result.append({
+            "field_path": f"{path_prefix}.{key}",
+            "payload_ref": payload_ref,
+            "value_summary": value.strip(),
+        })
+    return result
 
 
 def differences(left, right):
