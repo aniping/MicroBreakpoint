@@ -126,6 +126,12 @@ public class AgentController {
         return agentInteractionAnalysisService.analyze(body == null ? Map.of() : body);
     }
 
+    @PostMapping("/interactions/compare")
+    public ResponseEntity<Map<String, Object>> compareInteractions(
+            @RequestBody(required = false) Map<String, Object> body) {
+        return agentResponse(agentInteractionAnalysisService.compare(body == null ? Map.of() : body));
+    }
+
     @PostMapping("/payloads/fragment")
     public ResponseEntity<Map<String, Object>> payloadFragment(
             @RequestBody(required = false) Map<String, Object> body) {

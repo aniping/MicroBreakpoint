@@ -9,7 +9,7 @@ from app.services.agent_breakpoint_service import (
     set_breakpoint_rule_enabled,
 )
 from app.services.agent_breakpoint_explanation_service import explain_breakpoint_match
-from app.services.agent_interaction_analysis_service import analyze_interactions
+from app.services.agent_interaction_analysis_service import analyze_interactions, compare_interactions
 from app.services.agent_paused_interaction_service import (
     continue_interaction,
     list_interactions,
@@ -106,6 +106,12 @@ def continue_paused(interaction_id):
 @agent_api.post("/interactions/analyze")
 def analyze():
     return jsonify(analyze_interactions(request.get_json(silent=True) or {}))
+
+
+@agent_api.post("/interactions/compare")
+def compare():
+    result = compare_interactions(request.get_json(silent=True) or {})
+    return jsonify(result), 200 if result.get("ok") else 404 if result.get("status") == "not_found" else 400
 
 
 @agent_api.post("/payloads/fragment")

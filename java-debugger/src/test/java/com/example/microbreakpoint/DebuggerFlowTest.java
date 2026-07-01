@@ -285,6 +285,13 @@ class DebuggerFlowTest {
             assertThat(entity).containsEntry("id", "agent-vna-init");
         });
 
+        Map<String, Object> compared = post("/api/agent/interactions/compare", Map.of(
+                "interaction_ids", List.of("agent-vna-init-disabled", "agent-vna-init")));
+        assertThat(compared).containsEntry("ok", true);
+        assertThat(items(compared, "differences")).isNotEmpty();
+        assertThat(items(compared, "entities")).extracting(item -> item.get("id"))
+                .containsExactlyInAnyOrder("agent-vna-init-disabled", "agent-vna-init");
+
         Map<String, Object> pausedInteractions = post("/api/agent/interactions/paused/search", Map.of(
                 "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
                 "target", Map.of("object", "VNA", "command", "initialize")));

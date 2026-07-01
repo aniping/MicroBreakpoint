@@ -128,6 +128,8 @@ Agent 读取和管理断点规则时应继续使用领域入口：`GET /api/agen
 
 需要分析某个业务目标的历史交互时，Agent 应使用只读入口 `POST /api/agent/interactions/analyze`。该接口返回调用摘要、状态、异常摘要、耗时和 `request_payload_ref/response_payload_ref`，不默认读取完整 payload；后续字段展开继续通过 payload fragment 入口完成。
 
+需要比较两次交互时，Agent 应使用 `POST /api/agent/interactions/compare` 并传入 `interaction_ids`。该接口只比较状态、摘要、异常、耗时和 payload 引用等轻量事实，不展开完整入参出参。
+
 需要展开入参或出参中的单个字段时，Agent 应使用 `POST /api/agent/payloads/fragment`，传入 `payload_ref` 和 `field_path`；后端返回字段值和 `payload_fragment` 实体引用，避免默认读取完整大 payload。
 
 ## 大 Payload 存储与查看

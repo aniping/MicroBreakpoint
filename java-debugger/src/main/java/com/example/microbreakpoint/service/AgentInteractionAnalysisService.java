@@ -77,6 +77,42 @@ public class AgentInteractionAnalysisService {
         return Map.of("ok", true, "interactions", interactions, "summary", summary, "entities", entities);
     }
 
+    public Map<String, Object> compare(Map<String, Object> payload) {
+        List<String> ids = interactionIds(payload.get("interaction_ids"));
+        if (ids.size() < 2) {
+            return Map.of("ok", false, "status", "invalid_request", "message", "至少需要两个 interaction_id。",
+                    "entities", List.of());
+        }
+        Map<String, Object> leftRow = interactionRow(ids.get(0));
+        Map<String, Object> rightRow = interactionRow(ids.get(1));
+        if (leftRow == null || rightRow == null) {
+            return Map.of("ok", false, "status", "not_found", "message", "交互记录不存在。", "entities", List.of());
+        }
+        Map<String, Object> left = interaction(leftRow);
+        Map<String, Object> right = interaction(rightRow);
+        List<Map<String, Object>> differences = differences(left, right);
+        return Map.of(
+                "ok", true,
+                "base_interaction_id", left.get("interaction_id"),
+                "compared_interaction_id", right.get("interaction_id"),
+                "interactions", List.of(left, right),
+                "differences", differences,
+                "entities", List.of(
+                        entity("interaction", left.get("interaction_id"), left.get("label"), left.get("status")),
+                        entity("interaction", right.get("interaction_id"), right.get("label"), right.get("status"))));
+    }
+
+    private Map<String, Object> interactionRow(String interactionId) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
+                       params_summary, result_summary, params_payload_id, result_payload_id,
+                       exception_type, exception_message, cost_ms, created_at, finished_at, updated_at
+                FROM call_record
+                WHERE call_id=?
+                """, interactionId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     private Map<String, Object> interaction(Map<String, Object> row) {
         String objectName = str(row.get("object_name"));
         String cmdName = str(row.get("cmd_name"));
@@ -95,6 +131,28 @@ public class AgentInteractionAnalysisService {
         item.put("finished_at", row.get("finished_at"));
         item.put("updated_at", row.get("updated_at"));
         return item;
+    }
+
+    private List<Map<String, Object>> differences(Map<String, Object> left, Map<String, Object> right) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (String field : List.of("status", "breakpoint_rule_id", "request_summary", "response_summary",
+                "exception_summary", "cost_ms", "request_payload_ref", "response_payload_ref")) {
+            if (!str(left.get(field)).equals(str(right.get(field)))) {
+                Map<String, Object> diff = new LinkedHashMap<>();
+                diff.put("field_path", field);
+                diff.put("left", left.get(field));
+                diff.put("right", right.get(field));
+                result.add(diff);
+            }
+        }
+        return result;
+    }
+
+    private List<String> interactionIds(Object value) {
+        if (!(value instanceof List<?> items)) {
+            return List.of();
+        }
+        return items.stream().map(this::str).filter(item -> !item.isBlank()).toList();
     }
 
     private Map<String, Object> exceptionSummary(Map<String, Object> row) {

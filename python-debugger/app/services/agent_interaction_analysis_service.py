@@ -61,6 +61,41 @@ def analyze_interactions(payload):
     }
 
 
+def compare_interactions(payload):
+    ids = [str(item) for item in payload.get("interaction_ids", []) if str(item)]
+    if len(ids) < 2:
+        return {"ok": False, "status": "invalid_request", "message": "至少需要两个 interaction_id。", "entities": []}
+    left_row = interaction_row(ids[0])
+    right_row = interaction_row(ids[1])
+    if not left_row or not right_row:
+        return {"ok": False, "status": "not_found", "message": "交互记录不存在。", "entities": []}
+    left = interaction(left_row)
+    right = interaction(right_row)
+    return {
+        "ok": True,
+        "base_interaction_id": left["interaction_id"],
+        "compared_interaction_id": right["interaction_id"],
+        "interactions": [left, right],
+        "differences": differences(left, right),
+        "entities": [
+            entity("interaction", left["interaction_id"], left["label"], left["status"]),
+            entity("interaction", right["interaction_id"], right["label"], right["status"]),
+        ],
+    }
+
+
+def interaction_row(interaction_id):
+    row = get_db().execute(
+        """SELECT call_id, object_name, cmd_name, status, breakpoint_id, breakpoint_name,
+                  params_summary, result_summary, params_payload_id, result_payload_id,
+                  exception_type, exception_message, cost_ms, created_at, finished_at, updated_at
+           FROM call_record
+           WHERE call_id=?""",
+        (interaction_id,),
+    ).fetchone()
+    return row_to_dict(row) if row else None
+
+
 def interaction(row):
     label = f"{row.get('object_name')}.{row.get('cmd_name')}"
     exception_summary = {}
@@ -81,6 +116,23 @@ def interaction(row):
         "finished_at": row.get("finished_at"),
         "updated_at": row.get("updated_at"),
     }
+
+
+def differences(left, right):
+    result = []
+    for field in (
+        "status",
+        "breakpoint_rule_id",
+        "request_summary",
+        "response_summary",
+        "exception_summary",
+        "cost_ms",
+        "request_payload_ref",
+        "response_payload_ref",
+    ):
+        if str(left.get(field)) != str(right.get(field)):
+            result.append({"field_path": field, "left": left.get(field), "right": right.get(field)})
+    return result
 
 
 def add_payload_entity(entities, payload_ref, label):
