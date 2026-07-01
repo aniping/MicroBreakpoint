@@ -334,7 +334,8 @@ class DebuggerFlowTest {
                         "conditions", List.of(Map.of(
                                 "path", "parameters.voltage",
                                 "op", "gt",
-                                "value", 5)))));
+                                "value", 5),
+                                Map.of("path", "parameters.mode", "op", "exists")))));
         assertThat(declared).containsEntry("ok", true);
         assertThat(declared).containsEntry("status", "armed");
 
@@ -345,17 +346,50 @@ class DebuggerFlowTest {
                         "conditions", List.of(Map.of(
                                 "path", "parameters.voltage",
                                 "op", "gt",
-                                "value", 5)))));
+                                "value", 5),
+                                Map.of("path", "parameters.mode", "op", "exists")))));
         assertThat(duplicate).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
 
         Map<String, Object> below = post("/api/calls/before",
-                makeBefore("psu-voltage-low", "PSU", "set_voltage", 1, Map.of("voltage", 4.5)));
+                makeBefore("psu-voltage-low", "PSU", "set_voltage", 1, Map.of("voltage", 4.5, "mode", "fast")));
         assertThat(below).containsEntry("action", "continue");
 
         Map<String, Object> hit = post("/api/calls/before",
-                makeBefore("psu-voltage-high", "PSU", "set_voltage", 1, Map.of("voltage", 6.0)));
+                makeBefore("psu-voltage-high", "PSU", "set_voltage", 1, Map.of("voltage", 6.0, "mode", "fast")));
         assertThat(hit).containsEntry("action", "pause");
         assertThat(hit).containsEntry("breakpointId", declared.get("breakpoint_rule_id"));
+
+        Map<String, Object> explanation = post("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id")
+                + "/explain", Map.of("interaction_id", "psu-voltage-high"));
+        assertThat(explanation).containsEntry("matched", true);
+        Map<String, Object> facts = (Map<String, Object>) explanation.get("facts");
+        assertThat(facts).containsEntry("slot_matched", true);
+        assertThat(items(explanation, "condition_results"))
+                .extracting(item -> item.get("matched"))
+                .containsExactly(true, true);
+    }
+
+    @Test
+    void explainBreakpointMatchRespectsExplicitSlotFilter() {
+        createAndStart();
+        Map<String, Object> created = post("/api/breakpoints", Map.of(
+                "objectName", "VNA",
+                "cmdName", "create",
+                "slotId", 1,
+                "matchMode", "params_condition",
+                "conditions", List.of(Map.of("path", "params.mode", "operator", "eq", "value", "A"))));
+        assertThat(created).containsEntry("success", true);
+
+        Map<String, Object> missedSlot = post("/api/calls/before",
+                makeBefore("explain-miss-slot", "VNA", "create", 2, Map.of("mode", "A")));
+        assertThat(missedSlot).containsEntry("action", "continue");
+
+        Map<String, Object> explanation = post("/api/agent/breakpoints/" + created.get("breakpointId") + "/explain",
+                Map.of("interaction_id", "explain-miss-slot"));
+        assertThat(explanation).containsEntry("matched", false);
+        Map<String, Object> facts = (Map<String, Object>) explanation.get("facts");
+        assertThat(facts).containsEntry("target_matched", true);
+        assertThat(facts).containsEntry("slot_matched", false);
     }
 
     @Test

@@ -1,5 +1,5 @@
 from app.db.database import get_db, row_to_dict
-from app.services.debug_service import normalize
+from app.services.debug_service import breakpoint_slot_filter_key, condition_matches, normalize
 from app.services.payload_store import payload_by_id, read_payload_value
 from app.utils.json_utils import loads
 
@@ -17,10 +17,13 @@ def explain_breakpoint_match(rule_id, payload):
 
     enabled = is_enabled(rule.get("enabled"))
     target_matched = rule.get("objectName") == interaction.get("objectName") and rule.get("cmdName") == interaction.get("cmdName")
-    match_mode = rule.get("matchMode") or "command_only"
+    slot_filter_key = breakpoint_slot_filter_key(rule)
+    interaction_slot_key = interaction.get("slotKey") or interaction.get("slot_key")
+    slot_matched = slot_filter_key is None or str(slot_filter_key) == str(interaction_slot_key)
+    match_mode = rule.get("matchMode") or rule.get("match_mode") or "command_only"
     condition_results = condition_result_list(rule, interaction) if match_mode == "params_condition" else []
     conditions_matched = all(item["matched"] for item in condition_results)
-    matched = enabled and target_matched and conditions_matched
+    matched = enabled and target_matched and slot_matched and conditions_matched
     return {
         "ok": True,
         "breakpoint_rule_id": rule_id,
@@ -29,6 +32,9 @@ def explain_breakpoint_match(rule_id, payload):
         "facts": {
             "rule_enabled": enabled,
             "target_matched": target_matched,
+            "slot_matched": slot_matched,
+            "slot_filter_key": slot_filter_key,
+            "interaction_slot_key": interaction_slot_key,
             "conditions_matched": conditions_matched,
             "match_mode": match_mode,
         },
@@ -50,13 +56,14 @@ def condition_result_list(rule, interaction):
         path = str(condition.get("path") or "")
         operator = condition.get("operator") or condition.get("op") or "eq"
         expected = condition.get("value")
-        actual = field_value(params, path)
+        found, actual = field_lookup(params, path)
         results.append({
             "path": path,
             "operator": operator,
             "expected": expected,
             "actual": actual,
-            "matched": compare(actual, operator, expected),
+            "actual_found": found,
+            "matched": condition_matches(found, actual, operator, expected),
         })
     return results
 
@@ -68,19 +75,21 @@ def payload_value(payload_id):
     return read_payload_value(row) or {}
 
 
-def field_value(root, path):
+def field_lookup(root, path):
     current = root
     for segment in field_segments(path):
         if isinstance(current, dict):
-            current = current.get(segment)
+            if segment not in current:
+                return False, None
+            current = current[segment]
         elif isinstance(current, list):
             try:
                 current = current[int(segment)]
             except (ValueError, IndexError):
-                return None
+                return False, None
         else:
-            return None
-    return current
+            return False, None
+    return True, current
 
 
 def field_segments(path):
@@ -90,33 +99,6 @@ def field_segments(path):
             text = text[len(prefix):]
             break
     return [item for item in text.split(".") if item]
-
-
-def compare(actual, operator, expected):
-    if operator == "ne":
-        return not equals_value(actual, expected)
-    if operator == "gt":
-        return number(actual) > number(expected)
-    if operator == "gte":
-        return number(actual) >= number(expected)
-    if operator == "lt":
-        return number(actual) < number(expected)
-    if operator == "lte":
-        return number(actual) <= number(expected)
-    if operator == "contains":
-        return str(expected) in str(actual)
-    return equals_value(actual, expected)
-
-
-def equals_value(actual, expected):
-    return str(actual) == str(expected)
-
-
-def number(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return float("nan")
 
 
 def row(sql, item_id):

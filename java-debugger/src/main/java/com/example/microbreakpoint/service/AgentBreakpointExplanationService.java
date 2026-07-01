@@ -42,24 +42,31 @@ public class AgentBreakpointExplanationService {
         boolean enabled = enabled(rule.get("enabled"));
         boolean targetMatched = str(rule.get("objectName")).equals(str(interaction.get("objectName")))
                 && str(rule.get("cmdName")).equals(str(interaction.get("cmdName")));
-        String matchMode = str(rule.get("matchMode"));
+        String slotFilterKey = breakpointSlotFilterKey(rule);
+        String interactionSlotKey = str(firstNonNull(interaction.get("slotKey"), interaction.get("slot_key")));
+        boolean slotMatched = slotFilterKey == null || slotFilterKey.equals(interactionSlotKey);
+        String matchMode = str(firstNonNull(rule.get("matchMode"), rule.get("match_mode"), "command_only"));
         List<Map<String, Object>> conditionResults = "params_condition".equals(matchMode)
                 ? conditionResults(rule, interaction)
                 : List.of();
         boolean conditionsMatched = conditionResults.stream()
                 .allMatch(item -> Boolean.TRUE.equals(item.get("matched")));
-        boolean matched = enabled && targetMatched && conditionsMatched;
+        boolean matched = enabled && targetMatched && slotMatched && conditionsMatched;
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ok", true);
         result.put("breakpoint_rule_id", ruleId);
         result.put("interaction_id", interactionId);
         result.put("matched", matched);
-        result.put("facts", Map.of(
-                "rule_enabled", enabled,
-                "target_matched", targetMatched,
-                "conditions_matched", conditionsMatched,
-                "match_mode", matchMode));
+        Map<String, Object> facts = new LinkedHashMap<>();
+        facts.put("rule_enabled", enabled);
+        facts.put("target_matched", targetMatched);
+        facts.put("slot_matched", slotMatched);
+        facts.put("slot_filter_key", slotFilterKey);
+        facts.put("interaction_slot_key", interactionSlotKey);
+        facts.put("conditions_matched", conditionsMatched);
+        facts.put("match_mode", matchMode);
+        result.put("facts", facts);
         result.put("condition_results", conditionResults);
         result.put("message", matched ? "该交互满足断点规则。" : "该交互不满足断点规则。");
         result.put("entities", List.of(
@@ -78,13 +85,14 @@ public class AgentBreakpointExplanationService {
             String path = str(condition.get("path"));
             String operator = str(firstNonNull(condition.get("operator"), condition.get("op"), "eq"));
             Object expected = condition.get("value");
-            Object actual = fieldValue(params, path);
+            ValueLookup lookup = fieldLookup(params, path);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("path", path);
             result.put("operator", operator);
             result.put("expected", expected);
-            result.put("actual", actual);
-            result.put("matched", compare(actual, operator, expected));
+            result.put("actual", lookup.value());
+            result.put("actual_found", lookup.exists());
+            result.put("matched", conditionMatches(lookup.exists(), lookup.value(), operator, expected));
             results.add(result);
         }
         return results;
@@ -101,22 +109,25 @@ public class AgentBreakpointExplanationService {
         return Jsons.loads(payloadService.readPayloadText(row), Map.of());
     }
 
-    private Object fieldValue(Object root, String path) {
+    private ValueLookup fieldLookup(Object root, String path) {
         Object current = root;
         for (String segment : fieldSegments(path)) {
             if (current instanceof Map<?, ?> map) {
+                if (!map.containsKey(segment)) {
+                    return new ValueLookup(false, null);
+                }
                 current = map.get(segment);
             } else if (current instanceof List<?> list) {
                 try {
                     current = list.get(Integer.parseInt(segment));
                 } catch (RuntimeException e) {
-                    return null;
+                    return new ValueLookup(false, null);
                 }
             } else {
-                return null;
+                return new ValueLookup(false, null);
             }
         }
-        return current;
+        return new ValueLookup(true, current);
     }
 
     private List<String> fieldSegments(String path) {
@@ -130,15 +141,18 @@ public class AgentBreakpointExplanationService {
         return List.of(normalized.split("\\.")).stream().filter(item -> !item.isBlank()).toList();
     }
 
-    private boolean compare(Object actual, String operator, Object expected) {
-        return switch (operator) {
-            case "ne" -> !equalsValue(actual, expected);
-            case "gt" -> number(actual) > number(expected);
-            case "gte" -> number(actual) >= number(expected);
-            case "lt" -> number(actual) < number(expected);
-            case "lte" -> number(actual) <= number(expected);
-            case "contains" -> str(actual).contains(str(expected));
-            default -> equalsValue(actual, expected);
+    private boolean conditionMatches(boolean exists, Object actual, String operator, Object expected) {
+        String op = operator == null ? "eq" : operator.trim().toLowerCase();
+        return switch (op) {
+            case "exists" -> exists;
+            case "not_exists" -> !exists;
+            case "ne", "neq" -> exists && !equalsValue(actual, expected);
+            case "gt" -> exists && number(actual) > number(expected);
+            case "gte", "ge" -> exists && number(actual) >= number(expected);
+            case "lt" -> exists && number(actual) < number(expected);
+            case "lte", "le" -> exists && number(actual) <= number(expected);
+            case "contains" -> exists && str(actual).contains(str(expected));
+            default -> exists && equalsValue(actual, expected);
         };
     }
 
@@ -155,6 +169,34 @@ public class AgentBreakpointExplanationService {
         } catch (RuntimeException e) {
             return Double.NaN;
         }
+    }
+
+    private String breakpointSlotFilterKey(Map<String, Object> item) {
+        if (item.get("slot_id") == null && str(item.get("slot_key")).isBlank()) {
+            return null;
+        }
+        return normalizedSlotKey(normalizeSlotId(item.get("slot_id")), str(item.get("slot_key")));
+    }
+
+    private Integer normalizeSlotId(Object value) {
+        if (value == null || str(value).isBlank()) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(str(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String normalizedSlotKey(Integer slotId, String rawSlotKey) {
+        if (rawSlotKey != null && !rawSlotKey.isBlank()) {
+            return rawSlotKey;
+        }
+        return slotId == null ? "__NULL__" : String.valueOf(slotId);
     }
 
     @SuppressWarnings("unchecked")
@@ -199,5 +241,8 @@ public class AgentBreakpointExplanationService {
 
     private String str(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private record ValueLookup(boolean exists, Object value) {
     }
 }

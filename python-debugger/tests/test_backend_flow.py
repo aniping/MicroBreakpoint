@@ -945,6 +945,7 @@ def test_agent_parameter_breakpoint_compares_values_at_runtime(tmp_path):
                 "type": "parameters",
                 "conditions": [
                     {"path": "parameters.voltage", "op": "gt", "value": 5},
+                    {"path": "parameters.mode", "op": "exists"},
                 ],
             },
         },
@@ -960,6 +961,7 @@ def test_agent_parameter_breakpoint_compares_values_at_runtime(tmp_path):
                 "type": "parameters",
                 "conditions": [
                     {"path": "parameters.voltage", "op": "gt", "value": 5},
+                    {"path": "parameters.mode", "op": "exists"},
                 ],
             },
         },
@@ -968,16 +970,55 @@ def test_agent_parameter_breakpoint_compares_values_at_runtime(tmp_path):
 
     below = client.post(
         "/api/calls/before",
-        json=make_before("psu-voltage-low", object_name="PSU", cmd="set_voltage", params={"voltage": 4.5}),
+        json=make_before("psu-voltage-low", object_name="PSU", cmd="set_voltage", params={"voltage": 4.5, "mode": "fast"}),
     ).get_json()
     assert below["action"] == "continue"
 
     hit = client.post(
         "/api/calls/before",
-        json=make_before("psu-voltage-high", object_name="PSU", cmd="set_voltage", params={"voltage": 6.0}),
+        json=make_before("psu-voltage-high", object_name="PSU", cmd="set_voltage", params={"voltage": 6.0, "mode": "fast"}),
     ).get_json()
     assert hit["action"] == "pause"
     assert hit["breakpointId"] == declared["breakpoint_rule_id"]
+
+    explanation = client.post(
+        f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/explain",
+        json={"interaction_id": "psu-voltage-high"},
+    ).get_json()
+    assert explanation["matched"] is True
+    assert explanation["facts"]["slot_matched"] is True
+    assert [item["matched"] for item in explanation["condition_results"]] == [True, True]
+
+
+def test_explain_breakpoint_match_respects_explicit_slot_filter(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    created = client.post(
+        "/api/breakpoints",
+        json={
+            "objectName": "VNA",
+            "cmdName": "create",
+            "slotId": 1,
+            "matchMode": "params_condition",
+            "conditions": [{"path": "params.mode", "operator": "eq", "value": "A"}],
+        },
+    ).get_json()
+    assert created["success"] is True
+
+    missed_slot = client.post(
+        "/api/calls/before",
+        json=make_before("explain-miss-slot", object_name="VNA", cmd="create", slot_id=2, params={"mode": "A"}),
+    ).get_json()
+    assert missed_slot["action"] == "continue"
+
+    explanation = client.post(
+        f"/api/agent/breakpoints/{created['breakpointId']}/explain",
+        json={"interaction_id": "explain-miss-slot"},
+    ).get_json()
+    assert explanation["matched"] is False
+    assert explanation["facts"]["target_matched"] is True
+    assert explanation["facts"]["slot_matched"] is False
 
 
 def test_breakpoint_dedup_uses_business_identity_and_disables_command_breakpoint(tmp_path):
