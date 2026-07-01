@@ -130,6 +130,8 @@ Agent 读取和管理断点规则时应继续使用领域入口：`GET /api/agen
 
 需要比较两次交互时，Agent 应使用 `POST /api/agent/interactions/compare` 并传入 `interaction_ids`。该接口只比较状态、摘要、异常、耗时和 payload 引用等轻量事实，不展开完整入参出参。
 
+需要把调用、差异、异常和 payload 引用整理成可追溯材料时，Agent 应使用 `POST /api/agent/evidence` 并传入 `interaction_ids` 和可选 `focus`。该接口返回 `evidence_bundle_id`、相关交互、轻量差异、payload 引用和事实性 findings；业务判断仍由 Agent 基于证据向用户解释。
+
 需要展开入参或出参中的单个字段时，Agent 应使用 `POST /api/agent/payloads/fragment`，传入 `payload_ref` 和 `field_path`；后端返回字段值和 `payload_fragment` 实体引用，避免默认读取完整大 payload。
 
 ## 大 Payload 存储与查看

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.microbreakpoint.service.AgentBreakpointService;
 import com.example.microbreakpoint.service.AgentBreakpointExplanationService;
+import com.example.microbreakpoint.service.AgentEvidenceService;
 import com.example.microbreakpoint.service.AgentInteractionAnalysisService;
 import com.example.microbreakpoint.service.AgentPausedInteractionService;
 import com.example.microbreakpoint.service.AgentPausedInteractionWatchService;
@@ -29,18 +30,21 @@ public class AgentController {
     private final PayloadService payloadService;
     private final AgentBreakpointService agentBreakpointService;
     private final AgentBreakpointExplanationService agentBreakpointExplanationService;
+    private final AgentEvidenceService agentEvidenceService;
     private final AgentPausedInteractionService agentPausedInteractionService;
     private final AgentPausedInteractionWatchService agentPausedInteractionWatchService;
     private final AgentInteractionAnalysisService agentInteractionAnalysisService;
 
     public AgentController(PayloadService payloadService,
             AgentBreakpointService agentBreakpointService, AgentBreakpointExplanationService agentBreakpointExplanationService,
+            AgentEvidenceService agentEvidenceService,
             AgentPausedInteractionService agentPausedInteractionService,
             AgentPausedInteractionWatchService agentPausedInteractionWatchService,
             AgentInteractionAnalysisService agentInteractionAnalysisService) {
         this.payloadService = payloadService;
         this.agentBreakpointService = agentBreakpointService;
         this.agentBreakpointExplanationService = agentBreakpointExplanationService;
+        this.agentEvidenceService = agentEvidenceService;
         this.agentPausedInteractionService = agentPausedInteractionService;
         this.agentPausedInteractionWatchService = agentPausedInteractionWatchService;
         this.agentInteractionAnalysisService = agentInteractionAnalysisService;
@@ -130,6 +134,11 @@ public class AgentController {
     public ResponseEntity<Map<String, Object>> compareInteractions(
             @RequestBody(required = false) Map<String, Object> body) {
         return agentResponse(agentInteractionAnalysisService.compare(body == null ? Map.of() : body));
+    }
+
+    @PostMapping("/evidence")
+    public ResponseEntity<Map<String, Object>> buildEvidence(@RequestBody(required = false) Map<String, Object> body) {
+        return agentResponse(agentEvidenceService.build(body == null ? Map.of() : body));
     }
 
     @PostMapping("/payloads/fragment")

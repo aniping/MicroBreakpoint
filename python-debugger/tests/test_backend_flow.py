@@ -894,6 +894,19 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert compared["differences"]
     assert {item["id"] for item in compared["entities"]} == {"agent-vna-init-disabled", "agent-vna-init"}
 
+    evidence = client.post(
+        "/api/agent/evidence",
+        json={
+            "interaction_ids": ["agent-vna-init-disabled", "agent-vna-init"],
+            "focus": "VNA 初始化断点命中证据",
+        },
+    ).get_json()
+    assert evidence["ok"] is True
+    assert evidence["evidence_bundle_id"].startswith("evb-")
+    assert evidence["payload_refs"]
+    assert evidence["differences"]
+    assert any(item["type"] == "evidence_bundle" for item in evidence["entities"])
+
     paused_interactions = client.post(
         "/api/agent/interactions/paused/search",
         json={
