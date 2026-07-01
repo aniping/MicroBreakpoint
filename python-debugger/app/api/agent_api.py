@@ -14,6 +14,11 @@ from app.services.agent_paused_interaction_service import (
     list_interactions,
     wait_paused_interaction,
 )
+from app.services.agent_paused_watch_service import (
+    cancel_paused_interaction_watch,
+    list_agent_events,
+    watch_paused_interaction,
+)
 from app.services.payload_store import payload_fragment_by_id
 
 agent_api = Blueprint("agent_api", __name__, url_prefix="/api/agent")
@@ -63,6 +68,26 @@ def paused_interactions():
 def wait_paused():
     result = wait_paused_interaction(request.get_json(silent=True) or {})
     return jsonify(result)
+
+
+@agent_api.post("/interactions/paused/watch")
+def watch_paused():
+    result = watch_paused_interaction(request.get_json(silent=True) or {})
+    return jsonify(result), 200 if result.get("ok") else 400
+
+
+@agent_api.delete("/interactions/paused/watch/<watch_id>")
+def cancel_watch(watch_id):
+    result = cancel_paused_interaction_watch(watch_id)
+    return jsonify(result), 200 if result.get("ok") else 404
+
+
+@agent_api.get("/events")
+def events():
+    return jsonify(list_agent_events(
+        request.args.get("watch_id") or request.args.get("watchId"),
+        request.args.get("after_event_id") or request.args.get("afterEventId"),
+    ))
 
 
 @agent_api.post("/interactions/<interaction_id>/continue")

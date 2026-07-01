@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.microbreakpoint.service.AgentBreakpointService;
 import com.example.microbreakpoint.service.AgentInteractionAnalysisService;
 import com.example.microbreakpoint.service.AgentPausedInteractionService;
+import com.example.microbreakpoint.service.AgentPausedInteractionWatchService;
 import com.example.microbreakpoint.service.PayloadService;
 
 @CrossOrigin
@@ -27,14 +28,17 @@ public class AgentController {
     private final PayloadService payloadService;
     private final AgentBreakpointService agentBreakpointService;
     private final AgentPausedInteractionService agentPausedInteractionService;
+    private final AgentPausedInteractionWatchService agentPausedInteractionWatchService;
     private final AgentInteractionAnalysisService agentInteractionAnalysisService;
 
     public AgentController(PayloadService payloadService,
             AgentBreakpointService agentBreakpointService, AgentPausedInteractionService agentPausedInteractionService,
+            AgentPausedInteractionWatchService agentPausedInteractionWatchService,
             AgentInteractionAnalysisService agentInteractionAnalysisService) {
         this.payloadService = payloadService;
         this.agentBreakpointService = agentBreakpointService;
         this.agentPausedInteractionService = agentPausedInteractionService;
+        this.agentPausedInteractionWatchService = agentPausedInteractionWatchService;
         this.agentInteractionAnalysisService = agentInteractionAnalysisService;
     }
 
@@ -81,6 +85,26 @@ public class AgentController {
         return ResponseEntity.ok(agentPausedInteractionService.waitPaused(body == null ? Map.of() : body));
     }
 
+    @PostMapping("/interactions/paused/watch")
+    public ResponseEntity<Map<String, Object>> watchPausedInteraction(
+            @RequestBody(required = false) Map<String, Object> body) {
+        return agentResponse(agentPausedInteractionWatchService.watch(body == null ? Map.of() : body));
+    }
+
+    @DeleteMapping("/interactions/paused/watch/{watchId}")
+    public ResponseEntity<Map<String, Object>> cancelPausedInteractionWatch(@PathVariable String watchId) {
+        return agentResponse(agentPausedInteractionWatchService.cancel(watchId));
+    }
+
+    @GetMapping("/events")
+    public Map<String, Object> events(@RequestParam(required = false) String watchId,
+            @RequestParam(name = "watch_id", required = false) String watchIdSnake,
+            @RequestParam(required = false) String afterEventId,
+            @RequestParam(name = "after_event_id", required = false) String afterEventIdSnake) {
+        return agentPausedInteractionWatchService.listEvents(firstNonBlank(watchId, watchIdSnake),
+                firstNonBlank(afterEventId, afterEventIdSnake));
+    }
+
     @PostMapping("/interactions/{interactionId}/continue")
     public ResponseEntity<Map<String, Object>> continueInteraction(@PathVariable String interactionId) {
         Map<String, Object> result = agentPausedInteractionService.continueInteraction(interactionId);
@@ -104,5 +128,9 @@ public class AgentController {
         HttpStatus status = Boolean.TRUE.equals(result.get("ok")) ? HttpStatus.OK
                 : "not_found".equals(result.get("status")) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
         return ResponseEntity.status(status).body(result);
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return first != null && !first.isBlank() ? first : second;
     }
 }

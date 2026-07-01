@@ -31,15 +31,18 @@ public class DebugService {
     private final JdbcTemplate jdbc;
     private final PayloadService payloadService;
     private final WaitManager waitManager;
+    private final AgentPausedInteractionWatchService watchService;
 
     private boolean debugging = false;
     private String mode = "idle";
     private String sessionId;
 
-    public DebugService(DatabaseService databaseService, PayloadService payloadService, WaitManager waitManager) {
+    public DebugService(DatabaseService databaseService, PayloadService payloadService, WaitManager waitManager,
+            AgentPausedInteractionWatchService watchService) {
         this.jdbc = databaseService.jdbc();
         this.payloadService = payloadService;
         this.waitManager = waitManager;
+        this.watchService = watchService;
     }
 
     @PostConstruct
@@ -364,6 +367,8 @@ public class DebugService {
                     WHERE call_id=?
                     """, matched.get("id"), matched.get("name"), now, callId);
             applyBreakpointHit(matched, now);
+            watchService.recordPaused(str(matched.get("id")), str(callData.get("object_name")),
+                    str(callData.get("cmd_name")), callId);
             return mapOf(
                     "success", true,
                     "callIndex", callIndex,

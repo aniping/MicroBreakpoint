@@ -825,11 +825,35 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert enabled["ok"] is True
     assert enabled["status"] == "armed"
 
+    cancelled_watch = client.post(
+        "/api/agent/interactions/paused/watch",
+        json={"target": {"object": "VNA", "command": "initialize"}},
+    ).get_json()
+    assert cancelled_watch["ok"] is True
+    cancelled = client.delete(f"/api/agent/interactions/paused/watch/{cancelled_watch['watch_id']}").get_json()
+    assert cancelled["ok"] is True
+    assert cancelled["status"] == "cancelled"
+
+    watch = client.post(
+        "/api/agent/interactions/paused/watch",
+        json={
+            "breakpoint_rule_id": declared["breakpoint_rule_id"],
+            "target": {"object": "VNA", "command": "initialize"},
+        },
+    ).get_json()
+    assert watch["ok"] is True
+    assert watch["status"] == "watching"
+
     paused = client.post(
         "/api/calls/before",
         json=make_before("agent-vna-init", object_name="VNA", cmd="initialize", params={"scenario": "vna-initialize"}),
     ).get_json()
     assert paused["action"] == "pause"
+
+    events = client.get("/api/agent/events", query_string={"watch_id": watch["watch_id"]}).get_json()
+    assert events["ok"] is True
+    assert events["events"][0]["event"] == "interaction_paused"
+    assert events["events"][0]["interaction_id"] == "agent-vna-init"
 
     waited = client.post(
         "/api/agent/interactions/wait-paused",

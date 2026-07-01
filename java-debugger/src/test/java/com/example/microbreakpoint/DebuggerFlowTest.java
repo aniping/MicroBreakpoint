@@ -231,9 +231,29 @@ class DebuggerFlowTest {
         assertThat(enabled).containsEntry("ok", true);
         assertThat(enabled).containsEntry("status", "armed");
 
+        Map<String, Object> cancelledWatch = post("/api/agent/interactions/paused/watch", Map.of(
+                "target", Map.of("object", "VNA", "command", "initialize")));
+        assertThat(cancelledWatch).containsEntry("ok", true);
+        Map<String, Object> cancelled = delete("/api/agent/interactions/paused/watch/" + cancelledWatch.get("watch_id"));
+        assertThat(cancelled).containsEntry("ok", true);
+        assertThat(cancelled).containsEntry("status", "cancelled");
+
+        Map<String, Object> watch = post("/api/agent/interactions/paused/watch", Map.of(
+                "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
+                "target", Map.of("object", "VNA", "command", "initialize")));
+        assertThat(watch).containsEntry("ok", true);
+        assertThat(watch).containsEntry("status", "watching");
+
         Map<String, Object> paused = post("/api/calls/before",
                 makeBefore("agent-vna-init", "VNA", "initialize", 1, Map.of("scenario", "vna-initialize")));
         assertThat(paused).containsEntry("action", "pause");
+
+        Map<String, Object> events = get("/api/agent/events?watchId=" + watch.get("watch_id"));
+        assertThat(events).containsEntry("ok", true);
+        List<Map<String, Object>> watchEvents = items(events, "events");
+        assertThat(watchEvents).hasSize(1);
+        assertThat(watchEvents.get(0)).containsEntry("event", "interaction_paused");
+        assertThat(watchEvents.get(0)).containsEntry("interaction_id", "agent-vna-init");
 
         Map<String, Object> waited = post("/api/agent/interactions/wait-paused", Map.of(
                 "breakpoint_rule_id", declared.get("breakpoint_rule_id"),

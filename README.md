@@ -120,6 +120,8 @@ Agent 读取和管理断点规则时应继续使用领域入口：`GET /api/agen
 
 用户询问断点是否命中时，Agent 应使用 `POST /api/agent/interactions/paused/search` 查询当前暂停交互；用户确认继续时，使用 `POST /api/agent/interactions/{interaction_id}/continue` 恢复业务请求。这两个入口只暴露 Agent-facing 的 `interaction` 语义，底层 call 状态与释放逻辑仍由运行时内部处理。
 
+用户明确要求“命中后提醒我”时，Agent 使用 `POST /api/agent/interactions/paused/watch` 注册显式提醒；用户说“不用提醒了”时，使用 `DELETE /api/agent/interactions/paused/watch/{watch_id}` 取消提醒，取消 watch 不影响断点规则本身。暂停命中后后端会记录 `interaction_paused` 领域事件，Agent 可通过 `GET /api/agent/events?watch_id=...` 轮询读取。
+
 自动化验收或 CLI 脚本需要同步等待断点命中时，可以使用 `POST /api/agent/interactions/wait-paused` 并传入 `timeout_ms`；超时返回 `ok:false` 和 `status:"timeout"`，不表示后端异常。真实用户对话默认不使用该接口阻塞等待。
 
 需要分析某个业务目标的历史交互时，Agent 应使用只读入口 `POST /api/agent/interactions/analyze`。该接口返回调用摘要、状态、异常摘要、耗时和 `request_payload_ref/response_payload_ref`，不默认读取完整 payload；后续字段展开继续通过 payload fragment 入口完成。

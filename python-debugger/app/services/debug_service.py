@@ -17,6 +17,7 @@ from app.services.payload_store import (
     save_payload_file_copy,
     search_payload,
 )
+from app.services.agent_paused_watch_service import record_paused_interaction
 from app.services.wait_manager import wait_manager
 from app.utils.json_utils import dumps, loads
 from app.utils.time_utils import now_iso
@@ -443,6 +444,7 @@ def before_call(payload):
         )
         _apply_breakpoint_hit(db, matched, now)
         db.commit()
+        record_paused_interaction(matched["id"], call_data["object_name"], call_data["cmd_name"], payload["callId"])
         return {
             "success": True,
             "callIndex": call_index,
