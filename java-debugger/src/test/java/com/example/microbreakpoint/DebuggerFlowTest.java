@@ -203,6 +203,28 @@ class DebuggerFlowTest {
                 "match", Map.of("type", "interface")));
         assertThat(duplicate).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
 
+        Map<String, Object> rules = get("/api/agent/breakpoints");
+        assertThat(rules).containsEntry("ok", true);
+        List<Map<String, Object>> breakpointRules = items(rules, "breakpoint_rules");
+        assertThat(breakpointRules.get(0)).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
+
+        Map<String, Object> rule = get("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id"));
+        assertThat(rule).containsEntry("ok", true);
+        assertThat(rule).containsEntry("status", "armed");
+
+        Map<String, Object> disabled = post("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id") + "/disable",
+                Map.of());
+        assertThat(disabled).containsEntry("ok", true);
+        assertThat(disabled).containsEntry("status", "disabled");
+        Map<String, Object> skipped = post("/api/calls/before",
+                makeBefore("agent-vna-init-disabled", "VNA", "initialize", 1, Map.of()));
+        assertThat(skipped).containsEntry("action", "continue");
+
+        Map<String, Object> enabled = post("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id") + "/enable",
+                Map.of());
+        assertThat(enabled).containsEntry("ok", true);
+        assertThat(enabled).containsEntry("status", "armed");
+
         Map<String, Object> paused = post("/api/calls/before",
                 makeBefore("agent-vna-init", "VNA", "initialize", 1, Map.of("scenario", "vna-initialize")));
         assertThat(paused).containsEntry("action", "pause");
@@ -219,6 +241,13 @@ class DebuggerFlowTest {
         assertThat(continued).containsEntry("ok", true);
         assertThat(continued).containsEntry("status", "continued");
         assertThat(get("/api/calls/agent-vna-init")).containsEntry("status", "continued");
+
+        Map<String, Object> deleted = delete("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id"));
+        assertThat(deleted).containsEntry("ok", true);
+        assertThat(deleted).containsEntry("status", "cancelled");
+        Map<String, Object> afterDelete = post("/api/calls/before",
+                makeBefore("agent-vna-init-after-delete", "VNA", "initialize", 1, Map.of()));
+        assertThat(afterDelete).containsEntry("action", "continue");
     }
 
     @Test
@@ -368,6 +397,14 @@ class DebuggerFlowTest {
 
     private Map<String, Object> post(String path, Map<String, Object> body) {
         ResponseEntity<Map<String, Object>> response = rest.exchange(path, HttpMethod.POST, new HttpEntity<>(body),
+                new ParameterizedTypeReference<>() {
+                });
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        return response.getBody();
+    }
+
+    private Map<String, Object> delete(String path) {
+        ResponseEntity<Map<String, Object>> response = rest.exchange(path, HttpMethod.DELETE, HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {
                 });
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();

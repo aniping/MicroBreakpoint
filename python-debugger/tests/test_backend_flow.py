@@ -794,6 +794,27 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     ).get_json()
     assert duplicate["breakpoint_rule_id"] == declared["breakpoint_rule_id"]
 
+    rules = client.get("/api/agent/breakpoints").get_json()
+    assert rules["ok"] is True
+    assert rules["breakpoint_rules"][0]["breakpoint_rule_id"] == declared["breakpoint_rule_id"]
+
+    rule = client.get(f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}").get_json()
+    assert rule["ok"] is True
+    assert rule["status"] == "armed"
+
+    disabled = client.post(f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/disable").get_json()
+    assert disabled["ok"] is True
+    assert disabled["status"] == "disabled"
+    skipped = client.post(
+        "/api/calls/before",
+        json=make_before("agent-vna-init-disabled", object_name="VNA", cmd="initialize"),
+    ).get_json()
+    assert skipped["action"] == "continue"
+
+    enabled = client.post(f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/enable").get_json()
+    assert enabled["ok"] is True
+    assert enabled["status"] == "armed"
+
     paused = client.post(
         "/api/calls/before",
         json=make_before("agent-vna-init", object_name="VNA", cmd="initialize", params={"scenario": "vna-initialize"}),
@@ -815,6 +836,15 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert continued["ok"] is True
     assert continued["status"] == "continued"
     assert client.get("/api/calls/agent-vna-init").get_json()["status"] == "continued"
+
+    deleted = client.delete(f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}").get_json()
+    assert deleted["ok"] is True
+    assert deleted["status"] == "cancelled"
+    after_delete = client.post(
+        "/api/calls/before",
+        json=make_before("agent-vna-init-after-delete", object_name="VNA", cmd="initialize"),
+    ).get_json()
+    assert after_delete["action"] == "continue"
 
 
 def test_breakpoint_dedup_uses_business_identity_and_disables_command_breakpoint(tmp_path):

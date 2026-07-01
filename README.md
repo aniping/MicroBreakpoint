@@ -116,6 +116,8 @@ cd java-demo
 
 Agent 场景应优先使用 `POST /api/agent/breakpoints` 声明 `BreakpointRule`，而不是先查询接口再拼接底层断点 API。请求使用业务目标，例如 `target.object + target.command`；`match.type=interface` 会注册命令级规则，`match.type=parameters` 会注册参数条件规则。重复声明同一规则会返回已有 `breakpoint_rule_id` 并保持规则启用；返回中的 `meta.observation_hint` 只用于解释当前会话是否见过目标调用，不参与规则创建、启用或运行时匹配决策。
 
+Agent 读取和管理断点规则时应继续使用领域入口：`GET /api/agent/breakpoints`、`GET /api/agent/breakpoints/{breakpoint_rule_id}`、`POST /api/agent/breakpoints/{breakpoint_rule_id}/disable`、`POST /api/agent/breakpoints/{breakpoint_rule_id}/enable`、`DELETE /api/agent/breakpoints/{breakpoint_rule_id}`。这些接口返回 `breakpoint_rule` 实体，不要求 Agent 读取或拼接底层 UI 断点表结构。
+
 用户询问断点是否命中时，Agent 应使用 `POST /api/agent/interactions/paused/search` 查询当前暂停交互；用户确认继续时，使用 `POST /api/agent/interactions/{interaction_id}/continue` 恢复业务请求。这两个入口只暴露 Agent-facing 的 `interaction` 语义，底层 call 状态与释放逻辑仍由运行时内部处理。
 
 需要展开入参或出参中的单个字段时，Agent 应使用 `POST /api/agent/payloads/fragment`，传入 `payload_ref` 和 `field_path`；后端返回字段值和 `payload_fragment` 实体引用，避免默认读取完整大 payload。

@@ -1,9 +1,15 @@
 from flask import Blueprint, jsonify, request
 
 from app.db.database import get_db
+from app.services.agent_breakpoint_service import (
+    declare_breakpoint,
+    delete_breakpoint_rule,
+    get_breakpoint_rule,
+    list_breakpoint_rules,
+    set_breakpoint_rule_enabled,
+)
 from app.services.debug_service import (
     continue_paused_interaction,
-    declare_breakpoint_rule,
     list_paused_interactions,
 )
 from app.services.payload_store import payload_fragment_by_id
@@ -12,9 +18,38 @@ agent_api = Blueprint("agent_api", __name__, url_prefix="/api/agent")
 
 
 @agent_api.post("/breakpoints")
-def declare_breakpoint():
-    result = declare_breakpoint_rule(request.get_json(silent=True) or {})
+def add_breakpoint():
+    result = declare_breakpoint(request.get_json(silent=True) or {})
     return jsonify(result), 200 if result.get("ok") else 400
+
+
+@agent_api.get("/breakpoints")
+def breakpoints():
+    return jsonify(list_breakpoint_rules(request.args.get("sessionId")))
+
+
+@agent_api.get("/breakpoints/<rule_id>")
+def breakpoint(rule_id):
+    result = get_breakpoint_rule(rule_id)
+    return jsonify(result), 200 if result.get("ok") else 404
+
+
+@agent_api.post("/breakpoints/<rule_id>/disable")
+def disable_breakpoint(rule_id):
+    result = set_breakpoint_rule_enabled(rule_id, False)
+    return jsonify(result), 200 if result.get("ok") else 404
+
+
+@agent_api.post("/breakpoints/<rule_id>/enable")
+def enable_breakpoint(rule_id):
+    result = set_breakpoint_rule_enabled(rule_id, True)
+    return jsonify(result), 200 if result.get("ok") else 404
+
+
+@agent_api.delete("/breakpoints/<rule_id>")
+def delete_breakpoint(rule_id):
+    result = delete_breakpoint_rule(rule_id)
+    return jsonify(result), 200 if result.get("ok") else 404
 
 
 @agent_api.post("/interactions/paused/search")
