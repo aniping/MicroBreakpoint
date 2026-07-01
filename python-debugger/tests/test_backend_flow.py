@@ -933,6 +933,53 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert after_delete["action"] == "continue"
 
 
+def test_agent_parameter_breakpoint_compares_values_at_runtime(tmp_path):
+    client = make_client(tmp_path)
+
+    create_and_start(client)
+    declared = client.post(
+        "/api/agent/breakpoints",
+        json={
+            "target": {"object": "PSU", "command": "set_voltage"},
+            "match": {
+                "type": "parameters",
+                "conditions": [
+                    {"path": "parameters.voltage", "op": "gt", "value": 5},
+                ],
+            },
+        },
+    ).get_json()
+    assert declared["ok"] is True
+    assert declared["status"] == "armed"
+
+    duplicate = client.post(
+        "/api/agent/breakpoints",
+        json={
+            "target": {"object": "PSU", "command": "set_voltage"},
+            "match": {
+                "type": "parameters",
+                "conditions": [
+                    {"path": "parameters.voltage", "op": "gt", "value": 5},
+                ],
+            },
+        },
+    ).get_json()
+    assert duplicate["breakpoint_rule_id"] == declared["breakpoint_rule_id"]
+
+    below = client.post(
+        "/api/calls/before",
+        json=make_before("psu-voltage-low", object_name="PSU", cmd="set_voltage", params={"voltage": 4.5}),
+    ).get_json()
+    assert below["action"] == "continue"
+
+    hit = client.post(
+        "/api/calls/before",
+        json=make_before("psu-voltage-high", object_name="PSU", cmd="set_voltage", params={"voltage": 6.0}),
+    ).get_json()
+    assert hit["action"] == "pause"
+    assert hit["breakpointId"] == declared["breakpoint_rule_id"]
+
+
 def test_breakpoint_dedup_uses_business_identity_and_disables_command_breakpoint(tmp_path):
     client = make_client(tmp_path)
     create_and_start(client)

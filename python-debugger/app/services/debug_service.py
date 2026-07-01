@@ -570,6 +570,27 @@ def normalized_slot_key(slot_id, raw_slot_key=None):
     return slot_key(_normalize_slot_id(slot_id))
 
 
+def has_slot_filter(data):
+    if "slotId" in data or "slot_id" in data:
+        return True
+    raw_slot_key = data.get("slotKey") if "slotKey" in data else data.get("slot_key")
+    return raw_slot_key not in (None, "")
+
+
+def requested_slot_id(data):
+    return data.get("slotId") if "slotId" in data else data.get("slot_id")
+
+
+def requested_slot_key(data):
+    return data.get("slotKey") if "slotKey" in data else data.get("slot_key")
+
+
+def breakpoint_slot_filter_key(item):
+    if item.get("slot_id") is None and item.get("slot_key") in (None, ""):
+        return None
+    return normalized_slot_key(item.get("slot_id"), item.get("slot_key"))
+
+
 def params_fingerprint(params):
     return sha256(normalized_params_json(params).encode("utf-8")).hexdigest()
 
@@ -633,7 +654,7 @@ def find_duplicate_breakpoint(db, data):
             (data["sessionId"], data["objectName"], data["cmdName"], fingerprint, fingerprint),
         ).fetchall()
         for row in rows:
-            if normalized_slot_key(row["slot_id"], row["slot_key"]) == data["slotKey"]:
+            if breakpoint_slot_filter_key(row_to_dict(row)) == data.get("slotKey"):
                 return row
         return None
 
@@ -646,7 +667,7 @@ def find_duplicate_breakpoint(db, data):
             (data["sessionId"], data["objectName"], data["cmdName"]),
         ).fetchall()
         for row in rows:
-            if normalized_slot_key(row["slot_id"], row["slot_key"]) != data["slotKey"]:
+            if breakpoint_slot_filter_key(row_to_dict(row)) != data.get("slotKey"):
                 continue
             if normalize_conditions_for_compare(row["conditions_json"]) == expected:
                 return row
@@ -926,8 +947,8 @@ def _breakpoint_matches(item, call_data):
     mode = item.get("match_mode") or "command_only"
     if mode == "command_only":
         return True
-    bp_slot_key = normalized_slot_key(item.get("slot_id"), item.get("slot_key"))
-    if bp_slot_key and bp_slot_key != call_data["slot_key"]:
+    bp_slot_key = breakpoint_slot_filter_key(item)
+    if bp_slot_key is not None and bp_slot_key != call_data["slot_key"]:
         return False
     if mode == "params_snapshot":
         return item.get("params_fingerprint") == call_data["params_fingerprint"]
@@ -946,16 +967,62 @@ def breakpoint_match_params(call_data):
 def _conditions_match(conditions, params):
     for condition in conditions:
         path = condition.get("path", "")
-        key = path.removeprefix("params.")
+        key = condition_path(path)
         op = condition.get("operator", "eq")
         expected = condition.get("value")
-        exists = key in params
-        actual = params.get(key)
-        if op == "exists" and not exists:
-            return False
-        if op == "eq" and (not exists or actual != expected):
+        exists, actual = read_condition_value(params, key)
+        if not condition_matches(exists, actual, op, expected):
             return False
     return True
+
+
+def condition_path(path):
+    text = str(path or "")
+    for prefix in ("request.parameters.", "parameters.", "params."):
+        if text.startswith(prefix):
+            return text[len(prefix):]
+    return text
+
+
+def read_condition_value(params, path):
+    current = params
+    for part in [item for item in str(path or "").split(".") if item]:
+        if not isinstance(current, dict) or part not in current:
+            return False, None
+        current = current[part]
+    return True, current
+
+
+def condition_matches(exists, actual, operator, expected):
+    op = str(operator or "eq").strip().lower()
+    if op == "exists":
+        return exists
+    if op == "not_exists":
+        return not exists
+    if op in ("ne", "neq"):
+        return exists and not equals_condition_value(actual, expected)
+    if op == "gt":
+        return exists and number(actual) > number(expected)
+    if op in ("gte", "ge"):
+        return exists and number(actual) >= number(expected)
+    if op == "lt":
+        return exists and number(actual) < number(expected)
+    if op in ("lte", "le"):
+        return exists and number(actual) <= number(expected)
+    if op == "contains":
+        return exists and str(expected) in str(actual)
+    return exists and equals_condition_value(actual, expected)
+
+
+def equals_condition_value(actual, expected):
+    return str(actual) == str(expected)
+
+
+def number(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float("nan")
 
 
 def _should_pause(item):
@@ -1885,9 +1952,9 @@ def create_breakpoint(data):
     object_name = data.get("objectName") or UNCATEGORIZED_OBJECT
     cmd_name = data.get("cmdName") or UNKNOWN_COMMAND
     match_mode = data.get("matchMode") or "command_only"
-    requested_slot_id = _normalize_slot_id(data.get("slotId"))
-    slot_id = None if match_mode == "command_only" else requested_slot_id
-    slot = None if match_mode == "command_only" else normalized_slot_key(slot_id, data.get("slotKey"))
+    slot_filter = not is_command_breakpoint(match_mode) and has_slot_filter(data)
+    slot_id = _normalize_slot_id(requested_slot_id(data)) if slot_filter else None
+    slot = normalized_slot_key(slot_id, requested_slot_key(data)) if slot_filter else None
     params_fingerprint_value = data.get("paramsFingerprint", data.get("params_fingerprint"))
     params_snapshot_value = data.get("paramsSnapshot", data.get("params_snapshot"))
     params_summary_value = data.get("paramsSummary", data.get("params_summary"))

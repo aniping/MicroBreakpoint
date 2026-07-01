@@ -324,6 +324,41 @@ class DebuggerFlowTest {
     }
 
     @Test
+    void agentParameterBreakpointComparesValuesAtRuntime() {
+        createAndStart();
+
+        Map<String, Object> declared = post("/api/agent/breakpoints", Map.of(
+                "target", Map.of("object", "PSU", "command", "set_voltage"),
+                "match", Map.of(
+                        "type", "parameters",
+                        "conditions", List.of(Map.of(
+                                "path", "parameters.voltage",
+                                "op", "gt",
+                                "value", 5)))));
+        assertThat(declared).containsEntry("ok", true);
+        assertThat(declared).containsEntry("status", "armed");
+
+        Map<String, Object> duplicate = post("/api/agent/breakpoints", Map.of(
+                "target", Map.of("object", "PSU", "command", "set_voltage"),
+                "match", Map.of(
+                        "type", "parameters",
+                        "conditions", List.of(Map.of(
+                                "path", "parameters.voltage",
+                                "op", "gt",
+                                "value", 5)))));
+        assertThat(duplicate).containsEntry("breakpoint_rule_id", declared.get("breakpoint_rule_id"));
+
+        Map<String, Object> below = post("/api/calls/before",
+                makeBefore("psu-voltage-low", "PSU", "set_voltage", 1, Map.of("voltage", 4.5)));
+        assertThat(below).containsEntry("action", "continue");
+
+        Map<String, Object> hit = post("/api/calls/before",
+                makeBefore("psu-voltage-high", "PSU", "set_voltage", 1, Map.of("voltage", 6.0)));
+        assertThat(hit).containsEntry("action", "pause");
+        assertThat(hit).containsEntry("breakpointId", declared.get("breakpoint_rule_id"));
+    }
+
+    @Test
     void paramsSnapshotBreakpointMatchesSlotAndParams() {
         createAndStart();
         post("/api/calls/before", makeBefore("seed-call", "VNA", "create", 1, Map.of("mode", "A")));

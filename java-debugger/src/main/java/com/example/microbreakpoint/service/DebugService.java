@@ -704,9 +704,9 @@ public class DebugService {
         String objectName = strOr(data.get("objectName"), UNCATEGORIZED_OBJECT);
         String cmdName = strOr(data.get("cmdName"), UNKNOWN_COMMAND);
         String matchMode = strOr(data.get("matchMode"), "command_only");
-        Integer requestedSlotId = normalizeSlotId(data.get("slotId"));
-        Integer slotId = "command_only".equals(matchMode) ? null : requestedSlotId;
-        String slotKey = "command_only".equals(matchMode) ? null : normalizedSlotKey(slotId, str(data.get("slotKey")));
+        boolean slotFiltered = !isCommandBreakpoint(matchMode) && hasSlotFilter(data);
+        Integer slotId = slotFiltered ? normalizeSlotId(requestedSlotId(data)) : null;
+        String slotKey = slotFiltered ? normalizedSlotKey(slotId, str(requestedSlotKey(data))) : null;
         Object paramsFingerprint = firstNonNull(data.get("paramsFingerprint"), data.get("params_fingerprint"));
         Object paramsSummary = firstNonNull(data.get("paramsSummary"), data.get("params_summary"));
         Object paramsPayloadId = firstNonNull(data.get("paramsPayloadId"), data.get("params_payload_id"));
@@ -1258,7 +1258,7 @@ public class DebugService {
         if ("command_only".equals(matchMode)) {
             return true;
         }
-        String bpSlotKey = normalizedSlotKey(normalizeSlotId(item.get("slot_id")), str(item.get("slot_key")));
+        String bpSlotKey = breakpointSlotFilterKey(item);
         if (bpSlotKey != null && !bpSlotKey.equals(callData.get("slot_key"))) {
             return false;
         }
@@ -1279,19 +1279,70 @@ public class DebugService {
         List<?> conditions = raw instanceof List<?> list ? list : List.of();
         for (Object item : conditions) {
             Map<String, Object> condition = Jsons.object(item);
-            String key = str(condition.get("path")).replaceFirst("^params\\.", "");
+            String key = conditionPath(str(condition.get("path")));
             String op = strOr(condition.get("operator"), "eq");
             Object expected = condition.get("value");
-            boolean exists = params.containsKey(key);
-            Object actual = params.get(key);
-            if ("exists".equals(op) && !exists) {
-                return false;
-            }
-            if ("eq".equals(op) && (!exists || !String.valueOf(actual).equals(String.valueOf(expected)))) {
+            ValueLookup lookup = readConditionValue(params, key);
+            if (!conditionMatches(lookup.exists(), lookup.value(), op, expected)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private String conditionPath(String path) {
+        String result = path;
+        for (String prefix : List.of("request.parameters.", "parameters.", "params.")) {
+            if (result.startsWith(prefix)) {
+                result = result.substring(prefix.length());
+                break;
+            }
+        }
+        return result;
+    }
+
+    private ValueLookup readConditionValue(Map<String, Object> params, String path) {
+        Object current = params;
+        for (String part : path.split("\\.")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (!(current instanceof Map<?, ?> map) || !map.containsKey(part)) {
+                return new ValueLookup(false, null);
+            }
+            current = map.get(part);
+        }
+        return new ValueLookup(true, current);
+    }
+
+    private boolean conditionMatches(boolean exists, Object actual, String operator, Object expected) {
+        String op = operator == null ? "eq" : operator.trim().toLowerCase();
+        return switch (op) {
+            case "exists" -> exists;
+            case "not_exists" -> !exists;
+            case "ne", "neq" -> exists && !equalsConditionValue(actual, expected);
+            case "gt" -> exists && number(actual) > number(expected);
+            case "gte", "ge" -> exists && number(actual) >= number(expected);
+            case "lt" -> exists && number(actual) < number(expected);
+            case "lte", "le" -> exists && number(actual) <= number(expected);
+            case "contains" -> exists && str(actual).contains(str(expected));
+            default -> exists && equalsConditionValue(actual, expected);
+        };
+    }
+
+    private boolean equalsConditionValue(Object actual, Object expected) {
+        return actual == null ? expected == null : str(actual).equals(str(expected));
+    }
+
+    private double number(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        try {
+            return Double.parseDouble(str(value));
+        } catch (RuntimeException e) {
+            return Double.NaN;
+        }
     }
 
     private Map<String, Object> breakpointMatchParams(Map<String, Object> callData) {
@@ -1615,8 +1666,8 @@ public class DebugService {
             if (isCommandBreakpoint(matchMode)) {
                 return item;
             }
-            String slotKey = normalizedSlotKey(normalizeSlotId(data.get("slotId")), str(data.get("slotKey")));
-            if (!str(item.get("slot_key")).equals(str(slotKey))) {
+            String slotKey = requestedBreakpointSlotFilterKey(data);
+            if (!str(breakpointSlotFilterKey(item)).equals(str(slotKey))) {
                 continue;
             }
             if ("params_snapshot".equals(matchMode)
@@ -1700,6 +1751,36 @@ public class DebugService {
             return rawSlotKey;
         }
         return slotKey(slotId);
+    }
+
+    private boolean hasSlotFilter(Map<String, Object> data) {
+        if (data.containsKey("slotId") || data.containsKey("slot_id")) {
+            return true;
+        }
+        Object rawSlotKey = requestedSlotKey(data);
+        return rawSlotKey != null && !str(rawSlotKey).isBlank();
+    }
+
+    private Object requestedSlotId(Map<String, Object> data) {
+        return data.containsKey("slotId") ? data.get("slotId") : data.get("slot_id");
+    }
+
+    private Object requestedSlotKey(Map<String, Object> data) {
+        return data.containsKey("slotKey") ? data.get("slotKey") : data.get("slot_key");
+    }
+
+    private String requestedBreakpointSlotFilterKey(Map<String, Object> data) {
+        if (!hasSlotFilter(data)) {
+            return null;
+        }
+        return normalizedSlotKey(normalizeSlotId(requestedSlotId(data)), str(requestedSlotKey(data)));
+    }
+
+    private String breakpointSlotFilterKey(Map<String, Object> item) {
+        if (item.get("slot_id") == null && str(item.get("slot_key")).isBlank()) {
+            return null;
+        }
+        return normalizedSlotKey(normalizeSlotId(item.get("slot_id")), str(item.get("slot_key")));
     }
 
     private String slotKey(Integer slotId) {
@@ -1805,5 +1886,8 @@ public class DebugService {
     }
 
     private record Query(String sql, List<Object> args) {
+    }
+
+    private record ValueLookup(boolean exists, Object value) {
     }
 }
