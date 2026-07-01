@@ -888,6 +888,7 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert events["ok"] is True
     assert events["events"][0]["event"] == "interaction_paused"
     assert events["events"][0]["interaction_id"] == "agent-vna-init"
+    assert any(item["type"] == "interaction" and item["id"] == "agent-vna-init" for item in events["entities"])
 
     explanation = client.post(
         f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/explain",

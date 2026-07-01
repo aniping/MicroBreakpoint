@@ -65,7 +65,7 @@ public class AgentPausedInteractionWatchService {
                 .filter(event -> watchId == null || watchId.isBlank() || watchId.equals(event.get("watch_id")))
                 .filter(event -> ((Number) event.get("sequence")).longValue() > afterSequence)
                 .toList();
-        return Map.of("ok", true, "events", result, "entities", List.of());
+        return Map.of("ok", true, "events", result, "entities", eventEntities(result));
     }
 
     public synchronized void recordPaused(String breakpointRuleId, String objectName, String cmdName,
@@ -98,6 +98,31 @@ public class AgentPausedInteractionWatchService {
                 entity("paused_interaction_watch", watch.watchId, watch.label, "triggered"),
                 entity("interaction", interactionId, label, "paused")));
         return event;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> eventEntities(List<Map<String, Object>> sourceEvents) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        List<String> seen = new ArrayList<>();
+        for (Map<String, Object> event : sourceEvents) {
+            Object rawEntities = event.get("entities");
+            if (!(rawEntities instanceof List<?> entities)) {
+                continue;
+            }
+            for (Object rawEntity : entities) {
+                if (!(rawEntity instanceof Map<?, ?>)) {
+                    continue;
+                }
+                Map<String, Object> entity = (Map<String, Object>) rawEntity;
+                String key = str(entity.get("type")) + "|" + str(entity.get("id"));
+                if (seen.contains(key)) {
+                    continue;
+                }
+                seen.add(key);
+                result.add(entity);
+            }
+        }
+        return result;
     }
 
     private void cleanupExpired() {

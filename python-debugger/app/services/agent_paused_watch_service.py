@@ -64,7 +64,7 @@ def list_agent_events(watch_id=None, after_event_id=None):
             item for item in _events
             if (not watch_id or item.get("watch_id") == watch_id) and item.get("sequence", 0) > after_sequence
         ]
-        return {"ok": True, "events": items, "entities": []}
+        return {"ok": True, "events": items, "entities": event_entities(items)}
 
 
 def record_paused_interaction(breakpoint_rule_id, object_name, cmd_name, interaction_id):
@@ -98,6 +98,19 @@ def paused_event(sequence, watch, breakpoint_rule_id, object_name, cmd_name, int
             entity("interaction", interaction_id, label, "paused"),
         ],
     }
+
+
+def event_entities(events):
+    result = []
+    seen = set()
+    for event in events:
+        for item in event.get("entities") or []:
+            key = (item.get("type"), item.get("id"))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(item)
+    return result
 
 
 def watch_matches(watch, rule_id, object_name, cmd_name):
