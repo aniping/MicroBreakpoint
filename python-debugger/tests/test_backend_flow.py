@@ -810,6 +810,16 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
         json=make_before("agent-vna-init-disabled", object_name="VNA", cmd="initialize"),
     ).get_json()
     assert skipped["action"] == "continue"
+    timeout = client.post(
+        "/api/agent/interactions/wait-paused",
+        json={
+            "breakpoint_rule_id": declared["breakpoint_rule_id"],
+            "target": {"object": "VNA", "command": "initialize"},
+            "timeout_ms": 1,
+        },
+    ).get_json()
+    assert timeout["ok"] is False
+    assert timeout["status"] == "timeout"
 
     enabled = client.post(f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/enable").get_json()
     assert enabled["ok"] is True
@@ -820,6 +830,18 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
         json=make_before("agent-vna-init", object_name="VNA", cmd="initialize", params={"scenario": "vna-initialize"}),
     ).get_json()
     assert paused["action"] == "pause"
+
+    waited = client.post(
+        "/api/agent/interactions/wait-paused",
+        json={
+            "breakpoint_rule_id": declared["breakpoint_rule_id"],
+            "target": {"object": "VNA", "command": "initialize"},
+            "timeout_ms": 1,
+        },
+    ).get_json()
+    assert waited["ok"] is True
+    assert waited["status"] == "paused"
+    assert waited["interaction_id"] == "agent-vna-init"
 
     paused_interactions = client.post(
         "/api/agent/interactions/paused/search",

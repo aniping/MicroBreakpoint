@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.microbreakpoint.service.AgentBreakpointService;
-import com.example.microbreakpoint.service.DebugService;
+import com.example.microbreakpoint.service.AgentPausedInteractionService;
 import com.example.microbreakpoint.service.PayloadService;
 
 @CrossOrigin
@@ -23,15 +23,15 @@ import com.example.microbreakpoint.service.PayloadService;
 @RequestMapping("/api/agent")
 public class AgentController {
 
-    private final DebugService debugService;
     private final PayloadService payloadService;
     private final AgentBreakpointService agentBreakpointService;
+    private final AgentPausedInteractionService agentPausedInteractionService;
 
-    public AgentController(DebugService debugService, PayloadService payloadService,
-            AgentBreakpointService agentBreakpointService) {
-        this.debugService = debugService;
+    public AgentController(PayloadService payloadService,
+            AgentBreakpointService agentBreakpointService, AgentPausedInteractionService agentPausedInteractionService) {
         this.payloadService = payloadService;
         this.agentBreakpointService = agentBreakpointService;
+        this.agentPausedInteractionService = agentPausedInteractionService;
     }
 
     @PostMapping("/breakpoints")
@@ -68,12 +68,18 @@ public class AgentController {
 
     @PostMapping("/interactions/paused/search")
     public Map<String, Object> pausedInteractions(@RequestBody(required = false) Map<String, Object> body) {
-        return debugService.listPausedInteractions(body == null ? Map.of() : body);
+        return agentPausedInteractionService.list(body == null ? Map.of() : body);
+    }
+
+    @PostMapping("/interactions/wait-paused")
+    public ResponseEntity<Map<String, Object>> waitPausedInteraction(
+            @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.ok(agentPausedInteractionService.waitPaused(body == null ? Map.of() : body));
     }
 
     @PostMapping("/interactions/{interactionId}/continue")
     public ResponseEntity<Map<String, Object>> continueInteraction(@PathVariable String interactionId) {
-        Map<String, Object> result = debugService.continuePausedInteraction(interactionId);
+        Map<String, Object> result = agentPausedInteractionService.continueInteraction(interactionId);
         return ResponseEntity.status(Boolean.TRUE.equals(result.get("ok")) ? 200 : 400).body(result);
     }
 

@@ -8,9 +8,10 @@ from app.services.agent_breakpoint_service import (
     list_breakpoint_rules,
     set_breakpoint_rule_enabled,
 )
-from app.services.debug_service import (
-    continue_paused_interaction,
-    list_paused_interactions,
+from app.services.agent_paused_interaction_service import (
+    continue_interaction,
+    list_interactions,
+    wait_paused_interaction,
 )
 from app.services.payload_store import payload_fragment_by_id
 
@@ -54,12 +55,18 @@ def delete_breakpoint(rule_id):
 
 @agent_api.post("/interactions/paused/search")
 def paused_interactions():
-    return jsonify(list_paused_interactions(request.get_json(silent=True) or {}))
+    return jsonify(list_interactions(request.get_json(silent=True) or {}))
+
+
+@agent_api.post("/interactions/wait-paused")
+def wait_paused():
+    result = wait_paused_interaction(request.get_json(silent=True) or {})
+    return jsonify(result)
 
 
 @agent_api.post("/interactions/<interaction_id>/continue")
-def continue_interaction(interaction_id):
-    result = continue_paused_interaction(interaction_id)
+def continue_paused(interaction_id):
+    result = continue_interaction(interaction_id)
     return jsonify(result), 200 if result.get("ok") else 400
 
 

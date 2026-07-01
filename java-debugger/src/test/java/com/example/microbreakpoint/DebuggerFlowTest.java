@@ -219,6 +219,12 @@ class DebuggerFlowTest {
         Map<String, Object> skipped = post("/api/calls/before",
                 makeBefore("agent-vna-init-disabled", "VNA", "initialize", 1, Map.of()));
         assertThat(skipped).containsEntry("action", "continue");
+        Map<String, Object> timeout = post("/api/agent/interactions/wait-paused", Map.of(
+                "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
+                "target", Map.of("object", "VNA", "command", "initialize"),
+                "timeout_ms", 1));
+        assertThat(timeout).containsEntry("ok", false);
+        assertThat(timeout).containsEntry("status", "timeout");
 
         Map<String, Object> enabled = post("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id") + "/enable",
                 Map.of());
@@ -228,6 +234,14 @@ class DebuggerFlowTest {
         Map<String, Object> paused = post("/api/calls/before",
                 makeBefore("agent-vna-init", "VNA", "initialize", 1, Map.of("scenario", "vna-initialize")));
         assertThat(paused).containsEntry("action", "pause");
+
+        Map<String, Object> waited = post("/api/agent/interactions/wait-paused", Map.of(
+                "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
+                "target", Map.of("object", "VNA", "command", "initialize"),
+                "timeout_ms", 1));
+        assertThat(waited).containsEntry("ok", true);
+        assertThat(waited).containsEntry("status", "paused");
+        assertThat(waited).containsEntry("interaction_id", "agent-vna-init");
 
         Map<String, Object> pausedInteractions = post("/api/agent/interactions/paused/search", Map.of(
                 "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
