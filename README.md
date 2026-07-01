@@ -118,6 +118,8 @@ Agent 场景应优先使用 `POST /api/agent/breakpoints` 声明 `BreakpointRule
 
 Agent 读取和管理断点规则时应继续使用领域入口：`GET /api/agent/breakpoints`、`GET /api/agent/breakpoints/{breakpoint_rule_id}`、`POST /api/agent/breakpoints/{breakpoint_rule_id}/disable`、`POST /api/agent/breakpoints/{breakpoint_rule_id}/enable`、`DELETE /api/agent/breakpoints/{breakpoint_rule_id}`。这些接口返回 `breakpoint_rule` 实体，不要求 Agent 读取或拼接底层 UI 断点表结构。
 
+需要向用户解释某次调用为什么命中或未命中断点时，Agent 使用只读入口 `POST /api/agent/breakpoints/{breakpoint_rule_id}/explain`，传入 `interaction_id`。该接口返回规则启用状态、目标匹配、条件匹配和实体引用，不参与断点创建或运行时暂停决策。
+
 用户询问断点是否命中时，Agent 应使用 `POST /api/agent/interactions/paused/search` 查询当前暂停交互；用户确认继续时，使用 `POST /api/agent/interactions/{interaction_id}/continue` 恢复业务请求。这两个入口只暴露 Agent-facing 的 `interaction` 语义，底层 call 状态与释放逻辑仍由运行时内部处理。
 
 用户明确要求“命中后提醒我”时，Agent 使用 `POST /api/agent/interactions/paused/watch` 注册显式提醒；用户说“不用提醒了”时，使用 `DELETE /api/agent/interactions/paused/watch/{watch_id}` 取消提醒，取消 watch 不影响断点规则本身。暂停命中后后端会记录 `interaction_paused` 领域事件，Agent 可通过 `GET /api/agent/events?watch_id=...` 轮询读取。

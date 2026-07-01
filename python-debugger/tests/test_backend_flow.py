@@ -855,6 +855,15 @@ def test_agent_declare_breakpoint_rule_registers_without_observed_interface(tmp_
     assert events["events"][0]["event"] == "interaction_paused"
     assert events["events"][0]["interaction_id"] == "agent-vna-init"
 
+    explanation = client.post(
+        f"/api/agent/breakpoints/{declared['breakpoint_rule_id']}/explain",
+        json={"interaction_id": "agent-vna-init"},
+    ).get_json()
+    assert explanation["ok"] is True
+    assert explanation["matched"] is True
+    assert explanation["facts"]["rule_enabled"] is True
+    assert explanation["facts"]["target_matched"] is True
+
     waited = client.post(
         "/api/agent/interactions/wait-paused",
         json={

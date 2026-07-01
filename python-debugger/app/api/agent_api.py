@@ -8,6 +8,7 @@ from app.services.agent_breakpoint_service import (
     list_breakpoint_rules,
     set_breakpoint_rule_enabled,
 )
+from app.services.agent_breakpoint_explanation_service import explain_breakpoint_match
 from app.services.agent_interaction_analysis_service import analyze_interactions
 from app.services.agent_paused_interaction_service import (
     continue_interaction,
@@ -57,6 +58,12 @@ def enable_breakpoint(rule_id):
 def delete_breakpoint(rule_id):
     result = delete_breakpoint_rule(rule_id)
     return jsonify(result), 200 if result.get("ok") else 404
+
+
+@agent_api.post("/breakpoints/<rule_id>/explain")
+def explain_breakpoint(rule_id):
+    result = explain_breakpoint_match(rule_id, request.get_json(silent=True) or {})
+    return jsonify(result), 200 if result.get("ok") else 404 if result.get("status") == "not_found" else 400
 
 
 @agent_api.post("/interactions/paused/search")

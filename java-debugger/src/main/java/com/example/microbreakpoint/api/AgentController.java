@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.microbreakpoint.service.AgentBreakpointService;
+import com.example.microbreakpoint.service.AgentBreakpointExplanationService;
 import com.example.microbreakpoint.service.AgentInteractionAnalysisService;
 import com.example.microbreakpoint.service.AgentPausedInteractionService;
 import com.example.microbreakpoint.service.AgentPausedInteractionWatchService;
@@ -27,16 +28,19 @@ public class AgentController {
 
     private final PayloadService payloadService;
     private final AgentBreakpointService agentBreakpointService;
+    private final AgentBreakpointExplanationService agentBreakpointExplanationService;
     private final AgentPausedInteractionService agentPausedInteractionService;
     private final AgentPausedInteractionWatchService agentPausedInteractionWatchService;
     private final AgentInteractionAnalysisService agentInteractionAnalysisService;
 
     public AgentController(PayloadService payloadService,
-            AgentBreakpointService agentBreakpointService, AgentPausedInteractionService agentPausedInteractionService,
+            AgentBreakpointService agentBreakpointService, AgentBreakpointExplanationService agentBreakpointExplanationService,
+            AgentPausedInteractionService agentPausedInteractionService,
             AgentPausedInteractionWatchService agentPausedInteractionWatchService,
             AgentInteractionAnalysisService agentInteractionAnalysisService) {
         this.payloadService = payloadService;
         this.agentBreakpointService = agentBreakpointService;
+        this.agentBreakpointExplanationService = agentBreakpointExplanationService;
         this.agentPausedInteractionService = agentPausedInteractionService;
         this.agentPausedInteractionWatchService = agentPausedInteractionWatchService;
         this.agentInteractionAnalysisService = agentInteractionAnalysisService;
@@ -72,6 +76,12 @@ public class AgentController {
     @DeleteMapping("/breakpoints/{ruleId}")
     public ResponseEntity<Map<String, Object>> deleteBreakpoint(@PathVariable String ruleId) {
         return agentResponse(agentBreakpointService.delete(ruleId));
+    }
+
+    @PostMapping("/breakpoints/{ruleId}/explain")
+    public ResponseEntity<Map<String, Object>> explainBreakpoint(@PathVariable String ruleId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return agentResponse(agentBreakpointExplanationService.explain(ruleId, body == null ? Map.of() : body));
     }
 
     @PostMapping("/interactions/paused/search")

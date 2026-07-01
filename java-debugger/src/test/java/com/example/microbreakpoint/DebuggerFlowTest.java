@@ -255,6 +255,14 @@ class DebuggerFlowTest {
         assertThat(watchEvents.get(0)).containsEntry("event", "interaction_paused");
         assertThat(watchEvents.get(0)).containsEntry("interaction_id", "agent-vna-init");
 
+        Map<String, Object> explanation = post("/api/agent/breakpoints/" + declared.get("breakpoint_rule_id") + "/explain",
+                Map.of("interaction_id", "agent-vna-init"));
+        assertThat(explanation).containsEntry("ok", true);
+        assertThat(explanation).containsEntry("matched", true);
+        Map<String, Object> facts = (Map<String, Object>) explanation.get("facts");
+        assertThat(facts).containsEntry("rule_enabled", true);
+        assertThat(facts).containsEntry("target_matched", true);
+
         Map<String, Object> waited = post("/api/agent/interactions/wait-paused", Map.of(
                 "breakpoint_rule_id", declared.get("breakpoint_rule_id"),
                 "target", Map.of("object", "VNA", "command", "initialize"),
