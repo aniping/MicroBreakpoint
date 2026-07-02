@@ -8,7 +8,6 @@ from PySide6.QtWidgets import QApplication
 
 from desktop.backend_runtime import DesktopBackendRuntime
 from desktop.bridge import Bridge
-from desktop.config import BACKEND_URL
 
 
 def main(backend_mode="internal", backend_jar=None, backend_dir=None, qt_argv=None):
@@ -22,9 +21,9 @@ def main(backend_mode="internal", backend_jar=None, backend_dir=None, qt_argv=No
     app.setFont(QFont("Microsoft YaHei UI", 10))
     app.aboutToQuit.connect(backend.stop)
     engine = QQmlApplicationEngine()
-    bridge = Bridge()
+    bridge = Bridge(backend_url=backend.url)
     engine.rootContext().setContextProperty("bridge", bridge)
-    engine.rootContext().setContextProperty("backendApiUrl", BACKEND_URL)
+    engine.rootContext().setContextProperty("backendApiUrl", backend.url)
     qml = Path(__file__).resolve().parent / "qml" / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml)))
     if not engine.rootObjects():

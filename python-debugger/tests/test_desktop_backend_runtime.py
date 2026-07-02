@@ -17,6 +17,32 @@ def test_desktop_backend_runtime_defaults_to_internal():
     assert runtime.backend_mode == "internal"
 
 
+def test_desktop_backend_runtime_uses_configured_server_host(tmp_path):
+    settings = tmp_path / "settings.json"
+    settings.write_text('{"server":{"host":"192.168.1.20"}}', encoding="utf-8")
+
+    runtime = DesktopBackendRuntime(
+        port=18601,
+        app_config={"SETTINGS_FILE": str(settings)},
+    )
+
+    assert runtime.host == "192.168.1.20"
+    assert runtime.url == "http://192.168.1.20:18601"
+
+
+def test_desktop_backend_runtime_checks_localhost_when_binding_all_interfaces(tmp_path):
+    settings = tmp_path / "settings.json"
+    settings.write_text('{"server":{"host":"0.0.0.0"}}', encoding="utf-8")
+
+    runtime = DesktopBackendRuntime(
+        port=18601,
+        app_config={"SETTINGS_FILE": str(settings)},
+    )
+
+    assert runtime.host == "0.0.0.0"
+    assert runtime.url == "http://127.0.0.1:18601"
+
+
 def test_run_desktop_cli_defaults_to_internal():
     args = parse_args([])
 
@@ -158,7 +184,9 @@ def test_jar_backend_runtime_starts_resolved_jar_and_stops_owned_process(tmp_pat
     assert runtime.owned is True
     assert started["command"] == expected_java_command(runtime, jar)
     assert started["cwd"] == jar.parent.resolve()
+    assert started["env"]["SERVER_ADDRESS"] == runtime.host
     assert started["env"]["SERVER_PORT"] == str(runtime.port)
+    assert started["env"]["MICRO_BREAKPOINT_HOST"] == runtime.host
     assert started["env"]["MICRO_BREAKPOINT_PARENT_PID"] == str(os.getpid())
     assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in started["env"]
     assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" not in started["env"]

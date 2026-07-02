@@ -8,19 +8,19 @@ from time import monotonic, sleep
 
 import requests
 
-from desktop.app_settings import ensure_settings_file, settings_path
+from desktop.app_settings import backend_server_settings, ensure_settings_file, settings_path
 from desktop.config import BACKEND_HOST, BACKEND_PORT
 
 
 class DesktopBackendRuntime:
     BACKEND_MODES = {"internal", "jar", "external"}
 
-    def __init__(self, host=BACKEND_HOST, port=BACKEND_PORT, app_config=None,
+    def __init__(self, host=None, port=BACKEND_PORT, app_config=None,
             backend_mode="internal", backend_jar=None, backend_dir=None):
-        self.host = host
         self.port = port
         self.app_config = app_config
-        self.url = f"http://{host}:{port}"
+        self.host = str(host or self._configured_host()).strip() or BACKEND_HOST
+        self.url = f"http://{self._connect_host()}:{port}"
         if backend_mode not in self.BACKEND_MODES:
             raise ValueError(f"Unsupported backend mode: {backend_mode}")
         self.backend_mode = backend_mode
@@ -167,7 +167,9 @@ class DesktopBackendRuntime:
 
     def _backend_env(self):
         env = os.environ.copy()
+        env["SERVER_ADDRESS"] = self.host
         env["SERVER_PORT"] = str(self.port)
+        env["MICRO_BREAKPOINT_HOST"] = self.host
         env["MICRO_BREAKPOINT_PARENT_PID"] = str(os.getpid())
         env["MICRO_BREAKPOINT_DATABASE"] = self._database_path()
         payload_root = (self.app_config or {}).get("PAYLOAD_ROOT")
@@ -186,6 +188,14 @@ class DesktopBackendRuntime:
         if configured:
             return str(Path(configured).expanduser().resolve())
         return str(settings_path(self._app_base_dir()))
+
+    def _configured_host(self):
+        return backend_server_settings(self._settings_path()).get("host", BACKEND_HOST)
+
+    def _connect_host(self):
+        if self.host in ("0.0.0.0", "::"):
+            return BACKEND_HOST
+        return self.host
 
     def _app_base_dir(self):
         if getattr(sys, "frozen", False):

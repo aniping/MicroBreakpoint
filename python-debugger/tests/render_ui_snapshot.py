@@ -15,7 +15,6 @@ if str(ROOT) not in sys.path:
 
 from desktop.backend_runtime import DesktopBackendRuntime
 from desktop.bridge import Bridge
-from desktop.config import BACKEND_URL
 
 
 def seed_backend(base):
@@ -98,10 +97,9 @@ def main():
     app = QGuiApplication(sys.argv)
     app.setFont(QFont("Microsoft YaHei UI", 10))
     engine = QQmlApplicationEngine()
-    bridge = Bridge()
-    bridge.backend = runtime.url
+    bridge = Bridge(backend_url=runtime.url)
     engine.rootContext().setContextProperty("bridge", bridge)
-    engine.rootContext().setContextProperty("backendApiUrl", BACKEND_URL)
+    engine.rootContext().setContextProperty("backendApiUrl", runtime.url)
     engine.load(QUrl.fromLocalFile(str((Path(__file__).resolve().parents[1] / "desktop" / "qml" / "Main.qml").resolve())))
     if not engine.rootObjects():
         runtime.stop()

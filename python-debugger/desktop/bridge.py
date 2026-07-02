@@ -21,9 +21,9 @@ class Bridge(QObject):
     importDuplicate = Signal(str)
     userNotice = Signal(str)
 
-    def __init__(self, settings_file=None):
+    def __init__(self, settings_file=None, backend_url=None):
         super().__init__()
-        self.backend = BACKEND_URL
+        self.backend = backend_url or BACKEND_URL
         self.settings_file = settings_file
         self.callsPage = 1
         self.callsPageSize = 50
@@ -116,14 +116,28 @@ class Bridge(QObject):
     @Slot(str, result=str)
     def saveAppSettings(self, payload):
         try:
-            settings = json.loads(payload or "{}")
+            incoming = json.loads(payload or "{}")
         except ValueError:
-            settings = {}
+            incoming = {}
+        settings = self._merge_settings(load_settings(self.settings_file), incoming)
         saved = save_settings(settings, self.settings_file)
         theme_mode = saved.get("themeMode", "dark")
         self.settingsChanged.emit(json.dumps(saved, ensure_ascii=False))
         self.themeChanged.emit("light" if theme_mode == "light" else "dark")
         return json.dumps(saved, ensure_ascii=False)
+
+    def _merge_settings(self, current, incoming):
+        if not isinstance(incoming, dict):
+            return current
+        merged = dict(current)
+        for key, value in incoming.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                section = dict(merged[key])
+                section.update(value)
+                merged[key] = section
+            else:
+                merged[key] = value
+        return merged
 
     @Slot()
     def startRecord(self):

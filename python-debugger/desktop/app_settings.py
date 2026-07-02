@@ -3,9 +3,14 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
+from desktop.config import BACKEND_HOST
+
 
 DEFAULT_SETTINGS = {
     "themeMode": "dark",
+    "server": {
+        "host": BACKEND_HOST,
+    },
     "debugTarget": {
         "host": "127.0.0.1",
         "port": 8080,
@@ -64,10 +69,20 @@ def normalize_settings(data):
     if theme_mode in ("light", "dark"):
         settings["themeMode"] = theme_mode
 
+    server = data.get("server")
+    if isinstance(server, dict):
+        settings["server"] = _normalize_server(server)
+
     target = data.get("debugTarget")
     if isinstance(target, dict):
         settings["debugTarget"] = _normalize_debug_target(target)
     return settings
+
+
+def _normalize_server(server):
+    defaults = DEFAULT_SETTINGS["server"]
+    host = str(server.get("host") or defaults["host"]).strip() or defaults["host"]
+    return {"host": host}
 
 
 def _normalize_debug_target(target):
@@ -93,6 +108,10 @@ def _normalize_debug_target(target):
 
 def debug_target_settings(path=None):
     return load_settings(path)["debugTarget"]
+
+
+def backend_server_settings(path=None):
+    return load_settings(path)["server"]
 
 
 def build_debug_switch_url(target):
