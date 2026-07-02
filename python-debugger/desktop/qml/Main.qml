@@ -36,7 +36,7 @@ ApplicationWindow {
     property var interfaceItems: []
     property var breakpointItems: []
     property var sessionItems: []
-    property var appSettings: ({themeMode: "dark", server: {host: "127.0.0.1"}, debugTarget: {host: "127.0.0.1", port: 8080, debuggerSwitchPath: "/api/demo/debugger/enabled", requestTimeoutMs: 1000}})
+    property var appSettings: ({themeMode: "dark", debugTarget: {host: "127.0.0.1", port: 8080, debuggerSwitchPath: "/api/demo/debugger/enabled", requestTimeoutMs: 1000}})
     property string resultText: ""
     property string callBreakpointFilter: ""
     property string selectedCallId: ""

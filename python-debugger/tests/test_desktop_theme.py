@@ -26,10 +26,6 @@ def test_bridge_saves_app_settings_to_json(tmp_path):
     bridge = Bridge(settings_file=settings_file)
     emitted = []
     bridge.settingsChanged.connect(emitted.append)
-    settings_file.write_text(
-        '{"themeMode":"dark","server":{"host":"192.168.1.20"},"debugTarget":{"host":"127.0.0.1","port":8080,"debuggerSwitchPath":"/api/demo/debugger/enabled","requestTimeoutMs":1000}}',
-        encoding="utf-8",
-    )
 
     saved = bridge.saveAppSettings('{"themeMode":"light","debugTarget":{"host":"10.0.0.5","port":"19090","debuggerSwitchPath":"debug/enabled","requestTimeoutMs":"2500"}}')
 
@@ -37,7 +33,6 @@ def test_bridge_saves_app_settings_to_json(tmp_path):
     loaded_data = json.loads(Bridge(settings_file=settings_file).getAppSettings())
     assert saved_data == loaded_data
     assert loaded_data["themeMode"] == "light"
-    assert loaded_data["server"]["host"] == "192.168.1.20"
     assert loaded_data["debugTarget"]["host"] == "10.0.0.5"
     assert loaded_data["debugTarget"]["port"] == 19090
     assert loaded_data["debugTarget"]["debuggerSwitchPath"] == "/debug/enabled"

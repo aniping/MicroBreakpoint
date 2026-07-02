@@ -9,7 +9,7 @@ Item {
     property var appTheme
     property string themeMode: "dark"
     property string backendUrl: ""
-    property var settingsData: ({themeMode: "dark", server: {host: "127.0.0.1"}, debugTarget: {host: "127.0.0.1", port: 8080, debuggerSwitchPath: "/api/demo/debugger/enabled", requestTimeoutMs: 1000}})
+    property var settingsData: ({themeMode: "dark", debugTarget: {host: "127.0.0.1", port: 8080, debuggerSwitchPath: "/api/demo/debugger/enabled", requestTimeoutMs: 1000}})
     property bool loading: false
 
     signal themeModeRequested(string mode)
@@ -21,10 +21,6 @@ Item {
 
     function target() {
         return settingsData && settingsData.debugTarget ? settingsData.debugTarget : {}
-    }
-
-    function server() {
-        return settingsData && settingsData.server ? settingsData.server : {host: "127.0.0.1"}
     }
 
     function loadFields() {
@@ -45,9 +41,6 @@ Item {
         if (loading) return
         var next = {
             themeMode: page.themeMode,
-            server: {
-                host: page.server().host || "127.0.0.1"
-            },
             debugTarget: {
                 host: hostField.text.trim(),
                 port: portField.text.length > 0 ? Number(portField.text) : 8080,

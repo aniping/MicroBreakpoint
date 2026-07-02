@@ -87,9 +87,6 @@ cd java-demo
 ```json
 {
   "themeMode": "dark",
-  "server": {
-    "host": "127.0.0.1"
-  },
   "debugTarget": {
     "host": "127.0.0.1",
     "port": 8080,
@@ -98,8 +95,6 @@ cd java-demo
   }
 }
 ```
-
-`server.host` 是断点后端自身的监听地址，默认只监听本机 `127.0.0.1`。需要让局域网/大网 IP 访问 `18601` 时，把它改为本机网卡 IP，例如 `"192.168.1.20"`；`internal` 后端会直接按该地址监听，桌面端通过 `--backend jar` 拉起 Java 后端时也会把该地址传给 Spring Boot 的 `server.address`。手动启动外部 Java 后端时，也可以在 `java-debugger/src/main/resources/application.yml` 中修改 `server.address`，或通过 `SERVER_ADDRESS=<IP>` 覆盖。
 
 `debuggerSwitchPath` 使用 `POST`，请求体为 `{"enabled": true}` 或 `{"enabled": false}`。桌面端拉起 Java 后端时会把同一份 settings 文件路径传给后端；手动启动外部 Java 后端时，如需复用桌面配置，可添加 `-Dmicro-breakpoint.settings-file=<settings.json 路径>`。
 
@@ -189,9 +184,9 @@ mvn test
 ```
 ## Java 后端
 
-后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `http://127.0.0.1:18601`，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认在进程内启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
+后端已迁移为 `java-debugger/` Spring Boot 服务，默认监听 `0.0.0.0:18601`，本机仍可通过 `http://127.0.0.1:18601` 访问，继续使用现有 SQLite 数据库与 payload 目录。`python-debugger/` 仍保留 PySide6/QML 桌面端和 legacy Flask 代码；桌面端默认在进程内启动内置 Python Flask 后端，不会自动拉起 `java-debugger` 或 Maven。
 
-桌面端“设置”页可配置被调试业务服务的 IP/Host、端口、断点启用接口和请求超时；配置自动保存到应用目录下的 `data/settings.json`。该文件中的 `server.host` 用于配置断点后端自身监听地址，默认是 `127.0.0.1`，需要大网访问时可改成本机网卡 IP。内置 Python Flask 后端和桌面端拉起的 Java 后端都会读取这份配置，在“开始调试 / 停止调试”时请求业务服务断点开关。
+桌面端“设置”页可配置被调试业务服务的 IP/Host、端口、断点启用接口和请求超时；配置自动保存到应用目录下的 `data/settings.json`。内置 Python Flask 后端和桌面端拉起的 Java 后端都会读取这份配置，在“开始调试 / 停止调试”时请求业务服务断点开关。
 桌面端通过 `--backend jar` 拉起 Java 后端时会传入父进程 PID；Java 后端 watchdog 检测到桌面端异常退出后会先停止调试状态，再主动退出。手动启动或外部复用的 Java 后端不会带该 PID，不会被桌面端误停。
 
 启动 Java 后端：

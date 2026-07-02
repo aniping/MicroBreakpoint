@@ -13,7 +13,7 @@ python run_desktop.py --backend jar
 python run_desktop.py --backend external
 ```
 
-断点后端端口 `18601`，桌面端使用 PySide6/QML。
+断点后端默认监听 `0.0.0.0:18601`，本机访问地址仍为 `http://127.0.0.1:18601`；桌面端使用 PySide6/QML。
 
 ## Conda 环境
 
@@ -76,9 +76,6 @@ conda run -n micro-breakpoint python -m PyInstaller MicroBreakpoint.spec
 ```json
 {
   "themeMode": "dark",
-  "server": {
-    "host": "127.0.0.1"
-  },
   "debugTarget": {
     "host": "127.0.0.1",
     "port": 8080,
@@ -87,8 +84,6 @@ conda run -n micro-breakpoint python -m PyInstaller MicroBreakpoint.spec
   }
 }
 ```
-
-`server.host` 是断点后端自身的监听地址，默认只监听本机 `127.0.0.1`。需要让局域网/大网 IP 访问 `18601` 时，把它改为本机网卡 IP，例如 `"192.168.1.20"`；`internal` 后端会直接按该地址监听，`--backend jar` 拉起的 Java 后端也会把该地址传给 Spring Boot 的 `server.address`。手动启动外部 Java 后端时，也可以在 `java-debugger/src/main/resources/application.yml` 中修改 `server.address`，或通过 `SERVER_ADDRESS=<IP>` 覆盖。
 
 `internal` 后端会直接读取该文件；`--backend jar` 会把同一文件路径传给 Java 后端。手动启动外部 Java 后端时，可添加 `-Dmicro-breakpoint.settings-file=<settings.json 路径>` 使用同一份配置。
 

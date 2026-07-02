@@ -39,6 +39,8 @@ def test_debugger_ports_are_configured_for_18601():
     java_config = (ROOT / "java-demo" / "src" / "main" / "java" / "com" / "example" / "instrumentdemo" / "debuger" / "DebuggerSettingsConfig.java").read_text(encoding="utf-8")
     java_debugger_yml = (ROOT / "java-debugger" / "src" / "main" / "resources" / "application.yml").read_text(encoding="utf-8")
 
+    assert 'BACKEND_HOST = "0.0.0.0"' in python_config
+    assert 'BACKEND_CONNECT_HOST = "127.0.0.1"' in python_config
     assert "BACKEND_PORT = 18601" in python_config
     assert "BACKEND_PORT" in run_backend
     assert 'default="internal"' in run_desktop
@@ -47,7 +49,6 @@ def test_debugger_ports_are_configured_for_18601():
     assert '"external"' in run_desktop
     assert '"none"' not in run_desktop
     assert "MICRO_BREAKPOINT_DATABASE" in run_backend
-    assert "MICRO_BREAKPOINT_SETTINGS_FILE" in run_backend
     assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in run_backend
     assert "MICRO_BREAKPOINT_DEMO_REQUEST_TIMEOUT_MS" not in run_backend
     assert "MICRO_BREAKPOINT_DEMO_BASE_URL" not in flask_app
@@ -80,7 +81,7 @@ def test_debugger_ports_are_configured_for_18601():
     assert "public static volatile boolean enabled = false" in java_settings
     assert "${debugger.enabled:false}" in java_config
     assert "${debugger.server-url:http://127.0.0.1:18601}" in java_config
-    assert "address: ${SERVER_ADDRESS:127.0.0.1}" in java_debugger_yml
+    assert "address: ${SERVER_ADDRESS:0.0.0.0}" in java_debugger_yml
     assert "settings-file: ../python-debugger/data/settings.json" in java_debugger_yml
     assert "demo-base-url" not in java_debugger_yml
     assert "demo-request-timeout-ms" not in java_debugger_yml
