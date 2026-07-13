@@ -220,3 +220,7 @@ mvn test
 cd ..\python-debugger
 conda run -n micro-breakpoint pytest tests/test_desktop_backend_runtime.py tests/test_java_demo_scripts.py
 ```
+
+## 智能代理协作配置
+
+本项目的智能代理工作项使用 `.scratch/<feature>/` 下的本地 Markdown 文件管理，不使用 GitHub Issues。问题跟踪、triage 标签和领域文档约定见 `docs/agents/`。
