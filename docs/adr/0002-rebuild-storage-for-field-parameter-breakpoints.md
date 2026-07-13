@@ -1,0 +1,3 @@
+# Rebuild storage for field parameter breakpoints
+
+Replace `params_snapshot` and the legacy `params_condition` implementation with a single `field_parameters` mode alongside `command_only`. The new mode accepts only the canonical `{field_path, operator, value}` condition contract with `eq` and `contains_any`; old parameter rules, aliases, operators, and archive compatibility are deliberately not migrated, because retaining parallel matchers would undermine Java/Flask parity and long-term code quality. The software is unpublished, so implementation may delete a repository-local legacy database if one exists and recreate it from the new schema; no runtime migration, schema-version compatibility, backup, or automatic database-rebuild mechanism is required.

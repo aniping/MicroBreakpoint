@@ -1,0 +1,3 @@
+# Keep MCP tooling in AteAgents
+
+MicroBreakpoint owns the field-parameter-breakpoint contract, persistence, and runtime matching in both debugger backends. The MCP tool that exposes this capability to AI Agents lives in `I:\ai\cc\AteAgents` and calls MicroBreakpoint's Agent HTTP API, keeping Agent integration out of the debugger backends while preserving one matching contract for Java and Flask. AteAgents extends its existing `declare_breakpoint` tool with `match_type="parameters"` instead of introducing a second breakpoint-creation tool, so the existing target routing and HITL approval flow remain authoritative.
